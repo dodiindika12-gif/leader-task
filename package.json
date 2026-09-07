@@ -1,5 +1,5 @@
 {
-  "name": "leader-dashboard",
+  "name": "notion-task-manager",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,16 +9,23 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "next": "16.3.4",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "@ai-sdk/openai": "^4.0.45",
+    "@ai-sdk/react": "^4.0.79",
+    "@supabase/supabase-js": "^2.109.0",
+    "@tailwindcss/typography": "^0.5.20",
+    "ai": "^7.0.76",
+    "framer-motion": "^13.1.1",
+    "lucide-react": "^1.33.0",
+    "next": "16.2.9",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@tailwindcss/postcss": "^4",
+    "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
-    "eslint-config-next": "16.3.4",
-    "typescript": "^5"
+    "eslint-config-next": "16.2.9",
+    "tailwindcss": "^4"
   }
 }

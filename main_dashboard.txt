@@ -1,0 +1,1 @@
+const MainDashboard = .*' ../.gemini/antigravity-ide/brain/46be89e2-f015-441e-ab7b-b0a187d30d76/.system_generated/logs/transcript_full.jsonl | head -n 1 | cut -c 1-200\"","Cwd":"\"/home/dodi/leader-dashboard\"","WaitMsBeforeAsync":"2000","toolAction":"\"Searching transcript\"","toolSummary":"\"Finding MainDashboard in transcript_full.jsonl\""}}]}
