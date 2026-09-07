@@ -1459,10 +1459,64 @@ const TableView = ({
     );
 };
 
+const DivisionsTable = ({ divisionsList, onAddDivision, isSuperAdmin }) => {
+    const [isAdding, setIsAdding] = useState(false);
+    const [newDivName, setNewDivName] = useState('');
+    
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!newDivName.trim()) return;
+        onAddDivision(newDivName.trim());
+        setNewDivName('');
+        setIsAdding(false);
+    };
+
+    return (
+        <div className="bg-white/75 rounded-3xl border border-white/70 shadow-xl shadow-slate-200/50 overflow-hidden animate-fade-in backdrop-blur">
+            <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-sky-50/70">
+                <h3 className="font-semibold flex items-center text-sky-800"><i className="fa-solid fa-layer-group mr-2"></i> Daftar Divisi</h3>
+                {isSuperAdmin && (
+                    <button onClick={() => setIsAdding(!isAdding)} className="text-sky-600 hover:text-sky-700 p-1 bg-white/60 rounded hover:bg-white transition">
+                        <i className="fa-solid fa-plus text-xs"></i>
+                    </button>
+                )}
+            </div>
+            {isAdding && isSuperAdmin && (
+                <form onSubmit={handleSubmit} className="p-3 bg-slate-50/50 border-b border-slate-100 flex gap-2">
+                    <input type="text" value={newDivName} onChange={e => setNewDivName(e.target.value)} placeholder="Nama divisi..." className="flex-1 text-sm border-gray-300 rounded-lg py-1.5 px-3 focus:ring-1 focus:ring-sky-500" autoFocus />
+                    <button type="submit" className="bg-sky-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-sky-700">Simpan</button>
+                </form>
+            )}
+            <div className="p-3">
+                <ul className="space-y-1">
+                    {divisionsList.map(div => (
+                        <li key={div} className="p-2.5 text-sm font-medium text-gray-700 hover:bg-white/60 rounded-xl transition-colors border border-transparent hover:border-slate-100 shadow-sm">{div}</li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
+};
+
+const RolesTable = ({ rolesList }) => {
+    return (
+        <div className="bg-white/75 rounded-3xl border border-white/70 shadow-xl shadow-slate-200/50 overflow-hidden animate-fade-in backdrop-blur">
+            <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-amber-50/70">
+                <h3 className="font-semibold flex items-center text-amber-800"><i className="fa-solid fa-briefcase mr-2"></i> Daftar Jabatan</h3>
+            </div>
+            <div className="p-3">
+                <ul className="space-y-1">
+                    {rolesList.map(role => (
+                        <li key={role} className="p-2.5 text-sm font-medium text-gray-700 hover:bg-white/60 rounded-xl transition-colors border border-transparent hover:border-slate-100 shadow-sm">{role}</li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
+};
+
 const MembersTable = ({ members, onAddMember, onDeleteMember, onToggleStatus, onResetPassword, currentUser, divisionsList, onAddDivision }) => {
     const [isAdding, setIsAdding] = useState(false);
-    const [isDivManage, setIsDivManage] = useState(false);
-    const [newDivName, setNewDivName] = useState('');
     
     // RBAC Logic
     const isSuperAdmin = currentUser?.role === 'Super User';
@@ -1479,43 +1533,18 @@ const MembersTable = ({ members, onAddMember, onDeleteMember, onToggleStatus, on
         setIsAdding(false);
     };
 
-    const handleAddDivSubmit = (e) => {
-        e.preventDefault();
-        if (!newDivName.trim()) return;
-        onAddDivision(newDivName.trim());
-        setNewDivName('');
-        setIsDivManage(false);
-    }
-
     return (
-        <div className="bg-white/75 rounded-3xl border border-white/70 shadow-xl shadow-slate-200/50 overflow-hidden animate-fade-in max-w-4xl backdrop-blur">
+        <div className="bg-white/75 rounded-3xl border border-white/70 shadow-xl shadow-slate-200/50 overflow-hidden animate-fade-in w-full backdrop-blur">
             <div className="flex justify-between items-center p-4 border-b border-slate-100 tint-mint">
                 <h3 className="font-semibold flex items-center"><i className="fa-solid fa-users mr-2"></i> Daftar Karyawan</h3>
                 <div className="flex space-x-2">
-                    {isSuperAdmin && (
-                        <button onClick={() => {setIsDivManage(!isDivManage); setIsAdding(false);}} className="bg-white/80 text-emerald-600 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-white transition-colors shadow-sm flex items-center">
-                            <i className="fa-solid fa-layer-group mr-1.5 text-xs"></i> Divisi
-                        </button>
-                    )}
                     {canAddMember && (
-                        <button onClick={() => {setIsAdding(!isAdding); setIsDivManage(false);}} className="tint-mint-solid px-3 py-1.5 rounded-md text-sm font-medium hover:opacity-90 transition-opacity shadow-sm flex items-center">
+                        <button onClick={() => setIsAdding(!isAdding)} className="tint-mint-solid px-3 py-1.5 rounded-md text-sm font-medium hover:opacity-90 transition-opacity shadow-sm flex items-center">
                             <i className="fa-solid fa-plus mr-1.5 text-xs"></i> Tambah
                         </button>
                     )}
                 </div>
             </div>
-            
-            {isDivManage && isSuperAdmin && (
-                <form onSubmit={handleAddDivSubmit} className="p-4 bg-slate-50/50 border-b border-slate-100 flex items-end gap-3">
-                    <div className="flex-1">
-                        <label className="block text-xs font-medium text-slate-500 mb-1">Nama Divisi Baru</label>
-                        <input type="text" value={newDivName} onChange={e => setNewDivName(e.target.value)} className="w-full text-sm border-gray-300 rounded-lg" required placeholder="Cth: Marketing" />
-                    </div>
-                    <button type="submit" className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 h-[38px]">
-                        Tambah Divisi
-                    </button>
-                </form>
-            )}
 
             {isAdding && canAddMember && (
                 <form onSubmit={handleSubmit} className="p-4 bg-slate-50/50 border-b border-slate-100 flex flex-wrap items-end gap-3">
@@ -4363,7 +4392,15 @@ export default function TaskManagerApp() {
                                     Semua Divisi
                                     <span className="text-gray-400 text-xl font-normal ml-3">Anggota</span>
                                 </h2>
-                                <MembersTable members={filteredMembers} onAddMember={handleAddMember} onDeleteMember={handleDeleteMember} onToggleStatus={handleToggleMemberStatus} onResetPassword={handleResetPassword} currentUser={session} divisionsList={divisionsList} onAddDivision={handleAddDivision} />
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                                    <div className="lg:col-span-8 overflow-hidden">
+                                        <MembersTable members={filteredMembers} onAddMember={handleAddMember} onDeleteMember={handleDeleteMember} onToggleStatus={handleToggleMemberStatus} onResetPassword={handleResetPassword} currentUser={session} divisionsList={divisionsList} onAddDivision={handleAddDivision} />
+                                    </div>
+                                    <div className="lg:col-span-4 flex flex-col gap-6">
+                                        <DivisionsTable divisionsList={divisionsList} onAddDivision={handleAddDivision} isSuperAdmin={session?.role === 'Super User'} />
+                                        <RolesTable rolesList={ROLES} />
+                                    </div>
+                                </div>
                             </div>
                         )}
 
