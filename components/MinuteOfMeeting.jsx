@@ -24,14 +24,106 @@ export default function MinuteOfMeeting({
     onUpdateNote,
     onDeleteNote,
     onCreateTaskFromActionItem,
-    onBatchCreateTasks
+    onBatchCreateTasks,
+    initialTab = 'notes',
+    onTabChange = null
 }) {
     // Top Tab: 'notes' (Catatan Post-It) OR 'mom' (Notulen Rapat MoM)
-    const [activeTab, setActiveTab] = useState('notes');
+    const [activeTab, setActiveTab] = useState(initialTab || 'notes');
 
-    // Current logged in user ID and details
-    const activeUserId = session?.memberId || currentPicId || '';
-    const isSuperUser = session?.role === 'Super User';
+    React.useEffect(() => {
+        if (initialTab && (initialTab === 'notes' || initialTab === 'mom')) {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
+
+    const isSuperUser = Boolean(session?.role === 'Super User' || session?.memberId === 'superadmin' || session?.email === 'abskdi.markom@gmail.com');
+
+    // Current user identifiers for strict ownership & sharing validation
+    const userIdentifiers = useMemo(() => {
+        const isSuperAdminUser = isSuperUser;
+        const matchedMember = members.find(m => 
+            (session?.memberId && m.id === session.memberId) ||
+            (currentPicId && m.id === currentPicId) ||
+            (session?.email && m.email?.toLowerCase() === session.email.toLowerCase()) ||
+            (isSuperAdminUser && (m.email === 'abskdi.markom@gmail.com' || m.name?.toLowerCase() === 'superadmin'))
+        );
+
+        const ids = new Set([
+            session?.memberId,
+            currentPicId,
+            matchedMember?.id,
+            isSuperAdminUser ? 'superadmin' : null,
+            isSuperAdminUser ? '3970ef9a-2fd4-41bf-acbf-fab57672cc57' : null
+        ].filter(Boolean));
+
+        const emails = new Set([
+            session?.email,
+            matchedMember?.email,
+            isSuperAdminUser ? 'abskdi.markom@gmail.com' : null
+        ].filter(Boolean).map(e => e.toLowerCase().trim()));
+
+        const names = new Set([
+            session?.name,
+            matchedMember?.name,
+            isSuperAdminUser ? 'superadmin' : null
+        ].filter(Boolean).map(n => n.toLowerCase().trim()));
+
+        const primaryId = matchedMember?.id || (isSuperAdminUser ? '3970ef9a-2fd4-41bf-acbf-fab57672cc57' : '') || session?.memberId || currentPicId || '';
+
+        return { ids, emails, names, primaryId };
+    }, [session, currentPicId, members]);
+
+    const activeUserId = userIdentifiers.primaryId;
+
+    // Helper: Check if user is the Owner (pemilik)
+    const checkIsOwner = (item) => {
+        if (!item) return false;
+        const ownerId = item.picId || item.pic_id || item.author_id || item.authorId || item.owner_id;
+        if (!ownerId) return false;
+
+        const str = String(ownerId).trim();
+        if (userIdentifiers.ids.has(str)) return true;
+        if (userIdentifiers.emails.has(str.toLowerCase())) return true;
+        if (userIdentifiers.names.has(str.toLowerCase())) return true;
+        return false;
+    };
+
+    // Helper: Check if item is Shared to the user (dishare ke ybs)
+    const checkIsShared = (item) => {
+        if (!item) return false;
+
+        // Shared list check (sharedWith / shared_with / attendees)
+        const sharedList = [
+            ...(Array.isArray(item.sharedWith) ? item.sharedWith : []),
+            ...(Array.isArray(item.shared_with) ? item.shared_with : []),
+            ...(Array.isArray(item.attendees) ? item.attendees : [])
+        ];
+
+        for (const s of sharedList) {
+            if (!s) continue;
+            const str = String(s).trim();
+            if (userIdentifiers.ids.has(str)) return true;
+            if (userIdentifiers.emails.has(str.toLowerCase())) return true;
+            if (userIdentifiers.names.has(str.toLowerCase())) return true;
+        }
+
+        // Action items assigned PIC check (for MoM)
+        const actionItems = Array.isArray(item.action_items || item.actionItems)
+            ? (item.action_items || item.actionItems)
+            : [];
+        for (const act of actionItems) {
+            const pic = act.picId || act.pic_id;
+            if (pic) {
+                const str = String(pic).trim();
+                if (userIdentifiers.ids.has(str)) return true;
+                if (userIdentifiers.emails.has(str.toLowerCase())) return true;
+                if (userIdentifiers.names.has(str.toLowerCase())) return true;
+            }
+        }
+
+        return false;
+    };
 
     // ----------------------------------------------------
     // STATE: POST-IT (KEEP NOTES)
@@ -73,6 +165,51 @@ export default function MinuteOfMeeting({
         ]
     });
 
+    const [attendeeSearch, setAttendeeSearch] = useState('');
+
+    const filteredMembersForMeeting = useMemo(() => {
+        const q = attendeeSearch.toLowerCase().trim();
+        if (!q) return members;
+        return members.filter(m => 
+            (m.name || '').toLowerCase().includes(q) ||
+            (m.division || '').toLowerCase().includes(q) ||
+            (m.role || '').toLowerCase().includes(q) ||
+            (m.email || '').toLowerCase().includes(q)
+        );
+    }, [members, attendeeSearch]);
+
+    const selectedAttendeesList = useMemo(() => {
+        return (meetingFormData.attendees || []).map(id => {
+            const found = members.find(m => m.id === id);
+            return found || { id, name: id, division: '' };
+        });
+    }, [meetingFormData.attendees, members]);
+
+    const handleSelectAllAttendees = () => {
+        setMeetingFormData(prev => ({
+            ...prev,
+            attendees: members.map(m => m.id)
+        }));
+    };
+
+    const handleClearAllAttendees = () => {
+        setMeetingFormData(prev => ({
+            ...prev,
+            attendees: []
+        }));
+    };
+
+    // Auto clear selected meeting if access is revoked or not accessible
+    React.useEffect(() => {
+        if (selectedMeeting) {
+            const isOwner = checkIsOwner(selectedMeeting);
+            const isShared = checkIsShared(selectedMeeting);
+            if (!isOwner && !isShared) {
+                setSelectedMeeting(null);
+            }
+        }
+    }, [selectedMeeting, userIdentifiers]);
+
     // ----------------------------------------------------
     // STATE: SHARE MODAL (For both Notes and MOM)
     // ----------------------------------------------------
@@ -83,43 +220,45 @@ export default function MinuteOfMeeting({
     // ----------------------------------------------------
     // FILTERED LISTS
     // ----------------------------------------------------
-    // All raw notes categorized by type
+    // Raw notes categorized by type, strictly accessible to current user (owner or shared with)
     const { rawNotesList, rawMomList } = useMemo(() => {
         const nList = [];
         const mList = [];
 
         notes.forEach(item => {
+            const isOwner = checkIsOwner(item);
+            const isShared = checkIsShared(item);
+
+            // JANGAN TAMPILKAN JIKA BUKAN PEMILIK DAN TIDAK DISHARE KE YBS
+            if (!isOwner && !isShared) {
+                return;
+            }
+
             const t = (item.type || '').toLowerCase();
             if (t === 'meeting' || t === 'mom') {
                 mList.push(item);
+            } else if (t.startsWith('schedule')) {
+                // Ignore weekly schedules (managed separately in Jadwal menu)
+                return;
             } else {
                 nList.push(item);
             }
         });
 
         return { rawNotesList: nList, rawMomList: mList };
-    }, [notes]);
+    }, [notes, userIdentifiers]);
 
     // Filter Post-It Notes
     const filteredNotes = useMemo(() => {
         const query = notesSearch.toLowerCase().trim();
 
         return rawNotesList.filter(note => {
-            const isOwner = (note.picId || note.pic_id) === activeUserId;
-            const sharedList = Array.isArray(note.sharedWith) ? note.sharedWith : (Array.isArray(note.attendees) ? note.attendees : []);
-            const isSharedWithMe = sharedList.includes(activeUserId);
-
-            // Access check: Super User sees all; others see own + shared with them (or legacy without owner)
-            if (!isSuperUser) {
-                const hasOwner = Boolean(note.picId || note.pic_id);
-                if (hasOwner && !isOwner && !isSharedWithMe) {
-                    return false;
-                }
-            }
+            const isOwner = checkIsOwner(note);
+            const isShared = checkIsShared(note);
 
             // Filter Scope: 'all', 'my', 'shared'
             if (notesFilterScope === 'my' && !isOwner) return false;
-            if (notesFilterScope === 'shared' && (!isSharedWithMe || isOwner)) return false;
+            if (notesFilterScope === 'shared' && (!isShared || isOwner)) return false;
 
             // Color Filter
             if (notesColorFilter !== 'all' && (note.color || 'yellow') !== notesColorFilter) {
@@ -135,7 +274,7 @@ export default function MinuteOfMeeting({
 
             return true;
         });
-    }, [rawNotesList, notesSearch, notesFilterScope, notesColorFilter, activeUserId, isSuperUser]);
+    }, [rawNotesList, notesSearch, notesFilterScope, notesColorFilter, userIdentifiers]);
 
     // Separate Pinned and Others for Notes
     const { pinnedNotes, otherNotes } = useMemo(() => {
@@ -153,22 +292,12 @@ export default function MinuteOfMeeting({
         const query = momSearch.toLowerCase().trim();
 
         return rawMomList.filter(mom => {
-            const isOwner = (mom.picId || mom.pic_id) === activeUserId;
-            const attendeeList = Array.isArray(mom.attendees) ? mom.attendees : [];
-            const sharedList = Array.isArray(mom.sharedWith) ? mom.sharedWith : attendeeList;
-            const isSharedOrAttendee = sharedList.includes(activeUserId) || attendeeList.includes(activeUserId);
-
-            // Access check: Super User sees all; others see own + attendee/shared (or public/unassigned)
-            if (!isSuperUser) {
-                const hasOwner = Boolean(mom.picId || mom.pic_id);
-                if (hasOwner && !isOwner && !isSharedOrAttendee) {
-                    return false;
-                }
-            }
+            const isOwner = checkIsOwner(mom);
+            const isShared = checkIsShared(mom);
 
             // Filter Scope: 'all', 'my', 'shared'
             if (momFilterScope === 'my' && !isOwner) return false;
-            if (momFilterScope === 'shared' && (!isSharedOrAttendee || isOwner)) return false;
+            if (momFilterScope === 'shared' && (!isShared || isOwner)) return false;
 
             // Project filter
             if (momFilterProject !== 'all' && (mom.project_id || mom.projectId) !== momFilterProject) {
@@ -191,7 +320,7 @@ export default function MinuteOfMeeting({
 
             return true;
         });
-    }, [rawMomList, momSearch, momFilterProject, momFilterDivision, momFilterScope, activeUserId, isSuperUser]);
+    }, [rawMomList, momSearch, momFilterProject, momFilterDivision, momFilterScope, userIdentifiers]);
 
     // ----------------------------------------------------
     // POST-IT (KEEP NOTES) HANDLERS
@@ -331,6 +460,7 @@ export default function MinuteOfMeeting({
                 ]
             });
         }
+        setAttendeeSearch('');
         setIsEditingMeeting(true);
     };
 
@@ -341,47 +471,62 @@ export default function MinuteOfMeeting({
             return;
         }
 
-        const validActionItems = meetingFormData.actionItems
-            .filter(i => (i.issue || '').trim() || (i.decision || '').trim() || (i.text || '').trim())
-            .map((item, idx) => ({
-                id: item.id || `act-${idx + 1}`,
-                issue: (item.issue || '').trim(),
-                decision: (item.decision || item.text || '').trim(),
-                text: (item.decision || item.issue || item.text || '').trim(),
-                picId: item.picId || activeUserId,
-                deadline: item.deadline || '',
-                done: Boolean(item.done),
-                isConverted: Boolean(item.isConverted)
-            }));
+        const newId = meetingFormData.id || crypto.randomUUID();
+        const validActionItems = Array.isArray(meetingFormData.actionItems)
+            ? meetingFormData.actionItems
+                .filter(i => (i.issue || '').trim() || (i.decision || '').trim() || (i.text || '').trim())
+                .map((item, idx) => ({
+                    id: item.id || `act-${idx + 1}`,
+                    issue: (item.issue || '').trim(),
+                    decision: (item.decision || item.text || '').trim(),
+                    text: (item.decision || item.issue || item.text || '').trim(),
+                    picId: item.picId || activeUserId,
+                    deadline: item.deadline || '',
+                    done: Boolean(item.done),
+                    isConverted: Boolean(item.isConverted)
+                }))
+            : [];
 
         const payload = {
+            id: newId,
             type: 'Meeting',
             title: meetingFormData.title.trim(),
             meetingDate: meetingFormData.meetingDate,
-            location: meetingFormData.location.trim(),
+            location: (meetingFormData.location || '').trim(),
             projectId: meetingFormData.projectId || null,
             division: meetingFormData.division || null,
             attendees: meetingFormData.attendees || [],
             sharedWith: meetingFormData.attendees || [],
-            agenda: meetingFormData.agenda.trim(),
-            content: meetingFormData.content.trim(),
+            agenda: (meetingFormData.agenda || '').trim(),
+            content: (meetingFormData.content || '').trim(),
             actionItems: validActionItems,
-            issue: validActionItems[0]?.issue || meetingFormData.agenda.trim() || meetingFormData.title.trim(),
+            issue: validActionItems[0]?.issue || (meetingFormData.agenda || '').trim() || meetingFormData.title.trim(),
             decision: validActionItems.map(a => a.decision || a.text).filter(Boolean).join('; ') || '',
             picId: activeUserId,
             deadline: validActionItems[0]?.deadline || null
         };
 
         if (meetingFormData.id) {
-            await onUpdateNote(meetingFormData.id, payload);
-            if (selectedMeeting && selectedMeeting.id === meetingFormData.id) {
-                setSelectedMeeting(prev => ({ ...prev, ...payload, id: meetingFormData.id, action_items: validActionItems }));
+            const success = await onUpdateNote(meetingFormData.id, payload);
+            if (success !== false) {
+                if (selectedMeeting && selectedMeeting.id === meetingFormData.id) {
+                    setSelectedMeeting(prev => ({ ...prev, ...payload, id: meetingFormData.id, action_items: validActionItems }));
+                }
+                setIsEditingMeeting(false);
             }
         } else {
-            await onAddNote(payload);
+            const success = await onAddNote(payload);
+            if (success !== false) {
+                // Langsung buka notulen rapat di detail view agar pengguna bisa mengisi poin-poinnya
+                setSelectedMeeting({
+                    ...payload,
+                    id: newId,
+                    action_items: validActionItems,
+                    created_at: new Date().toISOString()
+                });
+                setIsEditingMeeting(false);
+            }
         }
-
-        setIsEditingMeeting(false);
     };
 
     // Attendees toggle in meeting form
@@ -571,18 +716,58 @@ export default function MinuteOfMeeting({
         }
     };
 
+    // Filter PIC options for meeting action items: only participants (attendees / sharedWith), meeting creator, or current row PIC
+    const getAvailablePicsForMeeting = (meeting, currentRowPicId) => {
+        if (!meeting) return members;
+
+        const attendeesArr = Array.isArray(meeting.attendees)
+            ? meeting.attendees
+            : (typeof meeting.attendees === 'string' ? JSON.parse(meeting.attendees || '[]') : []);
+
+        const sharedWithArr = Array.isArray(meeting.sharedWith)
+            ? meeting.sharedWith
+            : (Array.isArray(meeting.shared_with)
+                ? meeting.shared_with
+                : (typeof meeting.shared_with === 'string' ? JSON.parse(meeting.shared_with || '[]') : []));
+
+        const ownerId = meeting.pic_id || meeting.picId || meeting.author_id || meeting.authorId || meeting.owner_id;
+
+        const allowedSet = new Set(
+            [...attendeesArr, ...sharedWithArr, ownerId, currentRowPicId]
+                .filter(Boolean)
+                .map(id => String(id).trim().toLowerCase())
+        );
+
+        if (allowedSet.size === 0) {
+            return members;
+        }
+
+        const filtered = members.filter(m => {
+            if (allowedSet.has(String(m.id).toLowerCase())) return true;
+            if (m.email && allowedSet.has(String(m.email).toLowerCase().trim())) return true;
+            if (m.name && allowedSet.has(String(m.name).toLowerCase().trim())) return true;
+            return false;
+        });
+
+        return filtered.length > 0 ? filtered : members;
+    };
+
     // Add empty row directly inside Detail View table
     const handleAddRowInDetailView = async (meeting) => {
         const items = Array.isArray(meeting.action_items || meeting.actionItems)
             ? [...(meeting.action_items || meeting.actionItems)]
             : [];
 
+        const defaultPicId = (Array.isArray(meeting.attendees) && meeting.attendees.length > 0)
+            ? meeting.attendees[0]
+            : (meeting.pic_id || meeting.picId || activeUserId || '');
+
         const newRow = {
             id: `act-${Date.now()}`,
             issue: '',
             decision: '',
             text: '',
-            picId: activeUserId,
+            picId: defaultPicId,
             deadline: '',
             done: false,
             isConverted: false
@@ -618,6 +803,45 @@ export default function MinuteOfMeeting({
 
         await onUpdateNote(meeting.id, updatedMeeting);
         setSelectedMeeting(updatedMeeting);
+    };
+
+    // Delete row directly in Detail View table
+    const handleDeleteRowInDetailView = async (meeting, itemId) => {
+        const items = Array.isArray(meeting.action_items || meeting.actionItems)
+            ? [...(meeting.action_items || meeting.actionItems)]
+            : [];
+
+        if (items.length <= 1) {
+            const resetItem = { id: `act-${Date.now()}`, issue: '', decision: '', text: '', picId: activeUserId, deadline: '', done: false, isConverted: false };
+            const updatedMeeting = {
+                ...meeting,
+                action_items: [resetItem],
+                actionItems: [resetItem]
+            };
+            await onUpdateNote(meeting.id, updatedMeeting);
+            setSelectedMeeting(updatedMeeting);
+            return;
+        }
+
+        const updatedItems = items.filter(it => it.id !== itemId);
+        const updatedMeeting = {
+            ...meeting,
+            action_items: updatedItems,
+            actionItems: updatedItems
+        };
+
+        await onUpdateNote(meeting.id, updatedMeeting);
+        setSelectedMeeting(updatedMeeting);
+    };
+
+    // Delete entire meeting directly from Detail View
+    const handleDeleteSelectedMeeting = () => {
+        if (!selectedMeeting) return;
+        if (confirm(`Yakin ingin menghapus notulen "${selectedMeeting.title || 'Rapat'}" secara permanen?`)) {
+            const idToDelete = selectedMeeting.id;
+            setSelectedMeeting(null);
+            onDeleteNote(idToDelete);
+        }
     };
 
     // ----------------------------------------------------
@@ -730,7 +954,9 @@ export default function MinuteOfMeeting({
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto h-full flex flex-col">
-            {/* Top Navigation & Segmented Tabs */}
+            {!selectedMeeting ? (
+                <>
+                    {/* Top Navigation & Segmented Tabs */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/70">
                 <div>
                     <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2.5">
@@ -746,7 +972,11 @@ export default function MinuteOfMeeting({
                 <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/80 shadow-xs self-start sm:self-auto">
                     <button
                         type="button"
-                        onClick={() => { setActiveTab('notes'); setIsEditingMeeting(false); }}
+                        onClick={() => {
+                            setActiveTab('notes');
+                            setIsEditingMeeting(false);
+                            if (onTabChange) onTabChange('notes');
+                        }}
                         className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                             activeTab === 'notes'
                                 ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60 scale-[1.02]'
@@ -754,7 +984,7 @@ export default function MinuteOfMeeting({
                         }`}
                     >
                         <i className="fa-solid fa-note-sticky text-amber-500 text-sm"></i>
-                        <span>Catatan & Post-It</span>
+                        <span>Post it!</span>
                         <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-extrabold">
                             {rawNotesList.length}
                         </span>
@@ -762,7 +992,11 @@ export default function MinuteOfMeeting({
 
                     <button
                         type="button"
-                        onClick={() => { setActiveTab('mom'); setIsCreatingNote(false); }}
+                        onClick={() => {
+                            setActiveTab('mom');
+                            setIsCreatingNote(false);
+                            if (onTabChange) onTabChange('mom');
+                        }}
                         className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                             activeTab === 'mom'
                                 ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60 scale-[1.02]'
@@ -770,7 +1004,7 @@ export default function MinuteOfMeeting({
                         }`}
                     >
                         <i className="fa-solid fa-clipboard-list text-emerald-600 text-sm"></i>
-                        <span>Notulen Rapat (MoM)</span>
+                        <span>Minutes of Meeting</span>
                         <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold">
                             {rawMomList.length}
                         </span>
@@ -1332,320 +1566,414 @@ export default function MinuteOfMeeting({
                     </div>
                 </div>
             )}
+            </>
+            ) : (
+                /* ========================================================================= */
+                /* DEDICATED FULL-PAGE VIEW: MEETING DETAIL & ACTION ITEMS TABLE             */
+                /* ========================================================================= */
+                <div className="space-y-6 animate-fade-in pb-12">
+                    {/* Top Navigation & Action Buttons */}
+                    <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedMeeting(null)}
+                                className="group inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition"
+                            >
+                                <i className="fa-solid fa-arrow-left text-slate-400 group-hover:-translate-x-0.5 transition-transform"></i>
+                                <span>Kembali ke Daftar Notulen</span>
+                            </button>
+                            <div className="h-5 w-px bg-slate-200 hidden sm:block"></div>
+                            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
+                                <span className="hover:text-slate-800 cursor-pointer" onClick={() => setSelectedMeeting(null)}>
+                                    Notulen Rapat
+                                </span>
+                                <i className="fa-solid fa-chevron-right text-[10px] text-slate-300"></i>
+                                <span className="font-bold text-slate-800 max-w-sm truncate">
+                                    {selectedMeeting.title || selectedMeeting.issue || 'Detail Notulen'}
+                                </span>
+                            </div>
+                        </div>
 
-            {/* ========================================================================= */}
-            {/* MODAL 1: MEETING DETAIL & DETAIL TABEL (ISSUE, KEPUTUSAN, PIC, DEADLINE,   */}
-            {/*          CHECKLIST DONE, TOMBOL BUAT TASK)                                */}
-            {/* ========================================================================= */}
-            {selectedMeeting && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
-                        {/* Modal Header */}
-                        <div className="p-5 border-b border-slate-100 bg-slate-50/70 flex items-start justify-between gap-4">
-                            <div>
-                                <div className="flex items-center gap-2 mb-1.5">
-                                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 uppercase tracking-wider">
-                                        Detail Notulen Rapat (MoM)
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                                type="button"
+                                onClick={(e) => handleCopyWhatsAppFormat(selectedMeeting, e)}
+                                className="px-3.5 py-2 rounded-xl text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold transition flex items-center gap-1.5 shadow-xs"
+                                title="Salin format ringkasan WhatsApp"
+                            >
+                                <i className="fa-brands fa-whatsapp text-sm"></i>
+                                <span>{copiedId === selectedMeeting.id ? 'Tersalin!' : 'Salin WA'}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => handleOpenShareModal(selectedMeeting, 'mom')}
+                                className="px-3.5 py-2 rounded-xl text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold transition flex items-center gap-1.5 shadow-xs"
+                                title="Kelola siapa saja yang bisa akses notulen ini"
+                            >
+                                <i className="fa-solid fa-user-plus text-xs"></i>
+                                <span>Bagikan</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => handleOpenMeetingForm(selectedMeeting)}
+                                className="px-3.5 py-2 rounded-xl text-xs bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold transition flex items-center gap-1.5 shadow-xs"
+                            >
+                                <i className="fa-solid fa-pen text-xs text-slate-500"></i>
+                                <span>Edit Info</span>
+                            </button>
+
+                            {(isSuperUser || (selectedMeeting.pic_id || selectedMeeting.picId) === activeUserId) && (
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteSelectedMeeting}
+                                    className="px-3.5 py-2 rounded-xl text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold transition flex items-center gap-1.5 shadow-xs"
+                                    title="Hapus Notulen Rapat"
+                                >
+                                    <i className="fa-solid fa-trash-can text-xs"></i>
+                                    <span>Hapus</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Meeting Overview Card */}
+                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-7 space-y-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 uppercase tracking-wider">
+                                Notulen Rapat (MoM)
+                            </span>
+                            {selectedMeeting.meeting_date && (
+                                <span className="text-xs text-slate-600 font-semibold flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-full border border-slate-200/60">
+                                    <i className="fa-regular fa-calendar text-emerald-600 text-[11px]"></i>
+                                    {new Date(selectedMeeting.meeting_date).toLocaleDateString('id-ID', {
+                                        weekday: 'long',
+                                        day: 'numeric',
+                                        month: 'long',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    })}
+                                </span>
+                            )}
+                            {selectedMeeting.project_id && (
+                                <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200/60 flex items-center gap-1.5 text-xs font-semibold">
+                                    <i className="fa-regular fa-folder text-emerald-600"></i>
+                                    <span>{projects.find(p => p.id === selectedMeeting.project_id)?.name || 'Proyek'}</span>
+                                </span>
+                            )}
+                            {selectedMeeting.division && (
+                                <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-200/60 flex items-center gap-1.5 text-xs font-semibold">
+                                    <i className="fa-solid fa-layer-group text-blue-500 text-[10px]"></i>
+                                    <span>{selectedMeeting.division}</span>
+                                </span>
+                            )}
+                            {selectedMeeting.location && (
+                                <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200/60 flex items-center gap-1.5 text-xs font-medium">
+                                    <i className="fa-solid fa-location-dot text-rose-500"></i>
+                                    <span>{selectedMeeting.location}</span>
+                                </span>
+                            )}
+                        </div>
+
+                        <div>
+                            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
+                                {selectedMeeting.title || selectedMeeting.issue || 'Tanpa Judul Rapat'}
+                            </h1>
+                        </div>
+
+                        {/* Peserta Rapat (Attendees) Chips */}
+                        {(() => {
+                            const attendeesArr = Array.isArray(selectedMeeting.attendees) ? selectedMeeting.attendees : [];
+                            const attendeeItems = attendeesArr.map(att => {
+                                const found = members.find(m => m.id === att || m.name === att);
+                                return {
+                                    id: att,
+                                    name: found?.name || att,
+                                    role: found?.role
+                                };
+                            });
+
+                            return (
+                                <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mr-1">
+                                        <i className="fa-solid fa-users text-emerald-600"></i>
+                                        Peserta Rapat ({attendeeItems.length}):
                                     </span>
-                                    {selectedMeeting.meeting_date && (
-                                        <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                                            <i className="fa-regular fa-calendar text-[11px]"></i>
-                                            {new Date(selectedMeeting.meeting_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                        </span>
+                                    {attendeeItems.length === 0 ? (
+                                        <span className="text-xs text-slate-400 italic">Belum ada peserta yang ditandai</span>
+                                    ) : (
+                                        attendeeItems.map((att, idx) => (
+                                            <span
+                                                key={att.id || idx}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-50 text-slate-700 border border-slate-200"
+                                            >
+                                                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black uppercase">
+                                                    {att.name ? att.name.charAt(0) : 'U'}
+                                                </span>
+                                                <span>{att.name}</span>
+                                            </span>
+                                        ))
                                     )}
                                 </div>
-                                <h2 className="text-xl font-black text-slate-900 leading-tight">
-                                    {selectedMeeting.title || selectedMeeting.issue || 'Tanpa Judul Rapat'}
-                                </h2>
-                                <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-slate-600">
-                                    {selectedMeeting.project_id && (
-                                        <span className="bg-white px-2.5 py-1 rounded-lg border border-slate-200 flex items-center gap-1.5 font-semibold text-slate-700">
-                                            <i className="fa-regular fa-folder text-emerald-600"></i>
-                                            <span>{projects.find(p => p.id === selectedMeeting.project_id)?.name || 'Proyek'}</span>
-                                        </span>
-                                    )}
-                                    {selectedMeeting.location && (
-                                        <span className="bg-white px-2.5 py-1 rounded-lg border border-slate-200 flex items-center gap-1.5 text-slate-600">
-                                            <i className="fa-solid fa-location-dot text-rose-500"></i>
-                                            <span>{selectedMeeting.location}</span>
-                                        </span>
-                                    )}
-                                </div>
+                            );
+                        })()}
+                    </div>
+
+                    {/* Agenda & Rangkuman Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                <i className="fa-solid fa-list-check text-emerald-600"></i>
+                                <span>Agenda Rapat</span>
+                            </h4>
+                            {selectedMeeting.agenda ? (
+                                <p className="text-xs text-slate-700 whitespace-pre-line leading-relaxed pt-1 font-normal">
+                                    {selectedMeeting.agenda}
+                                </p>
+                            ) : (
+                                <p className="text-xs text-slate-400 italic pt-1">
+                                    Belum ada rincian agenda rapat tertulis.
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                                <i className="fa-regular fa-file-lines text-indigo-600"></i>
+                                <span>Rangkuman Notulensi Diskusi</span>
+                            </h4>
+                            {selectedMeeting.content ? (
+                                <p className="text-xs text-slate-700 whitespace-pre-line leading-relaxed pt-1 font-normal">
+                                    {selectedMeeting.content}
+                                </p>
+                            ) : (
+                                <p className="text-xs text-slate-400 italic pt-1">
+                                    Belum ada rangkuman notulensi tertulis.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Tabel Pembahasan, Keputusan & Action Items */}
+                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                            <div>
+                                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                                    <i className="fa-solid fa-table-list text-emerald-600"></i>
+                                    <span>Tabel Pembahasan, Keputusan & Action Items</span>
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Tiap baris issue dan keputusan dapat ditentukan PIC, deadline, checklist selesai, dan dikonversi langsung menjadi task proyek.
+                                </p>
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2.5">
                                 <button
                                     type="button"
-                                    onClick={(e) => handleCopyWhatsAppFormat(selectedMeeting, e)}
-                                    className="px-3 py-1.5 rounded-xl text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold transition flex items-center gap-1"
-                                    title="Salin format ringkasan WhatsApp"
+                                    onClick={() => handleAddRowInDetailView(selectedMeeting)}
+                                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
                                 >
-                                    <i className="fa-brands fa-whatsapp text-sm"></i>
-                                    <span>Salin WA</span>
+                                    <i className="fa-solid fa-plus text-xs"></i>
+                                    <span>Tambah Baris</span>
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => handleOpenShareModal(selectedMeeting, 'mom')}
-                                    className="px-3 py-1.5 rounded-xl text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold transition flex items-center gap-1"
-                                    title="Kelola siapa saja yang bisa akses notulen ini"
+                                    onClick={() => handleConvertAllItemsToTasks(selectedMeeting)}
+                                    className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-2 cursor-pointer"
+                                    title="Konversi semua item yang belum dibuat task ke proyek"
                                 >
-                                    <i className="fa-solid fa-user-plus text-xs"></i>
-                                    <span>Bagikan</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const m = selectedMeeting;
-                                        setSelectedMeeting(null);
-                                        handleOpenMeetingForm(m);
-                                    }}
-                                    className="px-3 py-1.5 rounded-xl text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition flex items-center gap-1"
-                                >
-                                    <i className="fa-solid fa-pen text-xs"></i>
-                                    <span>Edit</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedMeeting(null)}
-                                    className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-200 flex items-center justify-center transition"
-                                >
-                                    <i className="fa-solid fa-xmark text-sm"></i>
+                                    <i className="fa-solid fa-bolt text-xs"></i>
+                                    <span>Jadikan Semua Task</span>
                                 </button>
                             </div>
                         </div>
 
-                        {/* Modal Body */}
-                        <div className="p-6 overflow-y-auto flex-1 space-y-6 custom-scrollbar">
-                            {/* Attendees and Agenda Summary */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {selectedMeeting.agenda && (
-                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
-                                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                            <i className="fa-solid fa-list-check text-emerald-600"></i>
-                                            Agenda Rapat
-                                        </h4>
-                                        <p className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
-                                            {selectedMeeting.agenda}
-                                        </p>
-                                    </div>
-                                )}
+                        {/* The Table */}
+                        {(() => {
+                            let items = Array.isArray(selectedMeeting.action_items || selectedMeeting.actionItems)
+                                ? (selectedMeeting.action_items || selectedMeeting.actionItems)
+                                : [];
 
-                                {selectedMeeting.content && (
-                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
-                                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                            <i className="fa-regular fa-file-lines text-emerald-600"></i>
-                                            Rangkuman Notulensi Diskusi
-                                        </h4>
-                                        <p className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
-                                            {selectedMeeting.content}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
+                            if (items.length === 0 && (selectedMeeting.decision || selectedMeeting.issue)) {
+                                items = [{
+                                    id: 'act-1',
+                                    issue: selectedMeeting.issue || selectedMeeting.agenda || '',
+                                    decision: selectedMeeting.decision || '',
+                                    text: selectedMeeting.decision || selectedMeeting.issue || '',
+                                    picId: selectedMeeting.pic_id || selectedMeeting.picId || activeUserId,
+                                    deadline: selectedMeeting.deadline || '',
+                                    done: !!selectedMeeting.is_done,
+                                    isConverted: false
+                                }];
+                            }
 
-                            {/* DETAIL TABEL ACTION ITEMS & KEPUTUSAN */}
-                            <div className="space-y-3">
-                                <div className="flex flex-wrap items-center justify-between gap-3 pb-1 border-b border-slate-200">
-                                    <div>
-                                        <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                                            <i className="fa-solid fa-table-list text-emerald-600"></i>
-                                            Tabel Pembahasan, Keputusan & Action Items
-                                        </h3>
-                                        <p className="text-xs text-slate-500 mt-0.5">
-                                            Tiap baris issue dan keputusan dapat ditentukan PIC, deadline, checklist selesai, dan dikonversi langsung menjadi task proyek.
-                                        </p>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleAddRowInDetailView(selectedMeeting)}
-                                            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1 cursor-pointer"
-                                        >
-                                            <i className="fa-solid fa-plus text-xs"></i>
-                                            <span>Tambah Baris</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleConvertAllItemsToTasks(selectedMeeting)}
-                                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                                            title="Konversi semua item yang belum dibuat task ke proyek"
-                                        >
-                                            <i className="fa-solid fa-bolt text-xs"></i>
-                                            <span>Jadikan Semua Task</span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* The Detail Table */}
-                                {(() => {
-                                    let items = Array.isArray(selectedMeeting.action_items || selectedMeeting.actionItems)
-                                        ? (selectedMeeting.action_items || selectedMeeting.actionItems)
-                                        : [];
-
-                                    if (items.length === 0 && (selectedMeeting.decision || selectedMeeting.issue)) {
-                                        items = [{
-                                            id: 'act-1',
-                                            issue: selectedMeeting.issue || selectedMeeting.agenda || '',
-                                            decision: selectedMeeting.decision || '',
-                                            text: selectedMeeting.decision || selectedMeeting.issue || '',
-                                            picId: selectedMeeting.pic_id || selectedMeeting.picId || activeUserId,
-                                            deadline: selectedMeeting.deadline || '',
-                                            done: !!selectedMeeting.is_done,
-                                            isConverted: false
-                                        }];
-                                    }
-
-                                    return (
-                                        <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-xs">
-                                            <table className="w-full text-left text-xs border-collapse">
-                                                <thead>
-                                                    <tr className="bg-slate-100/90 text-slate-700 border-b border-slate-200 font-bold">
-                                                        <th className="p-3 w-10 text-center">#</th>
-                                                        <th className="p-3 min-w-[200px]">Issue / Pembahasan</th>
-                                                        <th className="p-3 min-w-[220px]">Keputusan / Solusi</th>
-                                                        <th className="p-3 min-w-[140px]">PIC (Penanggung Jawab)</th>
-                                                        <th className="p-3 min-w-[120px]">Tenggat (Deadline)</th>
-                                                        <th className="p-3 w-28 text-center">Selesai</th>
-                                                        <th className="p-3 w-36 text-center">Aksi Task</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100 bg-white">
-                                                    {items.length === 0 ? (
-                                                        <tr>
-                                                            <td colSpan={7} className="p-6 text-center text-slate-400">
-                                                                Belum ada baris pembahasan / keputusan. Klik tombol <span className="font-bold text-slate-700">+ Tambah Baris</span> di atas.
+                            return (
+                                <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-xs">
+                                    <table className="w-full text-left text-xs border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-100/90 text-slate-700 border-b border-slate-200 font-bold">
+                                                <th className="p-3.5 w-12 text-center">#</th>
+                                                <th className="p-3.5 min-w-[240px]">Issue / Pembahasan</th>
+                                                <th className="p-3.5 min-w-[260px]">Keputusan / Solusi</th>
+                                                <th className="p-3.5 min-w-[170px]">PIC (Penanggung Jawab)</th>
+                                                <th className="p-3.5 min-w-[140px]">Tenggat (Deadline)</th>
+                                                <th className="p-3.5 w-24 text-center">Selesai</th>
+                                                <th className="p-3.5 w-36 text-center">Aksi Task</th>
+                                                <th className="p-3.5 w-12 text-center"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 bg-white">
+                                            {items.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                                                        Belum ada baris pembahasan / keputusan. Klik tombol <span className="font-bold text-slate-700">+ Tambah Baris</span> di atas untuk mulai mencatat.
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                items.map((item, idx) => {
+                                                    return (
+                                                        <tr key={item.id || idx} className={`group hover:bg-slate-50/80 transition-colors ${item.done ? 'bg-slate-50/50' : ''}`}>
+                                                            <td className="p-3.5 text-center font-bold text-slate-400">
+                                                                {idx + 1}
+                                                            </td>
+                                                            {/* Issue */}
+                                                            <td className="p-3.5">
+                                                                <textarea
+                                                                    rows={2}
+                                                                    value={item.issue || ''}
+                                                                    placeholder="Tulis masalah / topik..."
+                                                                    onChange={(e) => handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'issue', e.target.value)}
+                                                                    className={`w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 p-2 rounded-xl outline-none transition text-xs resize-none ${
+                                                                        item.done ? 'line-through text-slate-400 bg-slate-100/50' : 'text-slate-800 font-semibold'
+                                                                    }`}
+                                                                />
+                                                            </td>
+                                                            {/* Keputusan */}
+                                                            <td className="p-3.5">
+                                                                <textarea
+                                                                    rows={2}
+                                                                    value={item.decision || item.text || ''}
+                                                                    placeholder="Tulis keputusan / tindak lanjut..."
+                                                                    onChange={(e) => {
+                                                                        handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'decision', e.target.value);
+                                                                        handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'text', e.target.value);
+                                                                    }}
+                                                                    className={`w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 p-2 rounded-xl outline-none transition text-xs resize-none ${
+                                                                        item.done ? 'line-through text-slate-400 bg-slate-100/50' : 'text-slate-700'
+                                                                    }`}
+                                                                />
+                                                            </td>
+                                                            {/* PIC */}
+                                                            <td className="p-3.5">
+                                                                <select
+                                                                    value={item.picId || ''}
+                                                                    onChange={(e) => handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'picId', e.target.value)}
+                                                                    className="w-full text-xs bg-slate-50 hover:bg-slate-100 focus:bg-white border border-slate-200 rounded-xl p-2 text-slate-700 focus:outline-none focus:border-emerald-500 cursor-pointer font-medium"
+                                                                >
+                                                                    <option value="">Pilih PIC...</option>
+                                                                    {getAvailablePicsForMeeting(selectedMeeting, item.picId).map(m => (
+                                                                        <option key={m.id} value={m.id}>
+                                                                            {m.name} {m.id === activeUserId ? '(Saya)' : ''}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </td>
+                                                            {/* Tenggat */}
+                                                            <td className="p-3.5">
+                                                                <input
+                                                                    type="date"
+                                                                    value={item.deadline ? item.deadline.split('T')[0] : ''}
+                                                                    onChange={(e) => handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'deadline', e.target.value)}
+                                                                    className="w-full text-xs bg-slate-50 hover:bg-slate-100 focus:bg-white border border-slate-200 rounded-xl p-2 text-slate-700 focus:outline-none focus:border-emerald-500 cursor-pointer font-medium"
+                                                                />
+                                                            </td>
+                                                            {/* Selesai Checklist */}
+                                                            <td className="p-3.5 text-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={!!item.done}
+                                                                    onChange={(e) => handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'done', e.target.checked)}
+                                                                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 transition cursor-pointer"
+                                                                    title="Tandai selesai"
+                                                                />
+                                                            </td>
+                                                            {/* Aksi Task */}
+                                                            <td className="p-3.5 text-center">
+                                                                {item.isConverted ? (
+                                                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-xl">
+                                                                        <i className="fa-solid fa-check text-xs"></i>
+                                                                        <span>Jadi Task</span>
+                                                                    </span>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleConvertSingleItemToTask(selectedMeeting, item)}
+                                                                        className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-xl transition active:scale-95 cursor-pointer shadow-xs"
+                                                                        title="Jadikan baris ini sebagai task di proyek"
+                                                                    >
+                                                                        <i className="fa-solid fa-bolt text-indigo-600"></i>
+                                                                        <span>Buat Task</span>
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                            {/* Hapus Baris */}
+                                                            <td className="p-3.5 text-center">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteRowInDetailView(selectedMeeting, item.id)}
+                                                                    className="opacity-40 group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                                                                    title="Hapus baris ini"
+                                                                >
+                                                                    <i className="fa-solid fa-trash-can text-xs"></i>
+                                                                </button>
                                                             </td>
                                                         </tr>
-                                                    ) : (
-                                                        items.map((item, idx) => {
-                                                            const picMember = members.find(m => m.id === item.picId);
-                                                            return (
-                                                                <tr key={item.id || idx} className={`hover:bg-slate-50/80 transition-colors ${item.done ? 'bg-slate-50/50' : ''}`}>
-                                                                    <td className="p-3 text-center font-bold text-slate-400">
-                                                                        {idx + 1}
-                                                                    </td>
-                                                                    {/* Issue */}
-                                                                    <td className="p-3">
-                                                                        <input
-                                                                            type="text"
-                                                                            value={item.issue || ''}
-                                                                            placeholder="Tulis masalah / topik..."
-                                                                            onChange={(e) => handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'issue', e.target.value)}
-                                                                            className={`w-full bg-transparent border-b border-transparent focus:border-emerald-500 focus:bg-white p-1 rounded outline-none transition ${
-                                                                                item.done ? 'line-through text-slate-400' : 'text-slate-800 font-semibold'
-                                                                            }`}
-                                                                        />
-                                                                    </td>
-                                                                    {/* Keputusan */}
-                                                                    <td className="p-3">
-                                                                        <input
-                                                                            type="text"
-                                                                            value={item.decision || item.text || ''}
-                                                                            placeholder="Tulis keputusan / tindak lanjut..."
-                                                                            onChange={(e) => {
-                                                                                handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'decision', e.target.value);
-                                                                                handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'text', e.target.value);
-                                                                            }}
-                                                                            className={`w-full bg-transparent border-b border-transparent focus:border-emerald-500 focus:bg-white p-1 rounded outline-none transition ${
-                                                                                item.done ? 'line-through text-slate-400' : 'text-slate-700'
-                                                                            }`}
-                                                                        />
-                                                                    </td>
-                                                                    {/* PIC */}
-                                                                    <td className="p-3">
-                                                                        <select
-                                                                            value={item.picId || ''}
-                                                                            onChange={(e) => handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'picId', e.target.value)}
-                                                                            className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-slate-700 focus:outline-none focus:border-emerald-500 cursor-pointer"
-                                                                        >
-                                                                            <option value="">Tanpa PIC</option>
-                                                                            {members.map(m => (
-                                                                                <option key={m.id} value={m.id}>
-                                                                                    {m.name} {m.id === activeUserId ? '(Saya)' : ''}
-                                                                                </option>
-                                                                            ))}
-                                                                        </select>
-                                                                    </td>
-                                                                    {/* Deadline */}
-                                                                    <td className="p-3">
-                                                                        <input
-                                                                            type="date"
-                                                                            value={item.deadline || ''}
-                                                                            onChange={(e) => handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'deadline', e.target.value)}
-                                                                            className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-slate-700 focus:outline-none focus:border-emerald-500 cursor-pointer w-full"
-                                                                        />
-                                                                    </td>
-                                                                    {/* Checklist Done */}
-                                                                    <td className="p-3 text-center">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={Boolean(item.done)}
-                                                                            onChange={() => handleToggleActionItemDone(selectedMeeting, item.id)}
-                                                                            className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                                                                            title={item.done ? "Tandai belum selesai" : "Tandai selesai"}
-                                                                        />
-                                                                    </td>
-                                                                    {/* Tombol Aksi Buat Task */}
-                                                                    <td className="p-3 text-center">
-                                                                        {item.isConverted ? (
-                                                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-lg">
-                                                                                <i className="fa-solid fa-check text-xs"></i>
-                                                                                <span>Jadi Task</span>
-                                                                            </span>
-                                                                        ) : (
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => handleConvertSingleItemToTask(selectedMeeting, item)}
-                                                                                className="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition active:scale-95 cursor-pointer"
-                                                                                title="Jadikan baris ini sebagai task di proyek"
-                                                                            >
-                                                                                <i className="fa-solid fa-bolt text-indigo-600"></i>
-                                                                                <span>Buat Task</span>
-                                                                            </button>
-                                                                        )}
-                                                                    </td>
-                                                                </tr>
-                                                            );
-                                                        })
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            );
+                        })()}
 
-                        {/* Modal Footer */}
-                        <div className="p-4 bg-slate-50/90 border-t border-slate-200 flex items-center justify-between">
-                            <div className="text-xs text-slate-500">
-                                {selectedMeeting.project_id
-                                    ? `Semua task baru akan masuk ke proyek: ${projects.find(p => p.id === selectedMeeting.project_id)?.name || 'Proyek'}`
-                                    : 'Catatan: Pastikan proyek sudah dipilih agar task dapat terhubung.'}
+                        {/* Table Footer */}
+                        <div className="pt-3 flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div className="text-xs text-slate-500 flex items-center gap-2">
+                                <i className="fa-solid fa-circle-info text-slate-400"></i>
+                                <span>
+                                    {selectedMeeting.project_id
+                                        ? `Semua task baru akan otomatis terhubung ke proyek: ${projects.find(p => p.id === selectedMeeting.project_id)?.name || 'Proyek'}`
+                                        : 'Catatan: Pastikan proyek sudah dipilih agar task dapat terhubung.'}
+                                </span>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setSelectedMeeting(null)}
-                                className="px-5 py-2 text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 rounded-xl transition shadow-xs"
+                                className="px-5 py-2.5 text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 rounded-xl transition shadow-xs flex items-center gap-2 self-end sm:self-auto cursor-pointer"
                             >
-                                Tutup Detail
+                                <i className="fa-solid fa-arrow-left text-xs"></i>
+                                <span>Kembali ke Daftar Notulen</span>
                             </button>
                         </div>
                     </div>
                 </div>
             )}
-
             {/* ========================================================================= */}
-            {/* MODAL 2: FULL MEETING FORM EDITOR (FOR CREATE / EDIT MOM)                 */}
+            {/* MODAL 2: MEETING FORM EDITOR (FOR CREATE / EDIT MOM)                       */}
             {/* ========================================================================= */}
             {isEditingMeeting && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl p-6 lg:p-8 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-                        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+                    <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl p-6 lg:p-7 max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+                        <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-100">
                             <div className="flex items-center gap-2.5">
                                 <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-                                <h3 className="font-bold text-slate-900 text-lg">
+                                <h3 className="font-black text-slate-900 text-lg">
                                     {meetingFormData.id ? 'Edit Notulen Rapat (MoM)' : 'Buat Notulen Rapat Baru (MoM)'}
                                 </h3>
                             </div>
@@ -1659,48 +1987,209 @@ export default function MinuteOfMeeting({
                         </div>
 
                         <form onSubmit={handleSaveMeetingForm} className="space-y-4 overflow-y-auto flex-1 pr-1 custom-scrollbar">
-                            {/* Title */}
+                            {/* 1. Judul Rapat */}
                             <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">Topik / Judul Rapat</label>
+                                <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-heading text-emerald-600"></i>
+                                    <span>Judul / Topik Rapat <span className="text-rose-500">*</span></span>
+                                </label>
                                 <input
                                     type="text"
                                     placeholder="Contoh: Rapat Koordinasi Mingguan Proyek Promo & IT..."
                                     value={meetingFormData.title}
                                     onChange={(e) => setMeetingFormData({ ...meetingFormData, title: e.target.value })}
-                                    className="w-full text-base font-bold text-slate-900 border border-slate-200 rounded-2xl p-3 focus:outline-none focus:border-emerald-500"
+                                    className="w-full text-base font-bold text-slate-900 border border-slate-200 rounded-2xl p-3 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 bg-white"
+                                    required
+                                    autoFocus
+                                />
+                            </div>
+
+                            {/* 2. Peserta Rapat (Pencarian Ceklis & Hasil Ceklis) */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                        <i className="fa-solid fa-users text-emerald-600"></i>
+                                        <span>Peserta Rapat <span className="text-slate-400 font-normal">(Pencarian & Ceklis Peserta)</span></span>
+                                    </label>
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <button
+                                            type="button"
+                                            onClick={handleSelectAllAttendees}
+                                            className="text-emerald-700 font-bold hover:underline cursor-pointer"
+                                        >
+                                            Pilih Semua
+                                        </button>
+                                        <span className="text-slate-300">•</span>
+                                        <button
+                                            type="button"
+                                            onClick={handleClearAllAttendees}
+                                            className="text-slate-500 font-medium hover:underline cursor-pointer"
+                                        >
+                                            Bersihkan
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* HASIL PESERTA YANG DI CEKLIS (Chips) */}
+                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/90">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                                            Hasil Peserta Terpilih ({selectedAttendeesList.length} orang):
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5 min-h-[36px] items-center">
+                                        {selectedAttendeesList.length === 0 ? (
+                                            <span className="text-xs text-slate-400 italic">
+                                                Belum ada peserta yang diceklis. Silakan cari dan beri tanda centang (✓) pada daftar di bawah.
+                                            </span>
+                                        ) : (
+                                            selectedAttendeesList.map(m => (
+                                                <span
+                                                    key={m.id}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold shadow-xs animate-fade-in"
+                                                >
+                                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                    <span>{m.name}</span>
+                                                    {m.division && <span className="text-[10px] text-emerald-600 font-normal">({m.division})</span>}
+                                                    {m.id === activeUserId && <span className="text-[10px] text-emerald-700 font-bold">(Saya)</span>}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleMeetingAttendee(m.id)}
+                                                        className="text-emerald-500 hover:text-emerald-800 ml-1 rounded-full w-4 h-4 inline-flex items-center justify-center hover:bg-emerald-200/60 transition cursor-pointer"
+                                                        title="Hapus peserta"
+                                                    >
+                                                        <i className="fa-solid fa-xmark text-[10px]"></i>
+                                                    </button>
+                                                </span>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* PENCARIAN CEKLIS PESERTA */}
+                                <div className="space-y-1.5">
+                                    <div className="relative">
+                                        <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                        <input
+                                            type="text"
+                                            placeholder="Ketik untuk mencari nama peserta, divisi, atau role..."
+                                            value={attendeeSearch}
+                                            onChange={(e) => setAttendeeSearch(e.target.value)}
+                                            className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+                                        />
+                                        {attendeeSearch && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setAttendeeSearch('')}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                                            >
+                                                <i className="fa-solid fa-xmark text-xs"></i>
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="max-h-44 overflow-y-auto space-y-1 p-2 bg-slate-50/60 rounded-2xl border border-slate-200/80 custom-scrollbar">
+                                        {filteredMembersForMeeting.length === 0 ? (
+                                            <p className="text-xs text-slate-400 text-center py-4">
+                                                Tidak ada anggota yang cocok dengan &quot;{attendeeSearch}&quot;
+                                            </p>
+                                        ) : (
+                                            filteredMembersForMeeting.map(m => {
+                                                const isChecked = meetingFormData.attendees.includes(m.id);
+                                                return (
+                                                    <label
+                                                        key={m.id}
+                                                        className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition border ${
+                                                            isChecked
+                                                                ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950 font-semibold shadow-xs'
+                                                                : 'bg-white border-slate-200/60 hover:bg-slate-100/70 text-slate-700'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-2.5">
+                                                            <div
+                                                                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-xs"
+                                                                style={{ backgroundColor: m.color || '#10b981' }}
+                                                            >
+                                                                {m.name.charAt(0)}
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs leading-tight">
+                                                                    {m.name} {m.id === activeUserId && <span className="text-[10px] text-emerald-600 font-bold">(Saya)</span>}
+                                                                </p>
+                                                                <p className="text-[10px] text-slate-400 font-normal">
+                                                                    {m.division || 'Divisi'} • {m.role || 'Staff'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={() => toggleMeetingAttendee(m.id)}
+                                                            className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                                        />
+                                                    </label>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 3. Pembahasan */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-list-check text-emerald-600"></i>
+                                    <span>Pembahasan / Agenda Rapat <span className="text-rose-500">*</span></span>
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    placeholder="Tuliskan pokok agenda atau pembahasan rapat (contoh: 1. Evaluasi penjualan, 2. Rencana kampanye baru)..."
+                                    value={meetingFormData.agenda}
+                                    onChange={(e) => setMeetingFormData({ ...meetingFormData, agenda: e.target.value })}
+                                    className="w-full bg-white border border-slate-200 rounded-2xl p-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 leading-relaxed"
                                     required
                                 />
                             </div>
 
-                            {/* Meta Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 text-xs">
+                            {/* 4. Waktu Pelaksanaan & Info Pendukung */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200/80 text-xs">
                                 <div>
-                                    <label className="block text-slate-500 font-semibold mb-1">Tanggal & Jam</label>
+                                    <label className="block text-slate-700 font-bold mb-1.5 flex items-center gap-1.5">
+                                        <i className="fa-regular fa-clock text-emerald-600"></i>
+                                        <span>Waktu Pelaksanaan <span className="text-rose-500">*</span></span>
+                                    </label>
                                     <input
                                         type="datetime-local"
                                         value={meetingFormData.meetingDate}
                                         onChange={(e) => setMeetingFormData({ ...meetingFormData, meetingDate: e.target.value })}
-                                        className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-800"
+                                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
+                                        required
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-slate-500 font-semibold mb-1">Lokasi / Link Meeting</label>
+                                    <label className="block text-slate-600 font-semibold mb-1.5 flex items-center gap-1.5">
+                                        <i className="fa-solid fa-location-dot text-rose-500"></i>
+                                        <span>Lokasi / Link Meeting</span>
+                                    </label>
                                     <input
                                         type="text"
                                         placeholder="Ruang Rapat 2 / Google Meet"
                                         value={meetingFormData.location}
                                         onChange={(e) => setMeetingFormData({ ...meetingFormData, location: e.target.value })}
-                                        className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-800"
+                                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-slate-500 font-semibold mb-1">Terkait Proyek</label>
+                                    <label className="block text-slate-600 font-semibold mb-1.5 flex items-center gap-1.5">
+                                        <i className="fa-regular fa-folder text-indigo-500"></i>
+                                        <span>Terkait Proyek</span>
+                                    </label>
                                     <select
                                         value={meetingFormData.projectId}
                                         onChange={(e) => setMeetingFormData({ ...meetingFormData, projectId: e.target.value })}
-                                        className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-800"
+                                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-emerald-500 font-medium"
                                     >
                                         <option value="">-- Tanpa Proyek Khusus --</option>
                                         {projects.map(p => (
@@ -1710,130 +2199,16 @@ export default function MinuteOfMeeting({
                                 </div>
                             </div>
 
-                            {/* Attendees Selector */}
-                            <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-2">
-                                    <i className="fa-solid fa-users text-emerald-600 mr-1.5"></i>
-                                    Peserta Rapat (Attendees & Hak Akses Sharing)
-                                </label>
-                                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2.5 bg-slate-50 rounded-2xl border border-slate-200">
-                                    {members.map(m => {
-                                        const isSelected = meetingFormData.attendees.includes(m.id);
-                                        return (
-                                            <button
-                                                key={m.id}
-                                                type="button"
-                                                onClick={() => toggleMeetingAttendee(m.id)}
-                                                className={`text-xs px-2.5 py-1 rounded-xl font-medium transition flex items-center gap-1.5 ${
-                                                    isSelected
-                                                        ? 'bg-emerald-600 text-white shadow-xs'
-                                                        : 'bg-white text-slate-600 border border-slate-200 hover:border-emerald-300'
-                                                }`}
-                                            >
-                                                <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-500'}`}></span>
-                                                <span>{m.name}</span>
-                                                {m.division && <span className="text-[10px] opacity-70">({m.division})</span>}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            {/* Agenda */}
-                            <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                                    <i className="fa-solid fa-list-check text-emerald-600 mr-1.5"></i>
-                                    Agenda Pembahasan
-                                </label>
-                                <textarea
-                                    rows={2}
-                                    placeholder="1. Review target mingguan&#10;2. Solusi hambatan..."
-                                    value={meetingFormData.agenda}
-                                    onChange={(e) => setMeetingFormData({ ...meetingFormData, agenda: e.target.value })}
-                                    className="w-full bg-white border border-slate-200 rounded-2xl p-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
-                                />
-                            </div>
-
-                            {/* Content / Notulensi */}
-                            <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                                    <i className="fa-regular fa-file-lines text-emerald-600 mr-1.5"></i>
-                                    Rangkuman Diskusi & Kesepakatan
-                                </label>
-                                <textarea
-                                    rows={3}
-                                    placeholder="Catat poin penting diskusi rapat..."
-                                    value={meetingFormData.content}
-                                    onChange={(e) => setMeetingFormData({ ...meetingFormData, content: e.target.value })}
-                                    className="w-full bg-white border border-slate-200 rounded-2xl p-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
-                                />
-                            </div>
-
-                            {/* Action items rows */}
-                            <div className="bg-emerald-50/40 p-4 rounded-2xl border border-emerald-100 space-y-2.5">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h4 className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
-                                            <i className="fa-solid fa-bolt text-emerald-600"></i>
-                                            Action Items / Keputusan
-                                        </h4>
-                                        <p className="text-[11px] text-emerald-700">Tentukan issue, keputusan, PIC, dan deadline.</p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={addActionItemRow}
-                                        className="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-xl font-bold hover:bg-emerald-700 transition flex items-center gap-1"
-                                    >
-                                        <i className="fa-solid fa-plus text-[10px]"></i> Baris Baru
-                                    </button>
-                                </div>
-
-                                <div className="space-y-2">
-                                    {meetingFormData.actionItems.map((it, idx) => (
-                                        <div key={it.id || idx} className="flex flex-wrap md:flex-nowrap items-center gap-2 bg-white p-2 rounded-xl border border-slate-200">
-                                            <span className="text-xs font-bold text-slate-400 w-5 text-center">{idx + 1}.</span>
-                                            <input
-                                                type="text"
-                                                placeholder="Issue / Bahasan..."
-                                                value={it.issue || ''}
-                                                onChange={(e) => updateActionItemField(it.id, 'issue', e.target.value)}
-                                                className="flex-1 min-w-[130px] text-xs bg-transparent border-b border-slate-200 p-1 outline-none text-slate-800 font-semibold"
-                                            />
-                                            <input
-                                                type="text"
-                                                placeholder="Keputusan / Solusi..."
-                                                value={it.decision || it.text || ''}
-                                                onChange={(e) => updateActionItemField(it.id, 'decision', e.target.value)}
-                                                className="flex-1 min-w-[150px] text-xs bg-transparent border-b border-slate-200 p-1 outline-none text-slate-700"
-                                            />
-                                            <select
-                                                value={it.picId || ''}
-                                                onChange={(e) => updateActionItemField(it.id, 'picId', e.target.value)}
-                                                className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-1 text-slate-700 min-w-[110px]"
-                                            >
-                                                <option value="">Pilih PIC</option>
-                                                {members.map(m => (
-                                                    <option key={m.id} value={m.id}>{m.name} {m.id === activeUserId ? '(Saya)' : ''}</option>
-                                                ))}
-                                            </select>
-                                            <input
-                                                type="date"
-                                                value={it.deadline || ''}
-                                                onChange={(e) => updateActionItemField(it.id, 'deadline', e.target.value)}
-                                                className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-1 text-slate-700"
-                                            />
-                                            {meetingFormData.actionItems.length > 1 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeActionItemRow(it.id)}
-                                                    className="text-slate-400 hover:text-rose-600 p-1 text-xs"
-                                                    title="Hapus baris"
-                                                >
-                                                    <i className="fa-solid fa-trash-can"></i>
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
+                            {/* 5. Poin-poin diisi setelahnya banner */}
+                            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 flex items-start gap-3 text-xs text-emerald-950">
+                                <span className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                    <i className="fa-solid fa-table-list text-sm"></i>
+                                </span>
+                                <div className="flex-1">
+                                    <p className="font-bold text-emerald-900">Poin-poin & Keputusan Rapat Diisi Setelahnya</p>
+                                    <p className="text-emerald-700/90 text-[11px] mt-0.5">
+                                        Setelah notulen disimpan, lembar tabel interaktif rapat akan langsung terbuka untuk mencatat butir bahasan, keputusan, PIC penanggung jawab, dan batas waktu pelaksanaan.
+                                    </p>
                                 </div>
                             </div>
 
@@ -1848,9 +2223,10 @@ export default function MinuteOfMeeting({
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-200 transition active:scale-95"
+                                    className="px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-200 transition active:scale-95 flex items-center gap-2"
                                 >
-                                    {meetingFormData.id ? 'Simpan Perubahan MoM' : 'Simpan Notulen MoM'}
+                                    <span>{meetingFormData.id ? 'Simpan Perubahan' : 'Simpan Notulen MoM'}</span>
+                                    <i className="fa-solid fa-arrow-right text-[11px]"></i>
                                 </button>
                             </div>
                         </form>

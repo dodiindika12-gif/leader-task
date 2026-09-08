@@ -1,0 +1,35 @@
+MATRIKS OTORISASI PENGGUNA (ROLE-BASED ACCESS CONTROL),,,,,,,,,
+Leader Dashboard - Hierarki 5 Tingkat: Staff (Lvl 1) ➔ Koordinator (Lvl 2) ➔ SPV (Lvl 3) ➔ Manager (Lvl 4) ➔ Direksi / Super User (Lvl 5),,,,,,,,,
+"Petunjuk: Silakan edit nilai di kolom E sampai I sesuai kebijakan perusahaan Anda, lalu simpan file ini.",,,,,,,,,
+No,Modul / Kategori,Aksi / Fitur Spesifik,Deskripsi Fungsi,Staff (Level 1),Koordinator (Level 2),SPV (Level 3),Manager (Level 4),Direksi / Super User (Level 5),Catatan / Syarat Khusus
+1,Ruang Lingkup (Scope),Akses Lintas Divisi,Melihat dan memfilter data seluruh divisi tanpa batasan,Terkunci di Divisi Sendiri,Terkunci di Divisi Sendiri,Terkunci di Divisi Sendiri,Terkunci di Divisi Sendiri,Ya (Bebas Semua Divisi),Direksi & Super User dapat melihat dan beralih ke divisi mana saja
+2,Ruang Lingkup (Scope),Pilihan Filter Divisi Global,Mengubah dropdown filter divisi di navbar utama,Tidak,Tidak,Tidak,Tidak,Ya,Karyawan level 1-4 otomatis terkunci ke divisinya masing-masing
+3,Tugas (Tasks),Buat Task Baru,Membuat tugas baru pada project yang diikuti,Ya,Ya,Ya,Ya,Ya,Staff bebas membuat tugas kerja harian
+4,Tugas (Tasks),Tag / Assign PIC Task,Menunjuk penanggung jawab atau kolaborator task,Bisa Tag Karyawan di Divisinya,Bisa Tag Karyawan di Divisinya,Bisa Tag Karyawan di Divisinya,Bisa Tag Karyawan di Divisinya,Bisa Tag Semua Karyawan,Staff dapat men-tag seluruh rekan di divisinya
+5,Tugas (Tasks),Update Status Task,"Mengubah status task (To Do, In Progress, Review, Done)",Hanya Task Milik Sendiri,Semua Task di Dept,Semua Task di Divisi,Semua Task di Divisi,Semua Task,Staff hanya update task yang di-assign padanya
+6,Tugas (Tasks),Checklist To-Do & Subtask,Mencentang dan menambah item subtask,Hanya Task Milik Sendiri,Semua Task di Dept,Semua Task di Divisi,Semua Task di Divisi,Semua Task,Memudahkan pemantauan progress pekerjaan
+7,Tugas (Tasks),Komentar & Upload Lampiran,Memberikan update komentar dan file attachment,Ya (Task yang Diikuti),Ya (Task di Dept),Ya (Task di Divisi),Ya (Task di Divisi),Ya (Semua Task),Komunikasi pengerjaan tugas
+8,Tugas (Tasks),Edit Detail & Deadline Task,"Mengubah deskripsi, deadline, dan prioritas task",Hanya Task Buatannya,Semua Task di Dept,Semua Task di Divisi,Semua Task di Divisi,Semua Task,Koordinator berhak atur jadwal stafnya
+9,Tugas (Tasks),Hapus Task,Menghapus kartu task dari board / timeline,Tidak,Ya (Hanya di Dept),Ya (Semua di Divisi),Ya (Semua di Divisi),Ya (Semua Task),Proteksi agar staff tidak menghapus task penting tanpa sengaja
+10,Proyek (Projects),Buat Project Baru,Mendaftarkan project baru di sistem,Tidak,Project Internal Dept,Project Divisi,Project Divisi,Semua Project,SPV/Manager pembuat project operasional
+11,Proyek (Projects),"Pengaturan Project (Warna, Nama, Folder)","Mengatur struktur folder, nama, dan warna project",Tidak,Project Buatannya,Semua Project Divisi,Semua Project Divisi,Semua Project,Folder untuk mengorganisir tugas
+12,Proyek (Projects),Bagikan Akses Project (Sharing),Memberikan hak akses anggota ke dalam project,Tidak,Dalam Divisi,Dalam Divisi,Dalam Divisi,Lintas Semua Divisi,Mengontrol siapa saja yang boleh melihat project
+13,Proyek (Projects),Hapus / Arsipkan Project,Menghapus project beserta seluruh task di dalamnya,Tidak,Tidak,Hanya Project Buatannya,Semua Project Divisi,Semua Project,Tindakan berdampak tinggi
+14,Anggota & Tim (Members),Lihat Direktori Karyawan,Melihat daftar rekan kerja dan kontak,Ya (Hanya Divisinya),Ya (Hanya Divisinya),Ya (Hanya Divisinya),Ya (Hanya Divisinya),Ya (Semua Divisi),Read-only directory
+15,Anggota & Tim (Members),Daftarkan Karyawan Baru,Menambahkan user / akun baru ke sistem,Tidak,Tidak,Ya (Ke Divisinya),Ya (Ke Divisinya),Ya (Bebas Divisi),Divisi otomatis terkunci jika dibuat oleh SPV/Manager
+16,Anggota & Tim (Members),Edit Profil & Jabatan Karyawan,"Mengubah nama, email, jabatan, dan divisi anggota",Tidak,Tidak,Staf di Divisinya,Staf & Koor di Divisinya,Semua Karyawan,Manager membawahi tim divisinya
+17,Anggota & Tim (Members),Reset Password Karyawan,Mereset password login akun karyawan,Tidak,Tidak,Staf di Divisinya,Karyawan di Divisinya,Semua Karyawan,Membantu staf yang lupa password
+18,Anggota & Tim (Members),Toggle Status Akun (Aktif/Non-aktif),Menonaktifkan akses login karyawan,Tidak,Tidak,Staf di Divisinya,Karyawan di Divisinya,Semua Karyawan,Saat karyawan cuti atau resign
+19,Anggota & Tim (Members),Hapus Akun Karyawan,Menghapus data karyawan secara permanen,Tidak,Tidak,Tidak,Tidak,Ya (Khusus Direksi/Admin),Mencegah kehilangan riwayat kerja
+20,Struktur Organisasi,Tambah / Edit Nama Divisi,Mendaftarkan divisi baru atau mengubah nama divisi,Tidak,Tidak,Tidak,Tidak,Ya (Khusus Direksi/Admin),Struktur utama perusahaan
+21,Struktur Organisasi,Tunjuk Manager Divisi,Memilih Manager yang memimpin divisi,Tidak,Tidak,Tidak,Tidak,Ya (Khusus Direksi/Admin),Wewenang jajaran direksi
+22,Struktur Organisasi,Hapus Divisi,Menghapus divisi (jika kosong dari anggota & proyek),Tidak,Tidak,Tidak,Tidak,Ya (Khusus Direksi/Admin),Harus bersih dari anggota/project
+23,Struktur Organisasi,Tambah / Edit Departemen,Mendaftarkan sub-departemen di dalam divisi,Tidak,Tidak,Usul di Divisinya,Kelola di Divisinya,Semua Departemen,Contoh: Dept Akuntansi di Divisi FAT
+24,Struktur Organisasi,Tunjuk Koordinator Departemen,Memilih Koordinator yang memimpin departemen,Tidak,Tidak,Di Divisinya,Di Divisinya,Semua Departemen,Koordinator melapor langsung ke SPV
+25,Struktur Organisasi,Hapus Departemen,Menghapus departemen (jika sudah tidak ada staf),Tidak,Tidak,Di Divisinya,Di Divisinya,Semua Departemen,Proteksi keutuhan data
+26,Jabatan (Roles & RBAC),Tambah / Edit Tingkat Jabatan,Mendaftarkan role baru atau mengubah nama jabatan,Tidak,Tidak,Tidak,Tidak,Ya (Khusus Direksi/Admin),Tingkat jabatan resmi
+27,Jabatan (Roles & RBAC),Konfigurasi Hak Akses Role,Mengubah otorisasi dan wewenang masing-masing level,Tidak,Tidak,Tidak,Tidak,Ya (Khusus Direksi/Admin),Sesuai matriks ini
+28,Jabatan (Roles & RBAC),Hapus Jabatan,Menghapus role dari sistem,Tidak,Tidak,Tidak,Tidak,Ya (Khusus Direksi/Admin),Hanya jika tidak ada pemegang jabatan
+29,Catatan & Risalah (Notes),Buat Catatan Rapat,Membuat risalah rapat / meeting notes,Ya,Ya,Ya,Ya,Ya,Semua level dapat mencatat rapat
+30,Catatan & Risalah (Notes),Bagikan Risalah Rapat,Membagikan catatan ke peserta / tim terkait,Dalam Divisi,Dalam Divisi,Dalam Divisi,Dalam Divisi,Lintas Semua Divisi,Kolaborasi antar departemen
+31,Catatan & Risalah (Notes),Hapus Catatan Rapat,Menghapus dokumen risalah rapat,Catatan Buatannya,Catatan Buatannya,Semua di Divisinya,Semua di Divisinya,Semua Catatan,Pengarsipan dokumen
