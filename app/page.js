@@ -7,6 +7,7 @@ import TimelineView from '../components/TimelineView';
 import MinuteOfMeeting from '../components/MinuteOfMeeting';
 import ProjectSettingsModal from '../components/ProjectSettingsModal';
 import WeeklyScheduleView, { getRoleLevel } from '../components/WeeklyScheduleView';
+import MainDashboard from '../components/MainDashboard';
 
 
 // Default Data when localStorage/DB is empty
@@ -402,6 +403,16 @@ const getDeadlineState = (deadline, status) => {
     if (dueDate < today) return 'overdue';
     if (dueDate.getTime() === today.getTime()) return 'today';
     return 'normal';
+};
+
+const getDeadlineDiffDays = (dateStr) => {
+    if (!dateStr) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(dateStr);
+    target.setHours(0, 0, 0, 0);
+    const diffTime = target.getTime() - today.getTime();
+    return Math.round(diffTime / (1000 * 60 * 60 * 24));
 };
 
 const formatDeadline = (dateStr) => {
@@ -1053,6 +1064,7 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
     const isOverdue = deadlineState === 'overdue';
     const isDueToday = deadlineState === 'today';
     const isDone = task.status === 'Done';
+    const diffDays = getDeadlineDiffDays(task.deadline);
     const pic = members.find(m => m.id === task.picId);
     const todoProgress = getTodoProgress(task);
     const project = projects.find(p => p.id === task.projectId);
@@ -1109,12 +1121,22 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                                 ) : (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); setIsEditingDeadline(true); }}
-                                        className={`text-[11px] font-medium flex items-center hover:bg-gray-200 px-1 py-0.5 rounded -ml-1 transition-colors ${isOverdue ? 'text-red-500' : isDueToday ? 'text-orange-600' : 'text-gray-500'}`}
+                                        className={`text-[11px] font-medium flex items-center hover:bg-gray-200 px-1 py-0.5 rounded -ml-1 transition-colors ${isOverdue ? 'text-rose-600 font-semibold' : isDueToday ? 'text-amber-600 font-semibold' : 'text-gray-500'}`}
                                     >
                                         <i className="fa-regular fa-calendar mr-1.5"></i>
                                         {task.deadline ? formatDeadline(task.deadline) : 'Set Deadline'}
-                                        {isOverdue && <span className="ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 border border-red-200">Overdue</span>}
-                                        {isDueToday && <span className="ml-2 px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200">Hari Ini</span>}
+                                        {isOverdue && (
+                                            <span className="ml-2 px-2 py-0.5 rounded-lg bg-rose-600 text-white font-bold text-[10px] shadow-2xs flex items-center gap-1 animate-pulse">
+                                                <i className="fa-solid fa-triangle-exclamation text-[9px]"></i>
+                                                {diffDays ? `Lewat ${Math.abs(diffDays)} Hari` : 'Overdue'}
+                                            </span>
+                                        )}
+                                        {isDueToday && (
+                                            <span className="ml-2 px-2 py-0.5 rounded-lg bg-amber-500 text-white font-bold text-[10px] shadow-2xs flex items-center gap-1">
+                                                <i className="fa-solid fa-clock text-[9px]"></i>
+                                                Hari Ini
+                                            </span>
+                                        )}
                                     </button>
                                 )}
                                 {task.folder && task.folder !== 'General' && (
@@ -1190,7 +1212,7 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
             draggable="true"
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
-            className={`bg-white/80 p-3.5 rounded-3xl border shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-grab active:cursor-grabbing group mb-3 relative flex flex-col min-h-[110px] backdrop-blur ${isDone ? 'border-white/60 bg-white/45' : 'border-white/75'}`}
+            className={`bg-white/80 p-3.5 rounded-3xl border shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-grab active:cursor-grabbing group mb-3 relative flex flex-col min-h-[110px] backdrop-blur ${isDone ? 'border-white/60 bg-white/45' : isOverdue ? 'border-rose-300 bg-rose-50/25 shadow-xs ring-1 ring-rose-200/50' : isDueToday ? 'border-amber-300 bg-amber-50/25 shadow-xs ring-1 ring-amber-200/50' : 'border-white/75'}`}
             style={{ borderLeft: `3px solid ${accentColor}` }}
         >
             <div className="flex justify-between items-start mb-2">
@@ -1268,11 +1290,21 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                     ) : (
                         <button
                             onClick={(e) => { e.stopPropagation(); setIsEditingDeadline(true); }}
-                            className={`text-[10px] font-medium flex items-center bg-gray-50 px-1.5 py-1 rounded border hover:bg-gray-100 transition-colors ${isOverdue ? 'border-red-200 text-red-600 bg-red-50' : isDueToday ? 'border-orange-200 text-orange-600 bg-orange-50' : 'border-gray-200 text-gray-500'}`}
+                            className={`text-[10px] font-medium flex items-center bg-gray-50 px-1.5 py-1 rounded border hover:bg-gray-100 transition-colors ${isOverdue ? 'border-rose-200 text-rose-700 bg-rose-50 font-semibold' : isDueToday ? 'border-amber-200 text-amber-700 bg-amber-50 font-semibold' : 'border-gray-200 text-gray-500'}`}
                         >
                             <i className="fa-regular fa-calendar mr-1"></i> {task.deadline ? formatDeadline(task.deadline) : 'Set Deadline'}
-                            {isOverdue && <span className="ml-1 font-bold">Overdue</span>}
-                            {isDueToday && <span className="ml-1 font-bold">Hari Ini</span>}
+                            {isOverdue && (
+                                <span className="ml-1.5 px-1.5 py-0.5 rounded bg-rose-600 text-white font-bold text-[9px] flex items-center gap-0.5 shadow-2xs">
+                                    <i className="fa-solid fa-triangle-exclamation text-[8px]"></i>
+                                    {diffDays ? `Lewat ${Math.abs(diffDays)}h` : 'Overdue'}
+                                </span>
+                            )}
+                            {isDueToday && (
+                                <span className="ml-1.5 px-1.5 py-0.5 rounded bg-amber-500 text-white font-bold text-[9px] flex items-center gap-0.5 shadow-2xs">
+                                    <i className="fa-solid fa-clock text-[8px]"></i>
+                                    Hari Ini
+                                </span>
+                            )}
                         </button>
                     )}
                     {task.createdAt && (
@@ -4837,110 +4869,7 @@ const AbsCalendar = ({
     );
 };
 
-const MainDashboard = ({ tasks, projects, members, shortcuts, currentPicId, onEdit, onQuickAddTask, session }) => {
-    const getGreeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'Selamat Pagi';
-        if (hour < 15) return 'Selamat Siang';
-        if (hour < 18) return 'Selamat Sore';
-        return 'Selamat Malam';
-    };
-    
-    const activeUserId = (session && ['Staff', 'Kordinator'].includes(session.role)) 
-        ? session.memberId 
-        : (currentPicId || session?.memberId);
-
-    const currMember = members.find(m => m.id === activeUserId);
-    const myTasks = tasks.filter(t => t.picId === activeUserId && t.status !== 'Done');
-    const myTodos = [];
-    tasks.forEach(t => {
-        if (t.status === 'Done') return;
-        t.todos.forEach(todo => {
-            if (!todo.done && (todo.picId || todo.pic_id) === activeUserId) {
-                myTodos.push({ ...todo, parentTaskTitle: t.title, taskId: t.id });
-            }
-        });
-    });
-
-    myTodos.sort((a, b) => {
-        if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
-        if (a.deadline) return -1;
-        if (b.deadline) return 1;
-        return 0;
-    });
-
-    const upcomingTasks = [...myTasks].sort((a,b) => (a.deadline || '9999-99-99').localeCompare(b.deadline || '9999-99-99')).slice(0, 5);
-
-    return (
-        <div className="space-y-6">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 text-white shadow-xl shadow-blue-900/20 relative overflow-hidden flex items-center justify-between">
-                <div className="relative z-10">
-                    <h1 className="text-3xl font-bold mb-2">{getGreeting()}, {currMember ? currMember.name : 'Leader'}! 👋</h1>
-                    <p className="text-blue-100">Anda memiliki {myTasks.length} tugas aktif dan {myTodos.length} sub-tugas (todo) tertunda.</p>
-                </div>
-                <div className="hidden sm:block relative z-10 text-right">
-                    <div className="text-5xl font-bold opacity-90">{new Date().getDate()}</div>
-                    <div className="text-xl opacity-75">{new Date().toLocaleDateString('id-ID', { month: 'long' })}</div>
-                </div>
-                <div className="absolute -right-20 -top-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
-                <div className="absolute right-40 -bottom-20 w-48 h-48 bg-white/10 rounded-full blur-2xl"></div>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white/80 rounded-3xl p-6 shadow-sm border border-slate-200/60">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-slate-800"><i className="fa-solid fa-thumbtack text-rose-500 mr-2"></i>Tugas Mendatang Saya</h3>
-                    </div>
-                    {upcomingTasks.length === 0 ? (
-                        <div className="text-center py-8 text-slate-400 text-sm">Tidak ada tugas mendesak. Kerja bagus! 🎉</div>
-                    ) : (
-                        <div className="space-y-3">
-                            {upcomingTasks.map(t => (
-                                <div key={t.id} onClick={() => onEdit(t)} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors border border-slate-100">
-                                    <div className="flex items-center truncate pr-4">
-                                        <div className={`w-2.5 h-2.5 rounded-full mr-3 shrink-0 ${PRIORITIES[t.priority]?.color || 'bg-slate-300'}`}></div>
-                                        <div className="truncate">
-                                            <p className="text-sm font-semibold text-slate-700 truncate">{t.title}</p>
-                                            <p className="text-xs text-slate-500 mt-0.5">{t.deadline ? new Date(t.deadline).toLocaleDateString('id-ID', { day:'numeric', month:'short' }) : 'No Deadline'}</p>
-                                        </div>
-                                    </div>
-                                    <div className="shrink-0 text-xs px-2 py-1 bg-white rounded-lg border border-slate-200 font-medium text-slate-500 shadow-sm">{t.status}</div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                <div className="bg-white/80 rounded-3xl p-6 shadow-sm border border-slate-200/60 flex flex-col">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4"><i className="fa-solid fa-list-check text-emerald-500 mr-2"></i>My Sub-Tasks (To-Do)</h3>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 max-h-[300px]">
-                        {myTodos.length === 0 ? (
-                            <div className="text-center py-8 text-slate-400 text-sm">Semua sub-tugas telah selesai!</div>
-                        ) : (
-                            myTodos.map((todo, i) => (
-                                <div key={i} className="flex items-center justify-between p-3 bg-emerald-50/50 rounded-xl border border-emerald-100/50">
-                                    <div className="flex items-start min-w-0 flex-1 mr-2">
-                                        <i className="fa-regular fa-square text-emerald-400 mt-0.5 mr-3 shrink-0"></i>
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-medium text-slate-700 truncate">{todo.title}</p>
-                                            <p className="text-xs text-slate-500 mt-1 line-clamp-1">Dari tugas: {todo.parentTaskTitle}</p>
-                                        </div>
-                                    </div>
-                                    {todo.deadline && (
-                                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md whitespace-nowrap shrink-0 flex items-center gap-1" title="Deadline sub-kegiatan">
-                                            <i className="fa-regular fa-calendar text-[10px]"></i>
-                                            {formatDeadline(todo.deadline) || todo.deadline}
-                                        </span>
-                                    )}
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
+// MainDashboard component is modularly loaded from ../components/MainDashboard
 
 const NotesPage = ({ notes, members, onAddNote, onUpdateNote, onDeleteNote, currentPicId, onCreateTaskFromMeeting }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -7693,13 +7622,20 @@ export default function TaskManagerApp() {
                         {view === 'dashboard' && (
                             <MainDashboard
                                 tasks={filteredTasks}
+                                allTasks={tasks}
                                 projects={projects}
                                 members={filteredMembers}
+                                allMembers={members}
                                 shortcuts={shortcuts}
                                 currentPicId={currentPicId}
                                 session={session}
+                                schedules={filteredAccessibleSchedules || schedules}
+                                roles={roles}
+                                divisions={divisions}
+                                departments={departments}
                                 onEdit={handleEditTask}
                                 onQuickAddTask={handleQuickAddTask}
+                                navigateView={navigateView}
                             />
                         )}
 
