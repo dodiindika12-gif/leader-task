@@ -121,20 +121,34 @@
     <p class="tagline">Beauty Task Management</p>
     <div class="spinner" id="spinner"></div>
     <div class="status-text" id="status">Memuat aplikasi...</div>
-    <button class="retry-btn" id="retryBtn" onclick="location.reload()">Muat Ulang</button>
+    <button class="retry-btn" id="retryBtn" onclick="retryConnect()">Coba Hubungkan Kembali</button>
   </div>
 
   <script>
-    // Langsung arahkan ke server aplikasi Busana
     const targetUrl = "https://task.absgroup.biz.id";
-    
-    if (navigator.onLine !== false) {
-      try {
-        window.location.replace(targetUrl);
-      } catch(e) {
-        window.location.href = targetUrl;
+
+    function navigateToApp() {
+      if (navigator.onLine !== false) {
+        try {
+          window.location.replace(targetUrl);
+        } catch(e) {
+          window.location.href = targetUrl;
+        }
       }
     }
+
+    function retryConnect() {
+      const statusEl = document.getElementById('status');
+      const retryBtn = document.getElementById('retryBtn');
+      const spinner = document.getElementById('spinner');
+      statusEl.innerText = 'Menghubungkan ke server...';
+      statusEl.style.color = '#64748b';
+      spinner.style.display = 'block';
+      retryBtn.style.display = 'none';
+      setTimeout(navigateToApp, 500);
+    }
+
+    navigateToApp();
 
     setTimeout(() => {
       const statusEl = document.getElementById('status');
@@ -147,9 +161,9 @@
         spinner.style.display = 'none';
         retryBtn.style.display = 'inline-block';
       } else {
-        window.location.href = targetUrl;
+        navigateToApp();
       }
-    }, 2000);
+    }, 2500);
   </script>
 </body>
 </html>
