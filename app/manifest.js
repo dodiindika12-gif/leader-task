@@ -1,17 +1,17 @@
 export default function manifest() {
   return {
-    name: 'Task ABS Tools | Semua Divisi',
-    short_name: 'Task ABS',
-    description: 'Dashboard manajemen tugas, jadwal rapat & worksheet, notulensi MoM, dan koordinasi kerja tim.',
+    name: 'Busana | Beauty Asana',
+    short_name: 'Busana',
+    description: 'Beauty Asana. Manajemen task dan project untuk Beauty agar bisa balance dan seimbang.',
     start_url: '/',
     id: '/',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait-primary',
     background_color: '#ffffff',
-    theme_color: '#4f46e5',
+    theme_color: '#ff008c',
     lang: 'id',
-    categories: ['productivity', 'business', 'utilities'],
+    categories: ['productivity', 'business', 'lifestyle'],
     icons: [
       {
         src: '/icons/icon-192x192.png',
@@ -34,7 +34,7 @@ export default function manifest() {
     ],
     shortcuts: [
       {
-        name: 'Dashboard Utama',
+        name: 'Dashboard Busana',
         short_name: 'Dashboard',
         description: 'Buka dashboard utama tugas & KPI',
         url: '/',
@@ -50,7 +50,7 @@ export default function manifest() {
       {
         name: 'Notes & MoM',
         short_name: 'Notes',
-        description: 'Buka notulensi rapat dan catatan post-it',
+        description: 'Buka notulensi rapat dan catatan kerja',
         url: '/',
         icons: [{ src: '/icons/icon-192x192.png', sizes: '192x192' }]
       }

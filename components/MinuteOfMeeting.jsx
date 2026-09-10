@@ -923,7 +923,7 @@ export default function MinuteOfMeeting({
             : '-';
 
         const lines = [
-            `📋 *MINUTE OF MEETING (MoM) — ABS GROUP*`,
+            `📋 *MINUTE OF MEETING (MoM) — BUSANA (BEAUTY ASANA)*`,
             `━━━━━━━━━━━━━━━━━━━━━━`,
             `📌 *Topik:* ${doc.title || doc.issue || 'Tanpa Judul'}`,
             `🗓 *Waktu:* ${meetingDate}`,
@@ -943,7 +943,7 @@ export default function MinuteOfMeeting({
                 return `${idx + 1}. ${issuePrefix}${it.decision || it.text}${picText}${deadlineText}${statusText}`;
             }),
             `━━━━━━━━━━━━━━━━━━━━━━`,
-            `_Dicatat otomatis via ABS Leader Dashboard_`
+            `_Dicatat otomatis via Busana (Beauty Asana)_`
         ].filter(line => line !== null);
 
         const textToCopy = lines.join('\n');

@@ -425,21 +425,22 @@ export default function MainDashboard({
             {/* ========================================================================= */}
             {/* 1. HERO BANNER: PUSAT KOMANDO & DAILY MOTIVATIONAL BRIEFING               */}
             {/* ========================================================================= */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-700 via-indigo-600 to-violet-700 p-6 sm:p-8 text-white shadow-xl shadow-indigo-950/15 border border-white/10">
+            <div className="relative overflow-hidden rounded-3xl bg-[linear-gradient(115deg,#e1007a_0%,#f01e8a_35%,#ec4899_68%,#8b5cf6_95%,#6d28d9_100%)] p-6 sm:p-8 text-white shadow-xl shadow-pink-950/25 border border-white/20">
                 {/* Background decorative glowing orbs */}
-                <div className="absolute -right-16 -top-20 w-72 h-72 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="absolute right-1/3 -bottom-20 w-60 h-60 bg-indigo-400/20 rounded-full blur-2xl pointer-events-none"></div>
+                <div className="absolute -right-16 -top-20 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute left-1/4 -top-24 w-80 h-80 bg-pink-300/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute right-1/3 -bottom-20 w-60 h-60 bg-pink-400/25 rounded-full blur-2xl pointer-events-none"></div>
 
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="space-y-2 max-w-2xl">
                         <div className="flex items-center gap-2.5 flex-wrap">
-                            <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase text-blue-100 border border-white/20">
+                            <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase text-pink-100 border border-white/20">
                                 {currentUserRole} {currentUserDivision ? `• ${currentUserDivision}` : ''}
                             </span>
-                            {activeOngoingSchedule && (
+                            {activeOngoingSchedule && isMeetingSchedule(activeOngoingSchedule) && (
                                 <span className="bg-emerald-400/30 text-emerald-200 border border-emerald-300/40 px-3 py-1 rounded-full text-xs font-bold animate-pulse flex items-center gap-1.5">
                                     <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                    {isMeetingSchedule(activeOngoingSchedule) ? 'Meeting Sedang Berlangsung' : 'Worksheet Sedang Berlangsung'}
+                                    Meeting Sedang Berlangsung
                                 </span>
                             )}
                         </div>
@@ -448,10 +449,10 @@ export default function MainDashboard({
                             {getGreeting()}, {currentUserName}! 👋
                         </h1>
 
-                        <p className="text-sm sm:text-base text-blue-100/90 leading-relaxed">
+                        <p className="text-sm sm:text-base text-pink-100/95 leading-relaxed">
                             {myDeadlinesSummary.overdueCount > 0 ? (
                                 <span>
-                                    Perhatian! Ada <strong className="text-rose-300 underline font-bold">{myDeadlinesSummary.overdueCount} tugas</strong> yang telah lewat deadline dan{' '}
+                                    Perhatian! Ada <strong className="text-rose-200 underline font-bold">{myDeadlinesSummary.overdueCount} tugas</strong> yang telah lewat deadline dan{' '}
                                     <strong className="text-amber-200">{myDeadlinesSummary.todayCount} tugas</strong> jatuh tempo hari ini.
                                 </span>
                             ) : myDeadlinesSummary.todayCount > 0 ? (
@@ -467,19 +468,19 @@ export default function MainDashboard({
                     </div>
 
                     {/* Widget Kalender & Jam Real-Time */}
-                    <div className="shrink-0 flex items-center gap-4 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+                    <div className="shrink-0 flex items-center gap-4 bg-white/15 backdrop-blur-md p-4 rounded-2xl border border-white/25 shadow-inner">
                         <div className="text-center px-2">
                             <div className="text-3xl sm:text-4xl font-black text-white">{currentTime.getDate()}</div>
-                            <div className="text-xs uppercase tracking-wider font-semibold text-blue-200">
+                            <div className="text-xs uppercase tracking-wider font-semibold text-pink-100">
                                 {currentTime.toLocaleDateString('id-ID', { month: 'short' })}
                             </div>
                         </div>
                         <div className="border-l border-white/20 pl-4 space-y-0.5">
-                            <div className="text-xs text-blue-200 font-medium">{todayDayName}</div>
+                            <div className="text-xs text-pink-100 font-medium">{todayDayName}</div>
                             <div className="text-xl sm:text-2xl font-mono font-extrabold text-white tracking-wider">
-                                {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/\./g, ':')}
                             </div>
-                            <div className="text-[10px] text-blue-200/80">Waktu Indonesia Tengah</div>
+                            <div className="text-[10px] text-pink-200/80">Waktu Indonesia Tengah</div>
                         </div>
                     </div>
                 </div>

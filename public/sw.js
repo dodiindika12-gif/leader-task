@@ -1,13 +1,18 @@
-// Service Worker: Task ABS Tools PWA
-const CACHE_NAME = 'task-abs-pwa-v1';
+// Service Worker: Busana (Beauty Asana) PWA
+const CACHE_NAME = 'busana-pwa-v3';
 
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
+  '/manifest.webmanifest',
+  '/favicon.ico',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
+  '/icons/maskable-icon-512x512.png',
   '/icons/apple-touch-icon.png',
-  '/icons/favicon-48x48.png'
+  '/icons/favicon-48x48.png',
+  '/icons/favicon-32x32.png',
+  '/icons/favicon-16x16.png'
 ];
 
 // 1. Install Event: Pre-cache static shell
@@ -28,7 +33,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name.startsWith('task-abs-') && name !== CACHE_NAME)
+          .filter((name) => name !== CACHE_NAME)
           .map((name) => caches.delete(name))
       );
     }).then(() => self.clients.claim())
@@ -39,6 +44,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // Jangan tangkap/cache request di development (localhost / 127.0.0.1)
+  // agar Turbopack HMR dan websocket dev server tidak hang atau stuck
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+    return;
+  }
 
   // Hanya proses request GET dari origin yang sama atau aset font/cdn
   if (request.method !== 'GET') return;
@@ -121,10 +132,10 @@ self.addEventListener('push', (event) => {
         vibrate: [100, 50, 100],
         data: data.data || { url: '/' }
       };
-      event.waitUntil(self.registration.showNotification(data.title || 'Task ABS Tools', options));
+      event.waitUntil(self.registration.showNotification(data.title || 'Busana | Beauty Asana', options));
     } catch (e) {
       event.waitUntil(
-        self.registration.showNotification('Task ABS Tools', {
+        self.registration.showNotification('Busana | Beauty Asana', {
           body: event.data.text(),
           icon: '/icons/icon-192x192.png'
         })

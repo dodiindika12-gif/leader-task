@@ -81,7 +81,7 @@ export default function PWAInstaller() {
 
     // 7. Cek status dismiss dari session/localStorage
     try {
-      const dismissedUntil = localStorage.getItem('task_abs_pwa_dismissed');
+      const dismissedUntil = localStorage.getItem('busana_pwa_dismissed');
       if (dismissedUntil && Number(dismissedUntil) > Date.now()) {
         setIsDismissed(true);
       }
@@ -102,7 +102,7 @@ export default function PWAInstaller() {
 
     if (!deferredPrompt) {
       // Fallback panduan jika browser tidak mendukung trigger otomatis
-      alert('Untuk menginstal aplikasi ini:\n1. Buka menu browser (ikon titik tiga di kanan atas).\n2. Pilih "Instal Aplikasi" atau "Tambahkan ke Layar Utama".');
+      alert('Untuk menginstal Busana:\n1. Buka menu browser (ikon titik tiga di kanan atas).\n2. Pilih "Instal Aplikasi" atau "Tambahkan ke Layar Utama".');
       return;
     }
 
@@ -124,7 +124,7 @@ export default function PWAInstaller() {
     try {
       // Sembunyikan banner selama 3 hari
       const expiry = Date.now() + 3 * 24 * 60 * 60 * 1000;
-      localStorage.setItem('task_abs_pwa_dismissed', String(expiry));
+      localStorage.setItem('busana_pwa_dismissed', String(expiry));
     } catch (e) {}
   };
 
@@ -144,24 +144,24 @@ export default function PWAInstaller() {
       <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-40 animate-in slide-in-from-bottom-5 fade-in duration-300">
         <div className="rounded-3xl bg-slate-900/95 backdrop-blur-xl text-white p-4 shadow-2xl border border-white/15 flex items-center gap-3.5">
           {/* App Icon */}
-          <div className="w-12 h-12 rounded-2xl bg-white p-1 shrink-0 overflow-hidden shadow-md flex items-center justify-center">
+          <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-md shrink-0 border border-pink-400/30 flex items-center justify-center">
             <img 
               src="/icons/icon-192x192.png" 
-              alt="Task ABS Logo" 
-              className="w-full h-full object-contain"
+              alt="Busana Logo" 
+              className="w-full h-full object-cover"
             />
           </div>
 
           {/* Text Content */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h4 className="text-xs font-bold text-white tracking-tight">Instal Task ABS</h4>
-              <span className="text-[9px] bg-indigo-500/30 text-indigo-300 font-extrabold px-1.5 py-0.2 rounded-md border border-indigo-400/30">
+              <h4 className="font-pacifico text-sm text-white tracking-normal">Busana</h4>
+              <span className="text-[9px] bg-pink-500/30 text-pink-200 font-inter font-bold px-1.5 py-0.2 rounded-md border border-pink-400/30">
                 PWA
               </span>
             </div>
-            <p className="text-[11px] text-slate-300 leading-snug mt-0.5 line-clamp-2">
-              Buka lebih cepat dari Home Screen layaknya aplikasi native tanpa bilah browser.
+            <p className="text-[11px] font-inter text-slate-300 leading-snug mt-0.5 line-clamp-2">
+              Beauty Task Management — Akses cepat & seimbang langsung dari Home Screen.
             </p>
           </div>
 
@@ -170,16 +170,15 @@ export default function PWAInstaller() {
             <button
               type="button"
               onClick={handleInstallClick}
-              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition transform active:scale-95 cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold shadow-lg shadow-pink-600/30 transition transform active:scale-95 cursor-pointer"
             >
               <i className="fa-solid fa-download mr-1.5 text-[11px]"></i>
-              Instal
+              <span>Instal</span>
             </button>
             <button
               type="button"
               onClick={handleDismiss}
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 text-xs transition cursor-pointer"
-              title="Tutup banner"
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 text-xs transition"
               aria-label="Tutup"
             >
               <i className="fa-solid fa-xmark"></i>
@@ -190,15 +189,15 @@ export default function PWAInstaller() {
 
       {/* Modal Panduan Khusus iOS (Safari) */}
       {showIOSGuide && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+        <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-slate-800 space-y-4 animate-in slide-in-from-bottom-4 duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-base shadow-xs">
+                <div className="w-9 h-9 rounded-2xl bg-pink-50 text-pink-600 flex items-center justify-center text-base shadow-xs">
                   <i className="fa-brands fa-apple"></i>
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">Instal di iPhone / iPad</h3>
+                  <h3 className="text-sm font-bold text-slate-900">Instal Busana di iPhone / iPad</h3>
                   <p className="text-[11px] text-slate-400">Tambahkan ke Layar Utama</p>
                 </div>
               </div>
@@ -213,19 +212,19 @@ export default function PWAInstaller() {
 
             <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
               <div className="flex items-start gap-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-100">
-                <span className="w-6 h-6 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                <span className="w-6 h-6 rounded-xl bg-pink-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
                   1
                 </span>
                 <div>
                   <p className="font-semibold text-slate-800">Ketuk Ikon Bagikan (*Share*)</p>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Ketuk tombol <i className="fa-solid fa-arrow-up-from-bracket text-indigo-600 font-bold mx-1"></i> di bilah menu bawah browser Safari.
+                    Ketuk tombol <i className="fa-solid fa-arrow-up-from-bracket text-pink-600 font-bold mx-1"></i> di bilah menu bawah browser Safari.
                   </p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-100">
-                <span className="w-6 h-6 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                <span className="w-6 h-6 rounded-xl bg-pink-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
                   2
                 </span>
                 <div>
@@ -243,7 +242,7 @@ export default function PWAInstaller() {
                 <div>
                   <p className="font-semibold text-slate-800">Konfirmasi & Nikmati</p>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Ketuk <strong>Tambah (*Add*)</strong> di sudut kanan atas. Aplikasi Task ABS siap digunakan dari layar depan Anda!
+                    Ketuk <strong>Tambah (*Add*)</strong> di sudut kanan atas. Aplikasi Busana (Beauty Asana) siap digunakan dari layar depan Anda!
                   </p>
                 </div>
               </div>

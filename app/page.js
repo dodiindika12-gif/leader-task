@@ -457,12 +457,55 @@ const getWeekEnd = (date) => {
 const PasswordModal = ({ isOpen, onClose, onSave, isForced }) => {
     const [newPass, setNewPass] = useState('');
     const [repeatPass, setRepeatPass] = useState('');
+    const [showPass, setShowPass] = useState(false);
+    const [showRepeatPass, setShowRepeatPass] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [isPasswordSaved, setIsPasswordSaved] = useState(false);
+    const [isStandalone, setIsStandalone] = useState(false);
+    const [activeDeviceTab, setActiveDeviceTab] = useState('android');
+
+    useEffect(() => {
+        if (!isOpen) {
+            setIsPasswordSaved(false);
+            setNewPass('');
+            setRepeatPass('');
+            setShowPass(false);
+            setShowRepeatPass(false);
+            return;
+        }
+
+        if (typeof window !== 'undefined') {
+            const standalone = 
+                window.matchMedia('(display-mode: standalone)').matches ||
+                window.navigator.standalone === true ||
+                document.referrer.includes('android-app://');
+            setIsStandalone(standalone);
+
+            const ua = window.navigator.userAgent.toLowerCase();
+            if (/iphone|ipad|ipod/.test(ua)) {
+                setActiveDeviceTab('ios');
+            } else if (/android/.test(ua)) {
+                setActiveDeviceTab('android');
+            } else {
+                setActiveDeviceTab('desktop');
+            }
+        }
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
+    const handleTriggerPWA = () => {
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('open-pwa-install'));
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (newPass.length < 6) {
+            alert('Password baru minimal 6 karakter!');
+            return;
+        }
         if (newPass !== repeatPass) {
             alert('Password Baru dan Ulangi Password tidak cocok!');
             return;
@@ -471,40 +514,413 @@ const PasswordModal = ({ isOpen, onClose, onSave, isForced }) => {
         const success = await onSave(newPass);
         setSaving(false);
         if (success) {
-            setNewPass('');
-            setRepeatPass('');
-            onClose();
+            if (isForced) {
+                // Tampilkan konfirmasi dan kesempatan untuk membaca / menginstal PWA
+                setIsPasswordSaved(true);
+            } else {
+                setNewPass('');
+                setRepeatPass('');
+                onClose();
+            }
         }
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={!isForced ? onClose : undefined}></div>
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm relative z-10 overflow-hidden animate-scale-in">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="font-bold text-slate-800">{isForced ? 'Buat Password Baru' : 'Ganti Password'}</h3>
-                    {!isForced && (
-                        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><i className="fa-solid fa-xmark text-lg"></i></button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            {/* Backdrop */}
+            <div 
+                className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
+                onClick={!isForced ? onClose : undefined}
+            ></div>
+
+            {/* Modal Card */}
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg relative z-10 overflow-hidden animate-scale-in border border-slate-100 flex flex-col max-h-[92vh] my-auto">
+                {/* Header */}
+                <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60 shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pink-600 via-pink-500 to-rose-400 p-0.5 shadow-md shadow-pink-500/20 flex items-center justify-center shrink-0">
+                            <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center overflow-hidden p-1">
+                                <img src="/Logo%20Beauty.png" alt="Busana" className="w-full h-full object-contain" />
+                            </div>
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-bold text-slate-800 text-sm sm:text-base leading-tight">
+                                    {isPasswordSaved ? 'Password Berhasil Diubah' : (isForced ? 'Pengaturan Awal Akun' : 'Ganti Password')}
+                                </h3>
+                                {isForced && !isPasswordSaved && (
+                                    <span className="text-[10px] bg-pink-100 text-pink-700 font-bold px-2 py-0.5 rounded-full border border-pink-200">
+                                        Wajib
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                                {isPasswordSaved 
+                                    ? 'Langkah berikutnya: Pasang aplikasi Busana di perangkat Anda'
+                                    : (isForced ? 'Ubah password default dan pasang aplikasi Busana (PWA)' : 'Perbarui kata sandi login akun Anda')
+                                }
+                            </p>
+                        </div>
+                    </div>
+                    {!isForced && !isPasswordSaved && (
+                        <button 
+                            onClick={onClose} 
+                            className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 text-sm transition"
+                        >
+                            <i className="fa-solid fa-xmark"></i>
+                        </button>
                     )}
                 </div>
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {isForced && (
-                        <div className="bg-amber-50 text-amber-700 p-3 rounded-lg text-xs border border-amber-200">
-                            Anda masih menggunakan password bawaan. Demi keamanan, mohon ubah password Anda sekarang.
+
+                {/* Content Body */}
+                <div className="overflow-y-auto p-5 sm:px-6 py-4 space-y-4">
+                    {/* View saat password berhasil diubah (Post-Save View) */}
+                    {isPasswordSaved ? (
+                        <div className="space-y-4 text-center">
+                            <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-2xl mx-auto border border-emerald-100 shadow-sm animate-bounce-short">
+                                <i className="fa-solid fa-circle-check"></i>
+                            </div>
+                            <div>
+                                <h4 className="text-base font-bold text-slate-900">Kata Sandi Berhasil Diperbarui!</h4>
+                                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                                    Akun Anda kini terlindungi dengan password baru. Sangat disarankan untuk memasang aplikasi Busana agar pekerjaan harian lebih praktis.
+                                </p>
+                            </div>
+
+                            {/* PWA Instruction Box */}
+                            <div className="text-left bg-gradient-to-br from-pink-50/80 via-white to-purple-50/60 rounded-2xl border border-pink-200/80 p-4 space-y-3 shadow-xs">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-white shadow-xs border border-pink-100 p-1 flex items-center justify-center shrink-0">
+                                        <img src="/Logo%20Beauty.png" alt="Busana" className="w-full h-full object-contain" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="font-pacifico text-sm text-slate-800" style={{ fontFamily: "var(--font-pacifico), 'Pacifico', cursive" }}>Busana</span>
+                                            <span className="text-[9px] bg-pink-500 text-white font-bold px-1.5 py-0.2 rounded-md">PWA</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500 truncate">Beauty Task Management</p>
+                                    </div>
+                                </div>
+
+                                {isStandalone ? (
+                                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-2.5 rounded-xl text-xs flex items-center gap-2 font-medium">
+                                        <i className="fa-solid fa-circle-check text-emerald-500 text-sm"></i>
+                                        <span>Aplikasi Busana sudah terpasang di perangkat ini.</span>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleTriggerPWA}
+                                        className="w-full bg-gradient-to-r from-[#e1007a] via-[#ec268f] to-[#a855f7] hover:opacity-95 text-white py-2.5 px-4 rounded-xl text-xs font-bold shadow-md shadow-pink-500/25 transition flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                                    >
+                                        <i className="fa-solid fa-download text-xs"></i>
+                                        <span>Instal Aplikasi Busana Sekarang</span>
+                                    </button>
+                                )}
+
+                                {/* Platform Guides */}
+                                <div className="pt-2 border-t border-pink-100/80 space-y-2">
+                                    <div className="grid grid-cols-3 gap-1 bg-slate-100/80 p-1 rounded-xl text-[10px] font-semibold">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveDeviceTab('android')}
+                                            className={`py-1.5 px-1 rounded-lg transition text-center cursor-pointer ${
+                                                activeDeviceTab === 'android' ? 'bg-white text-pink-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                                            }`}
+                                        >
+                                            <i className="fa-brands fa-android mr-1"></i>Android
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveDeviceTab('ios')}
+                                            className={`py-1.5 px-1 rounded-lg transition text-center cursor-pointer ${
+                                                activeDeviceTab === 'ios' ? 'bg-white text-pink-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                                            }`}
+                                        >
+                                            <i className="fa-brands fa-apple mr-1"></i>iPhone/iPad
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveDeviceTab('desktop')}
+                                            className={`py-1.5 px-1 rounded-lg transition text-center cursor-pointer ${
+                                                activeDeviceTab === 'desktop' ? 'bg-white text-pink-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                                            }`}
+                                        >
+                                            <i className="fa-solid fa-laptop mr-1"></i>Laptop/PC
+                                        </button>
+                                    </div>
+
+                                    <div className="bg-white/95 rounded-xl p-3 border border-pink-100 text-[11px] text-slate-600 space-y-1.5">
+                                        {activeDeviceTab === 'android' && (
+                                            <>
+                                                <div className="flex items-start gap-2">
+                                                    <span className="w-4 h-4 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                                                    <span>Klik tombol <strong>"Instal Aplikasi Busana"</strong> di atas atau buka menu titik tiga (<strong>⋮</strong>) Chrome.</span>
+                                                </div>
+                                                <div className="flex items-start gap-2">
+                                                    <span className="w-4 h-4 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                                                    <span>Pilih <strong>"Instal aplikasi"</strong> atau <strong>"Tambahkan ke Layar Utama"</strong>.</span>
+                                                </div>
+                                            </>
+                                        )}
+                                        {activeDeviceTab === 'ios' && (
+                                            <>
+                                                <div className="flex items-start gap-2">
+                                                    <span className="w-4 h-4 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                                                    <span>Buka di browser <strong>Safari</strong> lalu ketuk tombol <strong>Bagikan (Share <i className="fa-solid fa-arrow-up-from-bracket text-pink-600"></i>)</strong> di menu bawah.</span>
+                                                </div>
+                                                <div className="flex items-start gap-2">
+                                                    <span className="w-4 h-4 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                                                    <span>Gulir ke bawah dan ketuk <strong>"Tambahkan ke Layar Utama" (➕)</strong> lalu klik Tambah.</span>
+                                                </div>
+                                            </>
+                                        )}
+                                        {activeDeviceTab === 'desktop' && (
+                                            <>
+                                                <div className="flex items-start gap-2">
+                                                    <span className="w-4 h-4 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                                                    <span>Di Google Chrome / Microsoft Edge, klik ikon instalasi (<i className="fa-solid fa-desktop text-pink-600"></i>) di ujung kanan bilah URL.</span>
+                                                </div>
+                                                <div className="flex items-start gap-2">
+                                                    <span className="w-4 h-4 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                                                    <span>Klik <strong>"Instal"</strong> untuk memasang Busana di desktop komputer Anda.</span>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsPasswordSaved(false);
+                                    onClose();
+                                }}
+                                className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                            >
+                                <span>Selesai & Masuk ke Dashboard Busana</span>
+                                <i className="fa-solid fa-arrow-right text-xs"></i>
+                            </button>
                         </div>
+                    ) : (
+                        <>
+                            {/* Alert default password */}
+                            {isForced && (
+                                <div className="bg-amber-50/90 border border-amber-200/80 text-amber-900 p-3 rounded-2xl text-xs flex items-start gap-2.5">
+                                    <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                                        <i className="fa-solid fa-triangle-exclamation text-xs"></i>
+                                    </div>
+                                    <div className="flex-1 min-w-0 leading-relaxed">
+                                        <strong className="block font-semibold text-amber-950">Password Bawaan Terdeteksi</strong>
+                                        Demi keamanan akun Anda, silakan buat password baru (minimal 6 karakter) sebelum melanjutkan.
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Form Ganti Password */}
+                            <form onSubmit={handleSubmit} className="space-y-3.5">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                        Password Baru <span className="text-rose-500">*</span>
+                                    </label>
+                                    <div className="relative">
+                                        <input 
+                                            type={showPass ? 'text' : 'password'} 
+                                            value={newPass} 
+                                            onChange={e => setNewPass(e.target.value)} 
+                                            className="w-full text-xs sm:text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition placeholder:text-slate-400" 
+                                            placeholder="Masukkan password baru..." 
+                                            required 
+                                            minLength={6} 
+                                        />
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowPass(!showPass)} 
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-1"
+                                            tabIndex={-1}
+                                        >
+                                            <i className={`fa-solid ${showPass ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                        Ulangi Password Baru <span className="text-rose-500">*</span>
+                                    </label>
+                                    <div className="relative">
+                                        <input 
+                                            type={showRepeatPass ? 'text' : 'password'} 
+                                            value={repeatPass} 
+                                            onChange={e => setRepeatPass(e.target.value)} 
+                                            className="w-full text-xs sm:text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition placeholder:text-slate-400" 
+                                            placeholder="Ketik ulang password baru..." 
+                                            required 
+                                            minLength={6} 
+                                        />
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowRepeatPass(!showRepeatPass)} 
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-1"
+                                            tabIndex={-1}
+                                        >
+                                            <i className={`fa-solid ${showRepeatPass ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                                        </button>
+                                    </div>
+                                    {repeatPass && (
+                                        <div className="mt-1 text-[11px]">
+                                            {newPass === repeatPass ? (
+                                                <span className="text-emerald-600 flex items-center gap-1 font-medium">
+                                                    <i className="fa-solid fa-circle-check"></i> Password cocok
+                                                </span>
+                                            ) : (
+                                                <span className="text-rose-500 flex items-center gap-1 font-medium">
+                                                    <i className="fa-solid fa-circle-xmark"></i> Password belum sama
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button 
+                                    type="submit" 
+                                    disabled={saving || (newPass && repeatPass && newPass !== repeatPass)} 
+                                    className="w-full bg-gradient-to-r from-[#e1007a] via-[#ec268f] to-[#a855f7] hover:opacity-95 text-white rounded-xl py-2.5 text-xs sm:text-sm font-bold shadow-md shadow-pink-500/25 transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <i className="fa-solid fa-circle-notch fa-spin text-xs"></i>
+                                            <span>Menyimpan Password...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fa-solid fa-shield-halved text-xs"></i>
+                                            <span>Simpan Password Baru</span>
+                                        </>
+                                    )}
+                                </button>
+                            </form>
+
+                            {/* Section PWA Instruction */}
+                            <div className="pt-3 border-t border-slate-100 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-pink-500 animate-pulse"></span>
+                                        <h4 className="text-xs font-bold text-slate-800">Instruksi Pasang Aplikasi (PWA)</h4>
+                                    </div>
+                                    <span className="text-[10px] font-semibold text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full border border-pink-100">
+                                        Rekomendasi
+                                    </span>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-pink-50/70 via-white to-purple-50/50 rounded-2xl border border-pink-200/70 p-3.5 space-y-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <div className="w-9 h-9 rounded-xl bg-white shadow-xs border border-pink-100 p-1 flex items-center justify-center shrink-0">
+                                                <img src="/Logo%20Beauty.png" alt="Busana" className="w-full h-full object-contain" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="font-pacifico text-sm text-slate-800" style={{ fontFamily: "var(--font-pacifico), 'Pacifico', cursive" }}>Busana</span>
+                                                    <span className="text-[9px] bg-pink-500 text-white font-bold px-1.5 py-0.2 rounded-md">PWA</span>
+                                                </div>
+                                                <p className="text-[10px] text-slate-500 truncate">Beauty Task Management</p>
+                                            </div>
+                                        </div>
+
+                                        {!isStandalone && (
+                                            <button
+                                                type="button"
+                                                onClick={handleTriggerPWA}
+                                                className="shrink-0 bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                                            >
+                                                <i className="fa-solid fa-download text-[10px]"></i>
+                                                <span>Instal Sekarang</span>
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                                        Pasang aplikasi ke layar utama HP / komputer Anda untuk akses cepat tanpa bilah browser dan notifikasi tugas langsung.
+                                    </p>
+
+                                    {/* Tabs Platform Guide */}
+                                    <div className="space-y-2">
+                                        <div className="grid grid-cols-3 gap-1 bg-slate-100/80 p-1 rounded-xl text-[10px] font-semibold">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDeviceTab('android')}
+                                                className={`py-1.5 px-1 rounded-lg transition text-center cursor-pointer ${
+                                                    activeDeviceTab === 'android' ? 'bg-white text-pink-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                <i className="fa-brands fa-android mr-1"></i>Android
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDeviceTab('ios')}
+                                                className={`py-1.5 px-1 rounded-lg transition text-center cursor-pointer ${
+                                                    activeDeviceTab === 'ios' ? 'bg-white text-pink-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                <i className="fa-brands fa-apple mr-1"></i>iPhone/iPad
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDeviceTab('desktop')}
+                                                className={`py-1.5 px-1 rounded-lg transition text-center cursor-pointer ${
+                                                    activeDeviceTab === 'desktop' ? 'bg-white text-pink-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                <i className="fa-solid fa-laptop mr-1"></i>Laptop/PC
+                                            </button>
+                                        </div>
+
+                                        <div className="bg-white/95 rounded-xl p-2.5 border border-pink-100 text-[11px] text-slate-600 space-y-1.5 leading-relaxed">
+                                            {activeDeviceTab === 'android' && (
+                                                <>
+                                                    <div className="flex items-start gap-1.5">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[9px] shrink-0 mt-0.5">1</span>
+                                                        <span>Klik tombol <strong>"Instal Sekarang"</strong> di atas atau menu titik tiga (<strong>⋮</strong>) di Chrome.</span>
+                                                    </div>
+                                                    <div className="flex items-start gap-1.5">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[9px] shrink-0 mt-0.5">2</span>
+                                                        <span>Pilih <strong>"Instal aplikasi"</strong> atau <strong>"Tambahkan ke Layar Utama"</strong>.</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {activeDeviceTab === 'ios' && (
+                                                <>
+                                                    <div className="flex items-start gap-1.5">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[9px] shrink-0 mt-0.5">1</span>
+                                                        <span>Buka di browser <strong>Safari</strong> lalu ketuk tombol <strong>Bagikan (Share <i className="fa-solid fa-arrow-up-from-bracket text-pink-600"></i>)</strong>.</span>
+                                                    </div>
+                                                    <div className="flex items-start gap-1.5">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[9px] shrink-0 mt-0.5">2</span>
+                                                        <span>Gulir ke bawah dan ketuk <strong>"Tambahkan ke Layar Utama" (➕)</strong> lalu klik Tambah.</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {activeDeviceTab === 'desktop' && (
+                                                <>
+                                                    <div className="flex items-start gap-1.5">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[9px] shrink-0 mt-0.5">1</span>
+                                                        <span>Di browser Chrome/Edge, klik tombol <strong>"Instal Sekarang"</strong> atau ikon instal (<i className="fa-solid fa-desktop text-pink-600"></i>) di bilah URL.</span>
+                                                    </div>
+                                                    <div className="flex items-start gap-1.5">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-bold text-[9px] shrink-0 mt-0.5">2</span>
+                                                        <span>Klik <strong>"Instal"</strong> pada jendela konfirmasi browser.</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
                     )}
-                    <div>
-                        <label className="block text-xs font-medium text-slate-500 mb-1">Password Baru</label>
-                        <input type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} className="w-full text-sm border-gray-300 rounded-lg" required minLength="6" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-slate-500 mb-1">Ulangi Password</label>
-                        <input type="password" value={repeatPass} onChange={e=>setRepeatPass(e.target.value)} className="w-full text-sm border-gray-300 rounded-lg" required minLength="6" />
-                    </div>
-                    <button type="submit" disabled={saving} className="w-full bg-emerald-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50">
-                        {saving ? 'Menyimpan...' : 'Simpan Password'}
-                    </button>
-                </form>
+                </div>
             </div>
         </div>
     );
@@ -3133,6 +3549,53 @@ const OrgManagementView = ({
                                         <span>Keluar dari Akun (Logout)</span>
                                     </button>
                                 </div>
+                            </div>
+
+                            {/* Card Instalasi Aplikasi PWA */}
+                            <div className="bg-white/80 backdrop-blur-md p-6 rounded-3xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-pink-50 border border-pink-100 text-pink-600 flex items-center justify-center text-base shadow-xs">
+                                            <i className="fa-solid fa-mobile-screen-button"></i>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-bold text-slate-800">Aplikasi Desktop & Mobile</h4>
+                                            <p className="text-[11px] text-slate-500">Instal langsung ke layar utama perangkat</p>
+                                        </div>
+                                    </div>
+                                    <span className="text-[10px] font-extrabold bg-pink-100 text-pink-700 px-2 py-0.5 rounded-lg border border-pink-200 uppercase tracking-wider">
+                                        PWA
+                                    </span>
+                                </div>
+
+                                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-pink-50/80 via-purple-50/50 to-indigo-50/60 border border-pink-100/70 flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-white p-1.5 shadow-sm border border-pink-200/50 shrink-0 flex items-center justify-center">
+                                        <img src="/Logo%20Beauty.png" alt="Busana" className="w-full h-full object-contain" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <span className="font-pacifico text-[16px] text-slate-800 block leading-tight" style={{ fontFamily: "var(--font-pacifico), 'Pacifico', cursive" }}>
+                                            Busana
+                                        </span>
+                                        <span className="font-inter text-[10px] text-slate-500 font-medium">Beauty Task Management</span>
+                                    </div>
+                                </div>
+
+                                <p className="text-xs text-slate-600 leading-relaxed">
+                                    Nikmati pengalaman aplikasi native tanpa bilah browser. Akses lebih cepat, ringan, dan mendukung instalasi di Windows, Mac, Android, maupun iPhone/iPad.
+                                </p>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (typeof window !== 'undefined') {
+                                            window.dispatchEvent(new CustomEvent('open-pwa-install'));
+                                        }
+                                    }}
+                                    className="w-full bg-gradient-to-r from-pink-600 to-pink-500 hover:from-pink-500 hover:to-pink-600 text-white py-2.5 rounded-xl text-xs font-bold shadow-md shadow-pink-500/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                                >
+                                    <i className="fa-solid fa-download text-xs"></i>
+                                    <span>Instal Aplikasi Busana</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -6076,42 +6539,48 @@ export default function TaskManagerApp() {
 
         setIsMounted(false);
 
-        const loadData = async () => {
-            const [
-                { data: projectsData, error: projectsError },
-                { data: membersData, error: membersError },
-                { data: tasksData, error: tasksError },
-                { data: shortcutsData, error: shortcutsError },
-                { data: notesData, error: notesError },
-                { data: divsData },
-                { data: accessData },
-                { data: rolesData },
-                { data: deptsData }
-            ] = await Promise.all([
-                supabase.from('projects').select('*').order('created_at', { ascending: true }),
-                supabase.from('members').select('*').order('created_at', { ascending: true }),
-                supabase.from('tasks').select('*').order('created_at', { ascending: true }),
-                supabase.from('shortcuts').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
-                supabase.from('notes').select('*').order('created_at', { ascending: false }),
-                supabase.from('divisions').select('*').order('created_at', { ascending: true }),
-                supabase.from('project_access').select('*'),
-                supabase.from('roles').select('*').order('level', { ascending: true }),
-                supabase.from('departments').select('*').order('created_at', { ascending: true })
-            ]);
+        // Safety fallback timer: batas maksimal loading 3.5 detik
+        const fallbackTimer = setTimeout(() => {
+            console.warn('[Workspace] Loading fallback triggered');
+            setIsMounted(true);
+        }, 3500);
 
-            const firstError = projectsError || membersError || tasksError;
-            if (firstError) {
-                console.error('Supabase load error:', firstError);
-                alert(`Gagal memuat data Supabase: ${firstError.message}`);
-                setProjects([]);
-                setMembers([]);
-                setTasks([]);
-                setShortcuts([]);
-                setNotes([]);
-                setActiveProject('');
-                setIsMounted(true);
-                return;
-            }
+        const loadData = async () => {
+            try {
+                const [
+                    { data: projectsData, error: projectsError },
+                    { data: membersData, error: membersError },
+                    { data: tasksData, error: tasksError },
+                    { data: shortcutsData, error: shortcutsError },
+                    { data: notesData, error: notesError },
+                    { data: divsData },
+                    { data: accessData },
+                    { data: rolesData },
+                    { data: deptsData }
+                ] = await Promise.all([
+                    supabase.from('projects').select('*').order('created_at', { ascending: true }),
+                    supabase.from('members').select('*').order('created_at', { ascending: true }),
+                    supabase.from('tasks').select('*').order('created_at', { ascending: true }),
+                    supabase.from('shortcuts').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
+                    supabase.from('notes').select('*').order('created_at', { ascending: false }),
+                    supabase.from('divisions').select('*').order('created_at', { ascending: true }),
+                    supabase.from('project_access').select('*'),
+                    supabase.from('roles').select('*').order('level', { ascending: true }),
+                    supabase.from('departments').select('*').order('created_at', { ascending: true })
+                ]);
+
+                const firstError = projectsError || membersError || tasksError;
+                if (firstError) {
+                    console.error('Supabase load error:', firstError);
+                    setProjects([]);
+                    setMembers([]);
+                    setTasks([]);
+                    setShortcuts([]);
+                    setNotes([]);
+                    setActiveProject('');
+                    setIsMounted(true);
+                    return;
+                }
 
             const mappedProjects = (projectsData || []).map((project, index) => ({
                 id: project.id,
@@ -6320,15 +6789,36 @@ export default function TaskManagerApp() {
             });
             setIsMounted(true);
             
-            if (session && session.requiresPasswordChange) {
-                setIsPasswordModalOpen(true);
+                if (session && session.requiresPasswordChange) {
+                    setIsPasswordModalOpen(true);
+                }
+            } catch (err) {
+                console.error('[Workspace] LoadData error:', err);
+            } finally {
+                clearTimeout(fallbackTimer);
+                setIsMounted(true);
             }
         };
 
         loadData();
+
+        return () => clearTimeout(fallbackTimer);
     }, [session]);
 
-    if (!isMounted) return <div className="h-screen w-screen flex items-center justify-center bg-white text-gray-500">Memuat Workspace...</div>;
+    if (!isMounted) {
+        return (
+            <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-600 gap-4">
+                <div className="w-14 h-14 relative flex items-center justify-center">
+                    <div className="absolute inset-0 rounded-2xl border-3 border-pink-500/20 border-t-pink-600 animate-spin"></div>
+                    <img src="/Logo%20Beauty.png" alt="Busana" className="w-8 h-8 object-contain" />
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                    <span className="font-pacifico text-xl text-slate-800" style={{ fontFamily: "var(--font-pacifico), 'Pacifico', cursive" }}>Busana</span>
+                    <span className="font-inter text-xs text-slate-400 font-medium" style={{ fontFamily: "var(--font-inter), 'Inter', sans-serif" }}>Memuat Workspace...</span>
+                </div>
+            </div>
+        );
+    }
 
     if (!session) return <LoginScreen onLoginSuccess={(s) => {
         setSession(s);
@@ -7287,21 +7777,34 @@ export default function TaskManagerApp() {
 
                 {/* Sidebar */}
                 <div className={`fixed inset-y-0 left-0 z-[80] flex w-72 max-w-[86vw] flex-col border-r border-white/70 bg-white/95 shadow-2xl shadow-slate-900/20 transition-transform duration-300 lg:static lg:z-auto lg:w-64 lg:max-w-none lg:translate-x-0 lg:bg-white/25 lg:shadow-none ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-                    <div className="p-5 flex items-center justify-between font-semibold transition-colors mb-2">
-                        <div className="flex items-center space-x-3">
-                            <div className="w-9 h-9 rounded-2xl bg-white flex items-center justify-center overflow-hidden shadow-lg shadow-blue-500/20">
+                    <div className="p-4 flex items-center justify-between font-semibold transition-colors mb-2">
+                        <div className="flex items-center space-x-3 min-w-0">
+                            <div className="w-10 h-10 shrink-0 flex items-center justify-center">
                                 <img
-                                    src="https://pub-deabb4838f9345c095b0dbe31add5535.r2.dev/abs%204%20(1).png"
-                                    alt="Semua Divisi"
-                                    className="w-full h-full object-contain p-1"
+                                    src="/Logo%20Beauty.png"
+                                    alt="Busana"
+                                    className="w-full h-full object-contain"
                                 />
                             </div>
-                            <span>Semua Divisi</span>
+                            <div className="flex flex-col min-w-0 justify-center">
+                                <span
+                                    className="font-pacifico text-[22px] text-slate-800 leading-tight font-normal"
+                                    style={{ fontFamily: "var(--font-pacifico), 'Pacifico', cursive" }}
+                                >
+                                    Busana
+                                </span>
+                                <span
+                                    className="font-inter text-[10px] font-medium text-slate-400 tracking-tight leading-tight"
+                                    style={{ fontFamily: "var(--font-inter), 'Inter', sans-serif" }}
+                                >
+                                    Beauty Task Management
+                                </span>
+                            </div>
                         </div>
                         <button
                             type="button"
                             onClick={closeMobileSidebar}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-2xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-950 lg:hidden"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-2xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-950 lg:hidden shrink-0"
                             aria-label="Tutup menu"
                         >
                             <i className="fa-solid fa-xmark"></i>
@@ -7521,32 +8024,6 @@ export default function TaskManagerApp() {
                             </div>
                         ))}
                     </nav>
-
-                    {/* Tombol Instal Aplikasi (PWA) */}
-                    <div className="px-3 mb-2">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (typeof window !== 'undefined') {
-                                    window.dispatchEvent(new CustomEvent('open-pwa-install'));
-                                }
-                            }}
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-2xl bg-indigo-50/75 hover:bg-indigo-100/90 border border-indigo-200/80 text-indigo-700 text-xs font-semibold transition group shadow-2xs cursor-pointer"
-                            title="Instal Task ABS di perangkat Anda"
-                        >
-                            <div className="flex items-center gap-2">
-                                <span className="w-6 h-6 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-[10px] shadow-xs group-hover:scale-105 transition-transform">
-                                    <i className="fa-solid fa-download"></i>
-                                </span>
-                                <span>Instal Aplikasi</span>
-                            </div>
-                            <span className="text-[9px] bg-indigo-200/80 text-indigo-800 px-1.5 py-0.5 rounded-md font-extrabold tracking-wide">
-                                PWA
-                            </span>
-                        </button>
-                    </div>
-
-                    <SidebarClock />
                 </div>
 
                 {/* Main Content Area */}
