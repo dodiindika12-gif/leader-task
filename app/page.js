@@ -8,6 +8,7 @@ import MinuteOfMeeting from '../components/MinuteOfMeeting';
 import ProjectSettingsModal from '../components/ProjectSettingsModal';
 import WeeklyScheduleView, { getRoleLevel, isMeetingSchedule, isWorksheetSchedule } from '../components/WeeklyScheduleView';
 import MainDashboard from '../components/MainDashboard';
+import NotificationCenter from '../components/NotificationCenter';
 
 
 // Default Data when localStorage/DB is empty
@@ -7587,6 +7588,20 @@ export default function TaskManagerApp() {
                             </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
+                            {/* Pusat Notifikasi dengan Label Titik Merah & Dropdown Interaktif */}
+                            <NotificationCenter
+                                tasks={tasks}
+                                schedules={schedules}
+                                notes={notes}
+                                members={members}
+                                currentPicId={currentPicId}
+                                session={session}
+                                roles={roles}
+                                projects={projects}
+                                onOpenTask={handleEditTask}
+                                onNavigate={navigateView}
+                            />
+
                             {/* 1. Nama User paling kiri */}
                             <div className="flex items-center gap-2 rounded-2xl border border-white/70 bg-white/65 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur-sm">
                                 <i className="fa-regular fa-user text-slate-500"></i>
