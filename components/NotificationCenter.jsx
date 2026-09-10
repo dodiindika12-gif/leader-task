@@ -551,7 +551,7 @@ export default function NotificationCenter({
     };
 
     return (
-        <div className="relative" ref={dropdownRef}>
+        <div className="relative z-50" ref={dropdownRef}>
             {/* ================================================================= */}
             {/* TOMBOL LONCENG DENGAN LABEL TITIK MERAH (RED DOT BADGE ANIMASI)   */}
             {/* ================================================================= */}
@@ -586,7 +586,7 @@ export default function NotificationCenter({
             {/* ================================================================= */}
             {isOpen && (
                 <div 
-                    className="absolute right-0 mt-2 w-80 sm:w-96 rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                    className="absolute right-0 mt-2 w-80 sm:w-96 max-w-[calc(100vw-2rem)] rounded-3xl bg-white/98 backdrop-blur-2xl border border-slate-200/90 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                     style={{ maxHeight: 'calc(100vh - 100px)' }}
                 >
                     {/* Header Popover */}

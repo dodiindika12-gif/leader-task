@@ -7528,7 +7528,7 @@ export default function TaskManagerApp() {
 
                 {/* Main Content Area */}
                 <div className="flex-1 flex flex-col h-full overflow-hidden bg-white/35 min-w-0">
-                    <header className="h-16 border-b border-white/60 flex items-center justify-between gap-3 px-4 lg:px-8 bg-white/25 backdrop-blur">
+                    <header className="relative z-40 h-16 border-b border-white/60 flex items-center justify-between gap-3 px-4 lg:px-8 bg-white/25 backdrop-blur">
                         <div className="flex min-w-0 items-center gap-3">
                             <button
                                 type="button"
