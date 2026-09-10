@@ -55,22 +55,12 @@ Jika Anda memiliki PC/Laptop yang sudah terpasang **Android Studio**:
 
 ---
 
-## 🌐 Menghubungkan ke Domain / Server Produksi (Live Sync)
+## 🌐 Terhubung Langsung ke Server Produksi (Live Sync)
 
-Agar aplikasi Android otomatis tersinkronisasi langsung dengan data server web Anda secara real-time tanpa perlu re-build APK setiap kali ada perubahan fitur:
+Aplikasi Android telah dikonfigurasi untuk langsung memuat aplikasi web produksi secara real-time di:
+👉 **`https://task.absgroup.biz.id`**
 
-1. Buka berkas `capacitor.config.json`.
-2. Tambahkan properti `url` pada objek `server`:
-   ```json
-   {
-     "appId": "id.biz.abskdi.busana",
-     "appName": "Busana",
-     "webDir": "public",
-     "server": {
-       "url": "https://domain-busana-anda.com",
-       "androidScheme": "https",
-       "cleartext": true
-     }
-   }
-   ```
-3. Jalankan `npm run cap:sync` dan lakukan `git push origin main`.
+**Keuntungan Live Sync:**
+- Tidak perlu menginstal ulang file APK setiap kali ada pembaruan fitur atau perbaikan kode di dashboard.
+- Semua data, notifikasi, task leader, dan database `task_leader` Supabase tersinkronisasi langsung saat membuka aplikasi.
+- Dilengkapi fallback deteksi offline jika koneksi internet terputus saat pertama kali dibuka.

@@ -4,8 +4,17 @@
   "webDir": "public",
   "bundledWebRuntime": false,
   "server": {
+    "url": "https://task.absgroup.biz.id",
     "androidScheme": "https",
-    "cleartext": true
+    "cleartext": true,
+    "allowNavigation": [
+      "task.absgroup.biz.id",
+      "*.absgroup.biz.id",
+      "*.supabase.co",
+      "cdnjs.cloudflare.com",
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
   },
   "android": {
     "allowMixedContent": true,

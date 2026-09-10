@@ -125,23 +125,31 @@
   </div>
 
   <script>
-    // Deteksi environment Capacitor
-    const isCapacitor = window.Capacitor !== undefined;
+    // Langsung arahkan ke server aplikasi Busana
+    const targetUrl = "https://task.absgroup.biz.id";
     
-    // Redirect ke server bila terhubung
+    if (navigator.onLine !== false) {
+      try {
+        window.location.replace(targetUrl);
+      } catch(e) {
+        window.location.href = targetUrl;
+      }
+    }
+
     setTimeout(() => {
       const statusEl = document.getElementById('status');
       const retryBtn = document.getElementById('retryBtn');
       const spinner = document.getElementById('spinner');
 
-      // Cek koneksi internet
       if (!navigator.onLine) {
         statusEl.innerText = 'Tidak ada koneksi internet. Pastikan perangkat Anda terhubung ke jaringan.';
         statusEl.style.color = '#e11d48';
         spinner.style.display = 'none';
         retryBtn.style.display = 'inline-block';
+      } else {
+        window.location.href = targetUrl;
       }
-    }, 4000);
+    }, 2000);
   </script>
 </body>
 </html>
