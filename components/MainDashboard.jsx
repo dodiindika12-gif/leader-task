@@ -371,7 +371,13 @@ export default function MainDashboard({
     // Filter jadwal meeting vs worksheet
     const filteredTodaySchedules = useMemo(() => {
         if (scheduleFilterType === 'all') return todaySchedulesWithCountdown;
-        return todaySchedulesWithCountdown.filter(s => s.type === scheduleFilterType);
+        return todaySchedulesWithCountdown.filter(s => {
+            const isM = s.type === 'meeting' || s.type === 'schedule_meeting';
+            const isW = s.type === 'worksheet' || s.type === 'schedule_worksheet';
+            if (scheduleFilterType === 'meeting') return isM;
+            if (scheduleFilterType === 'worksheet') return isW;
+            return true;
+        });
     }, [todaySchedulesWithCountdown, scheduleFilterType]);
 
     // Active ongoing schedule (jika ada yang sedang berlangsung)
@@ -671,6 +677,8 @@ export default function MainDashboard({
                             const isUpcoming = item.status === 'upcoming';
                             const isPassed = item.status === 'passed';
 
+                            const isMeetingType = item.type === 'meeting' || item.type === 'schedule_meeting';
+
                             return (
                                 <div
                                     key={item.id}
@@ -686,9 +694,9 @@ export default function MainDashboard({
                                     <div className="flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-2">
                                             <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold ${
-                                                item.type === 'meeting' ? 'bg-indigo-100 text-indigo-700' : 'bg-sky-100 text-sky-700'
+                                                isMeetingType ? 'bg-indigo-100 text-indigo-700' : 'bg-sky-100 text-sky-700'
                                             }`}>
-                                                <i className={`fa-solid ${item.type === 'meeting' ? 'fa-handshake' : 'fa-table-cells'}`}></i>
+                                                <i className={`fa-solid ${isMeetingType ? 'fa-handshake' : 'fa-table-cells'}`}></i>
                                             </span>
                                             <span className="text-xs font-bold text-slate-700">
                                                 {item.startTimeStr} - {item.endTimeStr}
