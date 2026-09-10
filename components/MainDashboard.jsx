@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { getRoleLevel } from './WeeklyScheduleView';
+import { getRoleLevel, isMeetingSchedule, isWorksheetSchedule } from './WeeklyScheduleView';
 
 // Helper format tanggal deadline
 const formatDeadline = (dateStr) => {
@@ -369,15 +369,19 @@ export default function MainDashboard({
     }, [schedules, todayDayName, currentTime, effectiveMembers]);
 
     // Filter jadwal meeting vs worksheet
+    const todayMeetingsCount = useMemo(() => {
+        return todaySchedulesWithCountdown.filter(isMeetingSchedule).length;
+    }, [todaySchedulesWithCountdown]);
+
+    const todayWorksheetsCount = useMemo(() => {
+        return todaySchedulesWithCountdown.filter(isWorksheetSchedule).length;
+    }, [todaySchedulesWithCountdown]);
+
     const filteredTodaySchedules = useMemo(() => {
         if (scheduleFilterType === 'all') return todaySchedulesWithCountdown;
-        return todaySchedulesWithCountdown.filter(s => {
-            const isM = s.type === 'meeting' || s.type === 'schedule_meeting';
-            const isW = s.type === 'worksheet' || s.type === 'schedule_worksheet';
-            if (scheduleFilterType === 'meeting') return isM;
-            if (scheduleFilterType === 'worksheet') return isW;
-            return true;
-        });
+        if (scheduleFilterType === 'meeting') return todaySchedulesWithCountdown.filter(isMeetingSchedule);
+        if (scheduleFilterType === 'worksheet') return todaySchedulesWithCountdown.filter(isWorksheetSchedule);
+        return todaySchedulesWithCountdown;
     }, [todaySchedulesWithCountdown, scheduleFilterType]);
 
     // Active ongoing schedule (jika ada yang sedang berlangsung)
@@ -435,7 +439,7 @@ export default function MainDashboard({
                             {activeOngoingSchedule && (
                                 <span className="bg-emerald-400/30 text-emerald-200 border border-emerald-300/40 px-3 py-1 rounded-full text-xs font-bold animate-pulse flex items-center gap-1.5">
                                     <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                    {activeOngoingSchedule.type === 'meeting' ? 'Meeting Sedang Berlangsung' : 'Worksheet Sedang Berlangsung'}
+                                    {isMeetingSchedule(activeOngoingSchedule) ? 'Meeting Sedang Berlangsung' : 'Worksheet Sedang Berlangsung'}
                                 </span>
                             )}
                         </div>
@@ -652,7 +656,7 @@ export default function MainDashboard({
                             className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${scheduleFilterType === 'meeting' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
                         >
                             <i className="fa-solid fa-handshake text-indigo-500 text-[10px]"></i>
-                            Meeting
+                            Meeting ({todayMeetingsCount})
                         </button>
                         <button
                             type="button"
@@ -660,7 +664,7 @@ export default function MainDashboard({
                             className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${scheduleFilterType === 'worksheet' ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
                         >
                             <i className="fa-solid fa-table-cells text-sky-500 text-[10px]"></i>
-                            Worksheet
+                            Worksheet ({todayWorksheetsCount})
                         </button>
                     </div>
                 </div>
@@ -668,7 +672,12 @@ export default function MainDashboard({
                 {filteredTodaySchedules.length === 0 ? (
                     <div className="py-8 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs">
                         <i className="fa-regular fa-calendar-check text-2xl text-slate-300 mb-2 block"></i>
-                        Tidak ada agenda meeting atau worksheet tetap yang dijadwalkan untuk hari {todayDayName}.
+                        {scheduleFilterType === 'meeting'
+                            ? `Tidak ada agenda meeting yang dijadwalkan untuk hari ${todayDayName}.`
+                            : scheduleFilterType === 'worksheet'
+                            ? `Tidak ada agenda worksheet yang dijadwalkan untuk hari ${todayDayName}.`
+                            : `Tidak ada agenda meeting atau worksheet tetap yang dijadwalkan untuk hari ${todayDayName}.`
+                        }
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -677,7 +686,7 @@ export default function MainDashboard({
                             const isUpcoming = item.status === 'upcoming';
                             const isPassed = item.status === 'passed';
 
-                            const isMeetingType = item.type === 'meeting' || item.type === 'schedule_meeting';
+                            const isMeetingType = isMeetingSchedule(item);
 
                             return (
                                 <div

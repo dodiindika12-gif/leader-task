@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import TimelineView from '../components/TimelineView';
 import MinuteOfMeeting from '../components/MinuteOfMeeting';
 import ProjectSettingsModal from '../components/ProjectSettingsModal';
-import WeeklyScheduleView, { getRoleLevel } from '../components/WeeklyScheduleView';
+import WeeklyScheduleView, { getRoleLevel, isMeetingSchedule, isWorksheetSchedule } from '../components/WeeklyScheduleView';
 import MainDashboard from '../components/MainDashboard';
 
 
@@ -5965,8 +5965,7 @@ export default function TaskManagerApp() {
         const userDivision = session?.division || matchedMember?.division;
 
         return schedules.filter(item => {
-            const itemType = (item.type || '').toLowerCase();
-            const isWorksheet = itemType === 'worksheet' || itemType === 'schedule_worksheet';
+            const isWorksheet = isWorksheetSchedule(item);
 
             // Check PIC / owner
             const pic = item.picId || item.pic_id || item.author_id || item.authorId || item.userId;
@@ -6241,7 +6240,7 @@ export default function TaskManagerApp() {
                 if (!schedError && Array.isArray(schedData)) {
                     loadedSchedules = schedData.map(s => ({
                         id: s.id,
-                        type: s.type,
+                        type: isMeetingSchedule(s) ? 'schedule_meeting' : 'schedule_worksheet',
                         title: s.title || '',
                         day: s.day || 'Senin',
                         startTime: s.start_time || '09:00',
@@ -6264,9 +6263,10 @@ export default function TaskManagerApp() {
                     loadedSchedules = schedNotes.map(n => {
                         let parsed = {};
                         try { parsed = JSON.parse(n.content || '{}'); } catch(e) {}
+                        const rawItem = { ...parsed, type: n.type, title: n.title };
                         return {
                             id: n.id,
-                            type: n.type,
+                            type: isMeetingSchedule(rawItem) ? 'schedule_meeting' : 'schedule_worksheet',
                             title: n.title || '',
                             day: parsed.day || 'Senin',
                             startTime: parsed.startTime || '09:00',
@@ -6287,7 +6287,15 @@ export default function TaskManagerApp() {
             if (loadedSchedules.length === 0) {
                 try {
                     const localCached = localStorage.getItem('task_leader_schedules_cache');
-                    if (localCached) loadedSchedules = JSON.parse(localCached);
+                    if (localCached) {
+                        const parsed = JSON.parse(localCached);
+                        if (Array.isArray(parsed)) {
+                            loadedSchedules = parsed.map(s => ({
+                                ...s,
+                                type: isMeetingSchedule(s) ? 'schedule_meeting' : 'schedule_worksheet'
+                            }));
+                        }
+                    }
                 } catch(e) {}
             }
 

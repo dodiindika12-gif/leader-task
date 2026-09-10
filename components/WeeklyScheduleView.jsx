@@ -55,6 +55,50 @@ export const getRoleLevel = (roleName, rolesList = []) => {
     return 1;
 };
 
+// Helper to determine whether a schedule item is a Meeting
+export const isMeetingSchedule = (item) => {
+    if (!item) return false;
+    const t = String(item.type || '').toLowerCase().trim();
+    if (t === 'meeting' || t === 'schedule_meeting' || t.includes('meeting') || t.includes('rapat') || t.includes('briefing')) {
+        return true;
+    }
+    if (t === 'worksheet' || t === 'schedule_worksheet' || t.includes('worksheet')) {
+        return false;
+    }
+    const title = String(item.title || '').toLowerCase().trim();
+    if (title.includes('worksheet') || title.includes('lembar kerja')) {
+        return false;
+    }
+    if (title.includes('meeting') || title.includes('rapat') || title.includes('briefing') || title.includes('evaluasi') || title.includes('koordinasi') || title.includes('sync')) {
+        return true;
+    }
+    if (Array.isArray(item.attendees) && item.attendees.length > 1) {
+        return true;
+    }
+    const loc = String(item.location || '').toLowerCase();
+    if (loc.includes('zoom') || loc.includes('meet') || loc.includes('ruang rapat') || loc.includes('meeting room')) {
+        return true;
+    }
+    return false;
+};
+
+// Helper to determine whether a schedule item is a Worksheet
+export const isWorksheetSchedule = (item) => {
+    if (!item) return false;
+    const t = String(item.type || '').toLowerCase().trim();
+    if (t === 'worksheet' || t === 'schedule_worksheet' || t.includes('worksheet') || t.includes('kerja') || t.includes('operasional')) {
+        return true;
+    }
+    if (t === 'meeting' || t === 'schedule_meeting' || t.includes('meeting') || t.includes('rapat') || t.includes('briefing')) {
+        return false;
+    }
+    const title = String(item.title || '').toLowerCase().trim();
+    if (title.includes('worksheet') || title.includes('lembar kerja') || title.includes('kerja') || title.includes('inspeksi') || title.includes('sop') || title.includes('tugas') || title.includes('gudang')) {
+        return true;
+    }
+    return !isMeetingSchedule(item);
+};
+
 export default function WeeklyScheduleView({
     type = 'meeting', // 'meeting' or 'worksheet'
     schedules = [],
@@ -338,10 +382,9 @@ export default function WeeklyScheduleView({
     // Filtered schedules for this specific type and accessible to current user
     const typeSchedules = useMemo(() => {
         return (schedules || []).filter(item => {
-            const itemType = (item.type || '').toLowerCase();
             const matchesType = isMeeting 
-                ? (itemType === 'meeting' || itemType === 'schedule_meeting')
-                : (itemType === 'worksheet' || itemType === 'schedule_worksheet');
+                ? isMeetingSchedule(item)
+                : isWorksheetSchedule(item);
             if (!matchesType) return false;
 
             return checkIsAccessible(item);
