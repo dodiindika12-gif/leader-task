@@ -7522,6 +7522,29 @@ export default function TaskManagerApp() {
                         ))}
                     </nav>
 
+                    {/* Tombol Instal Aplikasi (PWA) */}
+                    <div className="px-3 mb-2">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (typeof window !== 'undefined') {
+                                    window.dispatchEvent(new CustomEvent('open-pwa-install'));
+                                }
+                            }}
+                            className="w-full flex items-center justify-between px-3 py-2 rounded-2xl bg-indigo-50/75 hover:bg-indigo-100/90 border border-indigo-200/80 text-indigo-700 text-xs font-semibold transition group shadow-2xs cursor-pointer"
+                            title="Instal Task ABS di perangkat Anda"
+                        >
+                            <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-[10px] shadow-xs group-hover:scale-105 transition-transform">
+                                    <i className="fa-solid fa-download"></i>
+                                </span>
+                                <span>Instal Aplikasi</span>
+                            </div>
+                            <span className="text-[9px] bg-indigo-200/80 text-indigo-800 px-1.5 py-0.5 rounded-md font-extrabold tracking-wide">
+                                PWA
+                            </span>
+                        </button>
+                    </div>
 
                     <SidebarClock />
                 </div>
