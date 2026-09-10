@@ -721,7 +721,7 @@ const PasswordModal = ({ isOpen, onClose, onSave, isForced }) => {
                             {/* Form Ganti Password */}
                             <form onSubmit={handleSubmit} className="space-y-3.5">
                                 <div>
-                                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                    <label className="block text-xs font-bold text-slate-900 mb-1">
                                         Password Baru <span className="text-rose-500">*</span>
                                     </label>
                                     <div className="relative">
@@ -729,7 +729,7 @@ const PasswordModal = ({ isOpen, onClose, onSave, isForced }) => {
                                             type={showPass ? 'text' : 'password'} 
                                             value={newPass} 
                                             onChange={e => setNewPass(e.target.value)} 
-                                            className="w-full text-xs sm:text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition placeholder:text-slate-400" 
+                                            className="w-full text-xs sm:text-sm font-semibold text-slate-900 bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition placeholder:text-slate-400" 
                                             placeholder="Masukkan password baru..." 
                                             required 
                                             minLength={6} 
@@ -737,7 +737,7 @@ const PasswordModal = ({ isOpen, onClose, onSave, isForced }) => {
                                         <button 
                                             type="button" 
                                             onClick={() => setShowPass(!showPass)} 
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-1"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 text-xs p-1 transition"
                                             tabIndex={-1}
                                         >
                                             <i className={`fa-solid ${showPass ? 'fa-eye-slash' : 'fa-eye'}`}></i>
@@ -746,7 +746,7 @@ const PasswordModal = ({ isOpen, onClose, onSave, isForced }) => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                    <label className="block text-xs font-bold text-slate-900 mb-1">
                                         Ulangi Password Baru <span className="text-rose-500">*</span>
                                     </label>
                                     <div className="relative">
@@ -754,7 +754,7 @@ const PasswordModal = ({ isOpen, onClose, onSave, isForced }) => {
                                             type={showRepeatPass ? 'text' : 'password'} 
                                             value={repeatPass} 
                                             onChange={e => setRepeatPass(e.target.value)} 
-                                            className="w-full text-xs sm:text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition placeholder:text-slate-400" 
+                                            className="w-full text-xs sm:text-sm font-semibold text-slate-900 bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition placeholder:text-slate-400" 
                                             placeholder="Ketik ulang password baru..." 
                                             required 
                                             minLength={6} 
@@ -762,7 +762,7 @@ const PasswordModal = ({ isOpen, onClose, onSave, isForced }) => {
                                         <button 
                                             type="button" 
                                             onClick={() => setShowRepeatPass(!showRepeatPass)} 
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-1"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 text-xs p-1 transition"
                                             tabIndex={-1}
                                         >
                                             <i className={`fa-solid ${showRepeatPass ? 'fa-eye-slash' : 'fa-eye'}`}></i>
@@ -4734,6 +4734,7 @@ const LOCAL_SESSION_KEY = 'task_abs_session';
 const LoginScreen = ({ onLoginSuccess }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     
     const handleAuth = async (e) => {
@@ -4791,45 +4792,89 @@ const LoginScreen = ({ onLoginSuccess }) => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-            <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm w-full border border-slate-200">
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <i className="fa-solid fa-lock text-3xl text-blue-600"></i>
+        <div className="min-h-screen bg-gradient-to-br from-pink-50/80 via-slate-50 to-purple-50/60 flex items-center justify-center p-4">
+            <div className="bg-white p-7 sm:p-8 rounded-3xl shadow-2xl max-w-sm w-full border border-pink-100/80">
+                <div className="text-center mb-6">
+                    <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-pink-600 via-pink-500 to-rose-400 p-0.5 shadow-lg shadow-pink-500/25 mx-auto mb-3.5 flex items-center justify-center">
+                        <div className="w-full h-full bg-white rounded-[22px] flex items-center justify-center p-2 shadow-inner">
+                            <img src="/Logo%20Beauty.png" alt="Busana Logo" className="w-full h-full object-contain" />
+                        </div>
                     </div>
-                    <h1 className="text-2xl font-bold text-slate-800">Autentikasi</h1>
-                    <p className="text-slate-500 text-sm mt-1">Silakan masuk ke Dashboard Perusahaan</p>
+                    <h1 
+                        className="text-3xl text-slate-900 font-bold tracking-normal leading-tight" 
+                        style={{ fontFamily: "var(--font-pacifico), 'Pacifico', cursive" }}
+                    >
+                        Busana
+                    </h1>
+                    <p 
+                        className="text-xs text-slate-800 font-bold mt-1 tracking-wide"
+                        style={{ fontFamily: "var(--font-inter), 'Inter', sans-serif" }}
+                    >
+                        Beauty Task Management
+                    </p>
+                    <p className="text-xs text-slate-600 font-medium mt-1.5">
+                        Masuk ke Dashboard Kerja Anda
+                    </p>
                 </div>
                 
                 <form onSubmit={handleAuth} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                        <input
-                            type="email"
-                            required
-                            className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                            placeholder="admin@perusahaan.com"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                        />
+                        <label className="block text-xs font-bold text-slate-900 mb-1.5 uppercase tracking-wider">
+                            Email <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <i className="fa-regular fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                            <input
+                                type="email"
+                                required
+                                className="w-full pl-10 pr-4 py-2.5 bg-white text-slate-900 font-semibold text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none transition-all placeholder:text-slate-400 shadow-xs"
+                                placeholder="nama@email.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                            />
+                        </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-                        <input
-                            type="password"
-                            required
-                            className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                            placeholder="••••••••"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                        />
+                        <label className="block text-xs font-bold text-slate-900 mb-1.5 uppercase tracking-wider">
+                            Password <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <i className="fa-solid fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                required
+                                className="w-full pl-10 pr-11 py-2.5 bg-white text-slate-900 font-semibold text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none transition-all placeholder:text-slate-400 shadow-xs"
+                                placeholder="Masukkan password..."
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 text-sm p-1 transition cursor-pointer"
+                                tabIndex={-1}
+                                title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                            >
+                                <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                            </button>
+                        </div>
                     </div>
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                        className="w-full bg-gradient-to-r from-[#e1007a] via-[#ec268f] to-[#a855f7] hover:opacity-95 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-pink-500/25 disabled:opacity-50 flex items-center justify-center gap-2 text-sm cursor-pointer active:scale-98"
                     >
-                        {loading ? 'Memproses...' : 'Masuk'}
+                        {loading ? (
+                            <>
+                                <i className="fa-solid fa-circle-notch fa-spin text-xs"></i>
+                                <span>Memproses...</span>
+                            </>
+                        ) : (
+                            <>
+                                <i className="fa-solid fa-right-to-bracket text-xs"></i>
+                                <span>Masuk</span>
+                            </>
+                        )}
                     </button>
                 </form>
             </div>
