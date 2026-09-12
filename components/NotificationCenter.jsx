@@ -553,7 +553,7 @@ export default function NotificationCenter({
     };
 
     return (
-        <div className="relative z-50" ref={dropdownRef}>
+        <div className="relative z-50 shrink-0" ref={dropdownRef}>
             {/* ================================================================= */}
             {/* TOMBOL LONCENG DENGAN LABEL TITIK MERAH (RED DOT BADGE ANIMASI)   */}
             {/* ================================================================= */}
@@ -596,7 +596,7 @@ export default function NotificationCenter({
                     />
 
                     <div 
-                        className="fixed inset-x-3 top-[68px] sm:inset-x-auto sm:right-4 sm:top-16 sm:w-96 md:absolute md:top-full md:right-0 md:mt-2 md:w-96 max-w-full rounded-3xl bg-white/98 backdrop-blur-2xl border border-slate-200/90 shadow-2xl z-50 overflow-hidden flex flex-col max-h-[calc(100dvh-5.5rem)] sm:max-h-[calc(100vh-100px)] animate-in fade-in slide-in-from-top-2 duration-200"
+                        className="fixed inset-x-3 top-[68px] sm:inset-x-auto sm:right-4 sm:top-16 sm:w-96 md:absolute md:top-full md:right-0 md:mt-2 md:w-[400px] md:max-w-none max-w-[calc(100vw-1.5rem)] rounded-3xl bg-white/98 backdrop-blur-2xl border border-slate-200/90 shadow-2xl z-50 overflow-hidden flex flex-col max-h-[calc(100dvh-5.5rem)] sm:max-h-[calc(100vh-100px)] animate-in fade-in slide-in-from-top-2 duration-200"
                     >
                         {/* Header Popover */}
                         <div className="p-3.5 sm:p-4 border-b border-slate-100 bg-linear-to-r from-slate-50/90 via-white to-slate-50/90 shrink-0">
