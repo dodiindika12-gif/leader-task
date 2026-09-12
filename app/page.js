@@ -6540,16 +6540,17 @@ export default function TaskManagerApp() {
             return false;
         });
     }, [schedules, session, currentPicId, members, isSuperUser, roles]);
-    // Ensure active project belongs to the current division if division is changed
+    // Ensure active project is accessible within filtered projects
     useEffect(() => {
-        if (globalDivision !== 'All' && activeProject) {
-            const currentProj = projects.find(p => p.id === activeProject);
-            if (currentProj && currentProj.division !== globalDivision) {
-                const firstProjInDiv = filteredProjects[0];
-                setActiveProject(firstProjInDiv ? firstProjInDiv.id : '');
+        if (filteredProjects.length > 0) {
+            const isAccessible = filteredProjects.some(p => p.id === activeProject);
+            if (!isAccessible) {
+                setActiveProject(filteredProjects[0].id);
             }
+        } else if (projects.length > 0 && filteredProjects.length === 0) {
+            setActiveProject('');
         }
-    }, [globalDivision, activeProject, projects, filteredProjects]);
+    }, [filteredProjects, activeProject, projects.length]);
 
 
     useEffect(() => {
@@ -6915,12 +6916,15 @@ export default function TaskManagerApp() {
     };
 
     const handleSaveNewProject = async (name, memberIds) => {
+        const projectDivision = globalDivision === 'All' ? (session?.division || null) : globalDivision;
         const newProject = {
             id: crypto.randomUUID(),
-            name: name,
+            name: name.trim(),
             isPinned: false,
-            owner_id: session.memberId,
+            owner_id: session?.memberId || null,
+            division: projectDivision,
             color: getDefaultProjectColor(projects.length),
+            folders: ['General'],
             showInCalendar: false
         };
 
@@ -6929,9 +6933,10 @@ export default function TaskManagerApp() {
             name: newProject.name,
             is_pinned: newProject.isPinned,
             color: newProject.color,
+            folders: newProject.folders,
             show_in_calendar: newProject.showInCalendar,
-            owner_id: session.memberId,
-            division: globalDivision === 'All' ? null : globalDivision
+            owner_id: newProject.owner_id,
+            division: newProject.division
         });
 
         if (projectError) {
