@@ -9,6 +9,7 @@ import ProjectSettingsModal from '../components/ProjectSettingsModal';
 import WeeklyScheduleView, { getRoleLevel, isMeetingSchedule, isWorksheetSchedule } from '../components/WeeklyScheduleView';
 import MainDashboard from '../components/MainDashboard';
 import NotificationCenter from '../components/NotificationCenter';
+import MemberMigrationModal from '../components/MemberMigrationModal';
 
 
 // Default Data when localStorage/DB is empty
@@ -2856,6 +2857,7 @@ const OrgManagementView = ({
     onAddMember,
     onUpdateMember,
     onDeleteMember,
+    onMigrateMember,
     onToggleMemberStatus,
     onResetPassword,
     onAddDivision,
@@ -3918,7 +3920,14 @@ const OrgManagementView = ({
                                                             <i className={`fa-solid ${member.is_active === false ? 'fa-user-check' : 'fa-user-slash'}`}></i>
                                                         </button>
                                                         <button
-                                                            onClick={() => onDeleteMember(member.id)}
+                                                            onClick={() => onMigrateMember ? onMigrateMember(member) : null}
+                                                            className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 opacity-80 group-hover:opacity-100 transition-all duration-200"
+                                                            title="Migrasi Tugas & Kepemilikan"
+                                                        >
+                                                            <i className="fa-solid fa-arrow-right-arrow-left"></i>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => onDeleteMember(member)}
                                                             className="text-slate-400 hover:text-rose-600 p-2 rounded-xl hover:bg-rose-50 opacity-80 group-hover:opacity-100 transition-all duration-200"
                                                             title="Hapus Karyawan"
                                                         >
@@ -5876,6 +5885,11 @@ export default function TaskManagerApp() {
     const [notesInitialTab, setNotesInitialTab] = useState('notes');
     const [isScheduleSubMenuOpen, setIsScheduleSubMenuOpen] = useState(false);
     const [schedules, setSchedules] = useState([]);
+    const [migrationModalConfig, setMigrationModalConfig] = useState({
+        isOpen: false,
+        sourceMember: null,
+        isDeleteMode: false
+    });
 
     const handleUpdateMyProfile = async (profileData) => {
         const memberId = session?.memberId;
@@ -7693,23 +7707,137 @@ export default function TaskManagerApp() {
         setMembers(prev => [...prev, newMember]);
     };
 
-    const handleDeleteMember = async (id) => {
-        openDialog({
-            type: 'confirm',
-            message: 'Yakin ingin menghapus anggota ini? Tugas yang sedang dikerjakannya akan menjadi tanpa PIC.',
-            onConfirm: async () => {
-                const { error } = await supabase.from('members').delete().eq('id', id);
+    const handleOpenMigrationModal = (memberOrId) => {
+        const id = typeof memberOrId === 'object' ? memberOrId?.id : memberOrId;
+        const member = members.find(m => m.id === id);
+        if (!member) return;
 
-                if (error) {
-                    console.error('Supabase member delete error:', error);
-                    alert(`Gagal menghapus anggota: ${error.message}`);
-                    return;
-                }
-
-                setMembers(prev => prev.filter(m => m.id !== id));
-                setTasks(prev => prev.map(t => t.picId === id ? { ...t, picId: '' } : t));
-            }
+        setMigrationModalConfig({
+            isOpen: true,
+            sourceMember: member,
+            isDeleteMode: false
         });
+    };
+
+    const handleDeleteMember = (memberOrId) => {
+        const id = typeof memberOrId === 'object' ? memberOrId?.id : memberOrId;
+        const memberToDelete = members.find(m => m.id === id);
+        if (session?.memberId === id) {
+            alert('Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif digunakan.');
+            return;
+        }
+
+        if (!memberToDelete) return;
+
+        // Buka modal migrasi & handover dalam mode hapus
+        setMigrationModalConfig({
+            isOpen: true,
+            sourceMember: memberToDelete,
+            isDeleteMode: true
+        });
+    };
+
+    const handleExecuteMigration = async ({ sourceMemberId, targetMemberId, isDelete, options }) => {
+        const targetMember = members.find(m => m.id === targetMemberId);
+        const targetName = targetMember?.name || null;
+
+        // 1. Migrasi Kepemilikan Workspace
+        if (options.migrateWorkspaces) {
+            await supabase.from('projects').update({ owner_id: targetMemberId || null }).eq('owner_id', sourceMemberId);
+            if (targetMemberId) {
+                const ownedProjects = projects.filter(p => p.owner_id === sourceMemberId);
+                for (const proj of ownedProjects) {
+                    await supabase.from('project_access').upsert({
+                        project_id: proj.id,
+                        member_id: targetMemberId
+                    }, { onConflict: 'project_id,member_id' });
+                }
+            }
+            setProjects(prev => prev.map(p => p.owner_id === sourceMemberId ? { ...p, owner_id: targetMemberId || null } : p));
+        }
+
+        // 2. Migrasi Tugas Utama (PIC)
+        if (options.migrateTasks) {
+            await supabase.from('tasks').update({ pic_id: targetMemberId || null }).eq('pic_id', sourceMemberId);
+            setTasks(prev => prev.map(t => t.picId === sourceMemberId ? { ...t, picId: targetMemberId || '' } : t));
+        }
+
+        // 3. Migrasi Sub-tugas Checklist (Todos PIC)
+        if (options.migrateTodos) {
+            const tasksWithMemberTodos = tasks.filter(t => 
+                Array.isArray(t.todos) && t.todos.some(todo => (todo.picId || todo.pic_id) === sourceMemberId)
+            );
+            for (const t of tasksWithMemberTodos) {
+                const updatedTodos = t.todos.map(todo => 
+                    (todo.picId || todo.pic_id) === sourceMemberId 
+                        ? { ...todo, picId: targetMemberId || '', pic_id: targetMemberId || '' }
+                        : todo
+                );
+                await supabase.from('tasks').update({ todos: updatedTodos }).eq('id', t.id);
+            }
+            setTasks(prev => prev.map(t => {
+                if (Array.isArray(t.todos) && t.todos.some(todo => (todo.picId || todo.pic_id) === sourceMemberId)) {
+                    return {
+                        ...t,
+                        todos: t.todos.map(todo => 
+                            (todo.picId || todo.pic_id) === sourceMemberId 
+                                ? { ...todo, picId: targetMemberId || '' }
+                                : todo
+                        )
+                    };
+                }
+                return t;
+            }));
+        }
+
+        // 4. Migrasi Jadwal Rutin & Meeting
+        if (options.migrateSchedules) {
+            await supabase.from('schedules').update({ pic_id: targetMemberId || null }).eq('pic_id', sourceMemberId);
+            setSchedules(prev => prev.map(s => s.pic_id === sourceMemberId ? { ...s, pic_id: targetMemberId || null } : s));
+        }
+
+        // 5. Migrasi Catatan & MoM
+        if (options.migrateNotes) {
+            await supabase.from('notes').update({ pic_id: targetMemberId || null }).eq('pic_id', sourceMemberId);
+            setNotes(prev => prev.map(n => (n.pic_id || n.author_id) === sourceMemberId ? { ...n, pic_id: targetMemberId || null } : n));
+        }
+
+        // 6. Migrasi Jabatan Struktural (Divisi & Departemen)
+        if (options.migrateRoles) {
+            await supabase.from('divisions').update({ manager_id: targetMemberId || null, manager_name: targetName }).eq('manager_id', sourceMemberId);
+            setDivisions(prev => prev.map(d => d.manager_id === sourceMemberId ? { ...d, manager_id: targetMemberId || null, manager_name: targetName } : d));
+
+            await supabase.from('departments').update({ spv_id: targetMemberId || null, spv_name: targetName }).eq('spv_id', sourceMemberId);
+            await supabase.from('departments').update({ coordinator_id: targetMemberId || null, coordinator_name: targetName }).eq('coordinator_id', sourceMemberId);
+            setDepartments(prev => prev.map(d => {
+                let updated = { ...d };
+                if (d.spv_id === sourceMemberId) {
+                    updated.spv_id = targetMemberId || null;
+                    updated.spv_name = targetName;
+                }
+                if (d.coordinator_id === sourceMemberId) {
+                    updated.coordinator_id = targetMemberId || null;
+                    updated.coordinator_name = targetName;
+                }
+                return updated;
+            }));
+        }
+
+        // 7. Jika mode hapus, selesaikan penghapusan dari Supabase
+        if (isDelete) {
+            // Pastikan relasi foreign key dilepas
+            await supabase.from('projects').update({ owner_id: null }).eq('owner_id', sourceMemberId);
+            await supabase.from('project_access').delete().eq('member_id', sourceMemberId);
+
+            const { error: delErr } = await supabase.from('members').delete().eq('id', sourceMemberId);
+            if (delErr) {
+                console.error('Supabase member delete error:', delErr);
+                alert(`Gagal menghapus anggota dari database: ${delErr.message}`);
+                return;
+            }
+
+            setMembers(prev => prev.filter(m => m.id !== sourceMemberId));
+        }
     };
 
     const projectTasks = filteredTasks.filter(t => t.projectId === activeProject);
@@ -8380,6 +8508,7 @@ export default function TaskManagerApp() {
                                 onAddMember={handleAddMember}
                                 onUpdateMember={handleUpdateMember}
                                 onDeleteMember={handleDeleteMember}
+                                onMigrateMember={handleOpenMigrationModal}
                                 onToggleMemberStatus={handleToggleMemberStatus}
                                 onResetPassword={handleResetPassword}
                                 onAddDivision={handleAddDivision}
@@ -8657,6 +8786,20 @@ export default function TaskManagerApp() {
                 onSaveSharing={handleSaveShareProject}
                 onDeleteProject={handleDeleteProject}
                 onUpdateName={handleUpdateProjectName}
+            />
+            <MemberMigrationModal
+                isOpen={migrationModalConfig.isOpen}
+                onClose={() => setMigrationModalConfig({ isOpen: false, sourceMember: null, isDeleteMode: false })}
+                sourceMember={migrationModalConfig.sourceMember}
+                members={members}
+                projects={projects}
+                tasks={tasks}
+                notes={notes}
+                schedules={schedules}
+                divisions={divisions}
+                departments={departments}
+                isDeleteMode={migrationModalConfig.isDeleteMode}
+                onExecuteMigration={handleExecuteMigration}
             />
         </div>
     );
