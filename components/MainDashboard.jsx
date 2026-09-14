@@ -78,6 +78,7 @@ export default function MainDashboard({
     // 2. Filter tabs internal dashboard
     const [myTasksTab, setMyTasksTab] = useState('all'); // 'all' | 'overdue' | 'today' | 'upcoming' | 'todos'
     const [scheduleFilterType, setScheduleFilterType] = useState('all'); // 'all' | 'meeting' | 'worksheet'
+    const [scheduleScope, setScheduleScope] = useState('mine'); // 'mine' (Jadwal Saya) | 'team' (Semua Tim)
     const [subordinateSearch, setSubordinateSearch] = useState('');
     const [copiedTaskId, setCopiedTaskId] = useState(null);
 
@@ -95,6 +96,80 @@ export default function MainDashboard({
     const currentUserLevel = getRoleLevel(currentUserRole, roles);
     const currentUserDivision = currMember?.division || session?.division;
     const currentUserDepartment = currMember?.department || session?.department;
+
+    const isSuperUser = Boolean(
+        session?.role === 'Super User' || 
+        session?.memberId === 'superadmin' || 
+        session?.email === 'abskdi.markom@gmail.com'
+    );
+
+    // Identifikasi multi-atribut user aktif (ID, Email, Nama) untuk pencocokan kepemilikan jadwal & meeting
+    const userIdentifiers = useMemo(() => {
+        const matchedMember = effectiveMembers.find(m => 
+            (session?.memberId && m.id === session.memberId) ||
+            (activeUserId && m.id === activeUserId) ||
+            (session?.email && m.email?.toLowerCase() === session.email.toLowerCase()) ||
+            (session?.name && m.name?.toLowerCase() === session.name.toLowerCase()) ||
+            (isSuperUser && (m.email === 'abskdi.markom@gmail.com' || m.name?.toLowerCase() === 'superadmin'))
+        );
+
+        const ids = new Set([
+            activeUserId,
+            session?.memberId,
+            currentPicId,
+            matchedMember?.id,
+            isSuperUser ? 'superadmin' : null,
+            isSuperUser ? '3970ef9a-2fd4-41bf-acbf-fab57672cc57' : null
+        ].filter(Boolean));
+
+        const emails = new Set([
+            session?.email,
+            matchedMember?.email,
+            isSuperUser ? 'abskdi.markom@gmail.com' : null
+        ].filter(Boolean).map(e => e.toLowerCase().trim()));
+
+        const names = new Set([
+            session?.name,
+            matchedMember?.name,
+            currentUserName,
+            isSuperUser ? 'superadmin' : null
+        ].filter(Boolean).map(n => n.toLowerCase().trim()));
+
+        return { ids, emails, names };
+    }, [activeUserId, session, currentPicId, effectiveMembers, isSuperUser, currentUserName]);
+
+    const isMatchingUser = useCallback((val) => {
+        if (!val) return false;
+        const str = String(val).trim();
+        const strLower = str.toLowerCase();
+        return userIdentifiers.ids.has(str) || 
+               userIdentifiers.emails.has(strLower) || 
+               userIdentifiers.names.has(strLower);
+    }, [userIdentifiers]);
+
+    const isArrayContainingUser = useCallback((arr) => {
+        if (!Array.isArray(arr)) return false;
+        return arr.some(item => isMatchingUser(item));
+    }, [isMatchingUser]);
+
+    const isPersonalSchedule = useCallback((item) => {
+        if (!item) return false;
+        const pic = item.picId || item.pic_id || item.author_id || item.authorId || item.userId;
+        if (isMatchingUser(pic)) return true;
+
+        if (isMeetingSchedule(item)) {
+            const attendees = Array.isArray(item.attendees) ? item.attendees : [];
+            if (isArrayContainingUser(attendees)) return true;
+
+            const sharedWith = [
+                ...(Array.isArray(item.sharedWith) ? item.sharedWith : []),
+                ...(Array.isArray(item.shared_with) ? item.shared_with : [])
+            ];
+            if (isArrayContainingUser(sharedWith)) return true;
+        }
+
+        return false;
+    }, [isMatchingUser, isArrayContainingUser]);
 
     // Greeting dinamis
     const getGreeting = () => {
@@ -347,7 +422,9 @@ export default function MainDashboard({
                 progressPercent = 100;
             }
 
-            const pic = effectiveMembers.find(m => m.id === (item.picId || item.pic_id));
+            const picId = item.picId || item.pic_id || item.author_id || item.authorId || item.userId;
+            const pic = effectiveMembers.find(m => m.id === picId || (m.name && m.name.toLowerCase() === String(picId).toLowerCase()));
+            const isMine = isPersonalSchedule(item);
 
             return {
                 ...item,
@@ -357,7 +434,8 @@ export default function MainDashboard({
                 countdownMs,
                 progressPercent,
                 countdownFormatted: formatCountdown(countdownMs),
-                pic
+                pic,
+                isMine
             };
         }).sort((a, b) => {
             const statusOrder = { ongoing: 0, upcoming: 1, passed: 2 };
@@ -366,26 +444,47 @@ export default function MainDashboard({
             }
             return a.startTimeStr.localeCompare(b.startTimeStr);
         });
-    }, [schedules, todayDayName, currentTime, effectiveMembers]);
+    }, [schedules, todayDayName, currentTime, effectiveMembers, isPersonalSchedule]);
 
-    // Filter jadwal meeting vs worksheet
-    const todayMeetingsCount = useMemo(() => {
-        return todaySchedulesWithCountdown.filter(isMeetingSchedule).length;
+    // Hitung statistik jadwal hari ini
+    const todayMySchedulesCount = useMemo(() => {
+        return todaySchedulesWithCountdown.filter(s => s.isMine).length;
     }, [todaySchedulesWithCountdown]);
 
-    const todayWorksheetsCount = useMemo(() => {
-        return todaySchedulesWithCountdown.filter(isWorksheetSchedule).length;
-    }, [todaySchedulesWithCountdown]);
+    const todayTeamSchedulesCount = todaySchedulesWithCountdown.length;
+
+    // Filter jadwal berdasarkan Scope: 'mine' (Jadwal Saya) vs 'team' (Semua Tim)
+    const scopedTodaySchedules = useMemo(() => {
+        if (scheduleScope === 'mine') {
+            return todaySchedulesWithCountdown.filter(s => s.isMine);
+        }
+        return todaySchedulesWithCountdown;
+    }, [todaySchedulesWithCountdown, scheduleScope]);
+
+    // Filter jadwal meeting vs worksheet dalam scope yang sedang aktif
+    const currentScopedMeetingsCount = useMemo(() => {
+        return scopedTodaySchedules.filter(isMeetingSchedule).length;
+    }, [scopedTodaySchedules]);
+
+    const currentScopedWorksheetsCount = useMemo(() => {
+        return scopedTodaySchedules.filter(isWorksheetSchedule).length;
+    }, [scopedTodaySchedules]);
 
     const filteredTodaySchedules = useMemo(() => {
-        if (scheduleFilterType === 'all') return todaySchedulesWithCountdown;
-        if (scheduleFilterType === 'meeting') return todaySchedulesWithCountdown.filter(isMeetingSchedule);
-        if (scheduleFilterType === 'worksheet') return todaySchedulesWithCountdown.filter(isWorksheetSchedule);
-        return todaySchedulesWithCountdown;
-    }, [todaySchedulesWithCountdown, scheduleFilterType]);
+        if (scheduleFilterType === 'meeting') return scopedTodaySchedules.filter(isMeetingSchedule);
+        if (scheduleFilterType === 'worksheet') return scopedTodaySchedules.filter(isWorksheetSchedule);
+        return scopedTodaySchedules;
+    }, [scopedTodaySchedules, scheduleFilterType]);
 
-    // Active ongoing schedule (jika ada yang sedang berlangsung)
-    const activeOngoingSchedule = todaySchedulesWithCountdown.find(s => s.status === 'ongoing');
+    // Active ongoing schedule (utamakan agenda pribadi yang sedang berlangsung)
+    const activeOngoingSchedule = useMemo(() => {
+        const myOngoing = todaySchedulesWithCountdown.find(s => s.status === 'ongoing' && s.isMine);
+        if (myOngoing) return myOngoing;
+        if (scheduleScope === 'team') {
+            return todaySchedulesWithCountdown.find(s => s.status === 'ongoing');
+        }
+        return null;
+    }, [todaySchedulesWithCountdown, scheduleScope]);
 
     // 7. Handler WhatsApp Reminder Follow-Up
     const handleSendWhatsAppReminder = (task, member) => {
@@ -629,7 +728,7 @@ export default function MainDashboard({
             {/* 3. LIVE WIDGET: JADWAL MEETING & WORKSHEET HARI INI + COUNTDOWN REAL-TIME */}
             {/* ========================================================================= */}
             <div className="bg-white/80 backdrop-blur-md p-6 rounded-3xl border border-white/80 shadow-sm space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                     <div>
                         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2.5">
                             <span className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-sm shadow-2xs">
@@ -638,47 +737,120 @@ export default function MainDashboard({
                             <span>Jadwal Meeting & Worksheet Hari Ini ({todayDayName})</span>
                         </h3>
                         <p className="text-xs text-slate-500 mt-0.5">
-                            Pantau agenda yang sedang berlangsung dan hitungan mundur menuju jadwal berikutnya
+                            {scheduleScope === 'mine'
+                                ? 'Menampilkan agenda pribadi Anda (meeting yang Anda ikuti & worksheet tugas Anda)'
+                                : 'Menampilkan seluruh agenda kerja dan jadwal rapat tim hari ini'
+                            }
                         </p>
                     </div>
 
-                    {/* Filter Button: Semua, Meeting, Worksheet */}
-                    <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl text-xs font-semibold shrink-0">
-                        <button
-                            type="button"
-                            onClick={() => setScheduleFilterType('all')}
-                            className={`px-3 py-1.5 rounded-xl transition ${scheduleFilterType === 'all' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
-                        >
-                            Semua ({todaySchedulesWithCountdown.length})
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setScheduleFilterType('meeting')}
-                            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${scheduleFilterType === 'meeting' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
-                        >
-                            <i className="fa-solid fa-handshake text-indigo-500 text-[10px]"></i>
-                            Meeting ({todayMeetingsCount})
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setScheduleFilterType('worksheet')}
-                            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${scheduleFilterType === 'worksheet' ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
-                        >
-                            <i className="fa-solid fa-table-cells text-sky-500 text-[10px]"></i>
-                            Worksheet ({todayWorksheetsCount})
-                        </button>
+                    {/* Filter Controls: Scope (Jadwal Saya vs Semua Tim) & Tipe (Semua, Meeting, Worksheet) */}
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        {/* Scope Toggle: Jadwal Saya vs Semua Tim */}
+                        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl text-xs font-semibold shadow-2xs border border-slate-200/50">
+                            <button
+                                type="button"
+                                onClick={() => setScheduleScope('mine')}
+                                className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                                    scheduleScope === 'mine'
+                                        ? 'bg-white text-indigo-700 shadow-xs ring-1 ring-slate-200/60 font-bold'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Tampilkan hanya agenda yang melibatkan Anda"
+                            >
+                                <i className="fa-regular fa-user text-[11px]"></i>
+                                <span>Jadwal Saya ({todayMySchedulesCount})</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setScheduleScope('team')}
+                                className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                                    scheduleScope === 'team'
+                                        ? 'bg-white text-slate-800 shadow-xs ring-1 ring-slate-200/60 font-bold'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Tampilkan seluruh jadwal tim & bawahan"
+                            >
+                                <i className="fa-solid fa-users text-[11px] text-slate-500"></i>
+                                <span>Semua Tim ({todayTeamSchedulesCount})</span>
+                            </button>
+                        </div>
+
+                        {/* Tipe Filter: Semua, Meeting, Worksheet */}
+                        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl text-xs font-semibold shadow-2xs border border-slate-200/50">
+                            <button
+                                type="button"
+                                onClick={() => setScheduleFilterType('all')}
+                                className={`px-3 py-1.5 rounded-xl transition ${
+                                    scheduleFilterType === 'all'
+                                        ? 'bg-white text-slate-800 shadow-xs ring-1 ring-slate-200/60 font-bold'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                Semua ({scopedTodaySchedules.length})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setScheduleFilterType('meeting')}
+                                className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                                    scheduleFilterType === 'meeting'
+                                        ? 'bg-white text-indigo-700 shadow-xs ring-1 ring-slate-200/60 font-bold'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                <i className="fa-solid fa-handshake text-indigo-500 text-[10px]"></i>
+                                <span>Meeting ({currentScopedMeetingsCount})</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setScheduleFilterType('worksheet')}
+                                className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                                    scheduleFilterType === 'worksheet'
+                                        ? 'bg-white text-sky-700 shadow-xs ring-1 ring-slate-200/60 font-bold'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                <i className="fa-solid fa-table-cells text-sky-500 text-[10px]"></i>
+                                <span>Worksheet ({currentScopedWorksheetsCount})</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 {filteredTodaySchedules.length === 0 ? (
                     <div className="py-8 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs">
                         <i className="fa-regular fa-calendar-check text-2xl text-slate-300 mb-2 block"></i>
-                        {scheduleFilterType === 'meeting'
-                            ? `Tidak ada agenda meeting yang dijadwalkan untuk hari ${todayDayName}.`
-                            : scheduleFilterType === 'worksheet'
-                            ? `Tidak ada agenda worksheet yang dijadwalkan untuk hari ${todayDayName}.`
-                            : `Tidak ada agenda meeting atau worksheet tetap yang dijadwalkan untuk hari ${todayDayName}.`
-                        }
+                        {scheduleScope === 'mine' ? (
+                            <div>
+                                <p>
+                                    {scheduleFilterType === 'meeting'
+                                        ? `Tidak ada agenda meeting pribadi Anda untuk hari ${todayDayName}.`
+                                        : scheduleFilterType === 'worksheet'
+                                        ? `Tidak ada agenda worksheet pribadi Anda untuk hari ${todayDayName}.`
+                                        : `Tidak ada agenda meeting atau worksheet pribadi Anda untuk hari ${todayDayName}.`
+                                    }
+                                </p>
+                                {todayTeamSchedulesCount > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setScheduleScope('team')}
+                                        className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-semibold transition text-xs shadow-2xs border border-indigo-100"
+                                    >
+                                        <i className="fa-solid fa-users text-xs"></i>
+                                        <span>Lihat Agenda Tim Hari Ini ({todayTeamSchedulesCount} jadwal)</span>
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <p>
+                                {scheduleFilterType === 'meeting'
+                                    ? `Tidak ada agenda meeting tim yang dijadwalkan untuk hari ${todayDayName}.`
+                                    : scheduleFilterType === 'worksheet'
+                                    ? `Tidak ada agenda worksheet tim yang dijadwalkan untuk hari ${todayDayName}.`
+                                    : `Tidak ada agenda meeting atau worksheet tetap yang dijadwalkan untuk hari ${todayDayName}.`
+                                }
+                            </p>
+                        )}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -742,10 +914,10 @@ export default function MainDashboard({
                                                     <span className="truncate max-w-[150px]">{item.location}</span>
                                                 </span>
                                             )}
-                                            {item.pic && (
-                                                <span className="flex items-center gap-1 text-[11px] text-slate-600">
-                                                    <i className="fa-regular fa-user text-slate-400 text-[10px]"></i>
-                                                    <span>{item.pic.name}</span>
+                                            {(item.pic?.name || item.picId || item.pic_id) && (
+                                                <span className={`flex items-center gap-1 text-[11px] ${item.isMine ? 'text-indigo-600 font-semibold' : 'text-slate-600'}`}>
+                                                    <i className={`fa-regular ${item.isMine ? 'fa-circle-user text-indigo-500' : 'fa-user text-slate-400'} text-[10px]`}></i>
+                                                    <span>{item.pic?.name || item.picId || item.pic_id} {item.isMine ? '(Anda)' : ''}</span>
                                                 </span>
                                             )}
                                         </div>
