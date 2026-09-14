@@ -6149,8 +6149,8 @@ const SharingSelector = ({ members, session, selectedMemberIds, setSelectedMembe
     }).filter(([div, members]) => members.length > 0);
 
     return (
-        <div className="flex flex-col h-full">
-            <div className="mb-4 space-y-3">
+        <div className="flex flex-col flex-1 min-h-0">
+            <div className="mb-4 space-y-3 shrink-0">
                 {/* Search */}
                 <div className="relative">
                     <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
@@ -6183,12 +6183,12 @@ const SharingSelector = ({ members, session, selectedMemberIds, setSelectedMembe
                 </div>
             </div>
 
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between shrink-0">
                 <label className="block text-sm font-semibold text-slate-700">Pilih Anggota</label>
                 <span className="text-xs text-gray-500 font-medium bg-slate-100 px-2.5 py-1 rounded-full">{selectedMemberIds.size} dipilih</span>
             </div>
             
-            <div className="space-y-3 overflow-y-auto custom-scrollbar flex-1 pr-1 pb-2">
+            <div className="space-y-3 overflow-y-auto custom-scrollbar flex-1 min-h-0 pr-1 pb-2 max-h-[45vh] sm:max-h-[50vh]">
                 {filteredGroups.length === 0 ? (
                     <p className="text-sm text-gray-500 text-center py-4">Tidak ada anggota yang cocok dengan pencarian.</p>
                 ) : (
@@ -6264,23 +6264,25 @@ const ShareProjectModal = ({ project, members, session, projectAccess, isOpen, o
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-up">
-                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div className="relative bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-up flex flex-col max-h-[90vh]">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
                     <h3 className="text-lg font-bold text-slate-800">Bagikan Project: {project.name}</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors">
                         <i className="fa-solid fa-xmark"></i>
                     </button>
                 </div>
-                <div className="p-6 max-h-[70vh] flex flex-col overflow-hidden">
+                <div className="p-6 flex-1 flex flex-col min-h-0 overflow-y-auto custom-scrollbar">
                     <p className="text-sm text-gray-500 mb-4 shrink-0">Kelola anggota yang memiliki akses ke project ini.</p>
-                    <SharingSelector 
-                        members={members} 
-                        session={session} 
-                        selectedMemberIds={selectedMemberIds} 
-                        setSelectedMemberIds={setSelectedMemberIds} 
-                    />
+                    <div className="flex-1 flex flex-col min-h-0">
+                        <SharingSelector 
+                            members={members} 
+                            session={session} 
+                            selectedMemberIds={selectedMemberIds} 
+                            setSelectedMemberIds={setSelectedMemberIds} 
+                        />
+                    </div>
                 </div>
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end space-x-3">
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end space-x-3 shrink-0">
                     <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 bg-slate-100 rounded-xl transition-colors">
                         Batal
                     </button>
@@ -6324,7 +6326,7 @@ const CreateProjectModal = ({ members, session, isOpen, onClose, onSave }) => {
                         <i className="fa-solid fa-xmark"></i>
                     </button>
                 </div>
-                <div className="p-6 flex-1 flex flex-col overflow-hidden">
+                <div className="p-6 flex-1 flex flex-col min-h-0 overflow-y-auto custom-scrollbar">
                     <div className="mb-5 shrink-0">
                         <label className="block text-sm font-semibold text-slate-700 mb-2">Nama Project</label>
                         <input
@@ -6336,7 +6338,7 @@ const CreateProjectModal = ({ members, session, isOpen, onClose, onSave }) => {
                         />
                     </div>
                     
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 flex flex-col min-h-0">
                         <SharingSelector 
                             members={members} 
                             session={session} 
