@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getRoleLevel, isMeetingSchedule, isWorksheetSchedule } from './WeeklyScheduleView';
 
 // Helper format tanggal deadline
