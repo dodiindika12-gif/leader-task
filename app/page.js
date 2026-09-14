@@ -3808,11 +3808,6 @@ const OrgManagementView = ({
                                                 <td className="p-4">
                                                     <div className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
                                                         <span>{member.name}</span>
-                                                        {isCoord && (
-                                                            <span title="Koordinator Departemen" className="text-amber-500 text-xs">
-                                                                <i className="fa-solid fa-crown"></i>
-                                                            </span>
-                                                        )}
                                                     </div>
                                                     <div className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
                                                         <i className="fa-regular fa-envelope text-[10px]"></i>
@@ -3835,7 +3830,7 @@ const OrgManagementView = ({
                                                             member.role === 'Direksi' ? 'fa-crown' :
                                                             member.role === 'Manager' ? 'fa-user-tie' :
                                                             member.role === 'SPV' ? 'fa-clipboard-user' :
-                                                            isCoord ? 'fa-crown' : 'fa-briefcase'
+                                                            isCoord ? 'fa-user-check' : 'fa-briefcase'
                                                         } text-[10px]`}></i>
                                                         {member.role || member.position || 'Staff'}
                                                     </span>
@@ -4605,7 +4600,7 @@ const OrgManagementView = ({
                                                         ? 'bg-amber-100 text-amber-700 border border-amber-300' 
                                                         : 'bg-amber-50 border border-amber-100 text-amber-600'
                                                 }`}>
-                                                    <i className={`fa-solid ${isCoord ? 'fa-crown' : 'fa-briefcase'}`}></i>
+                                                    <i className={`fa-solid ${isCoord ? 'fa-user-check' : 'fa-briefcase'}`}></i>
                                                 </div>
                                                 <div>
                                                     <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
@@ -5231,7 +5226,7 @@ const AbsCalendar = ({
     const userMemberId = session?.memberId;
     const roleFilteredTasks = useMemo(() => {
         return tasks.filter(t => {
-            if (session && ['Staff', 'Kordinator'].includes(userRole)) {
+            if (session && ['Staff', 'Koordinator', 'Kordinator'].includes(userRole)) {
                 const isMainPic = t.picId === userMemberId;
                 const isSubPic = Array.isArray(t.todos) && t.todos.some(todo => (todo.picId || todo.pic_id) === userMemberId);
                 return isMainPic || isSubPic;
@@ -6375,7 +6370,7 @@ export default function TaskManagerApp() {
             if (project && project.owner_id && !accessibleProjectIds.has(t.projectId)) return false;
         }
         
-        if (session && ['Staff', 'Kordinator'].includes(session.role)) {
+        if (session && ['Staff', 'Koordinator', 'Kordinator'].includes(session.role)) {
             const isMainPic = t.picId === session.memberId;
             const isSubPic = Array.isArray(t.todos) && t.todos.some(todo => (todo.picId || todo.pic_id) === session.memberId);
             return isMainPic || isSubPic;
