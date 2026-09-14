@@ -2153,8 +2153,8 @@ const resolveDirectSupervisor = (member, { divisions = [], departments = [], all
     if (!member) return null;
 
     const role = (member.role || member.position || 'Staff').toLowerCase();
-    const divName = member.division;
-    const deptName = member.department;
+    const divName = (member.division || '').trim();
+    const deptName = (member.department || '').trim();
 
     // 1. If role is Direksi or Super User
     if (role.includes('direksi') || role.includes('director') || role === 'super user') {
@@ -2168,18 +2168,21 @@ const resolveDirectSupervisor = (member, { divisions = [], departments = [], all
         };
     }
 
+    const divClean = divName.toLowerCase();
+    const deptClean = deptName.toLowerCase();
+
     // Find relevant division info
-    const divObj = divisions.find(d => (typeof d === 'string' ? d : d.name) === divName);
-    const divManagerName = divObj?.manager_name || allMembers.find(m => m.division === divName && (m.role || m.position || '').toLowerCase().includes('manager'))?.name || null;
+    const divObj = divisions.find(d => ((typeof d === 'string' ? d : d?.name) || '').trim().toLowerCase() === divClean);
+    const divManagerName = divObj?.manager_name || allMembers.find(m => (m.division || '').trim().toLowerCase() === divClean && (m.role || m.position || '').toLowerCase().includes('manager'))?.name || null;
 
     // Find relevant department info
-    const deptObj = departments.find(d => d.division_name === divName && d.name === deptName);
-    const deptCoordinatorName = deptObj?.coordinator_name || allMembers.find(m => m.division === divName && m.department === deptName && (m.role || m.position || '').toLowerCase().includes('koordinator'))?.name || null;
+    const deptObj = departments.find(d => (d.division_name || '').trim().toLowerCase() === divClean && (d.name || '').trim().toLowerCase() === deptClean);
+    const deptCoordinatorName = deptObj?.coordinator_name || allMembers.find(m => (m.division || '').trim().toLowerCase() === divClean && (m.department || '').trim().toLowerCase() === deptClean && ((m.role || m.position || '').toLowerCase().includes('koordinator') || (m.role || m.position || '').toLowerCase().includes('kordinator') || (m.role || m.position || '').toLowerCase().includes('coordinator')))?.name || null;
     
     // Find SPV for this department or division
     let spvName = deptObj?.spv_name || null;
     if (!spvName) {
-        const divSpvMember = allMembers.find(m => m.division === divName && ((m.role || '').toLowerCase().includes('spv') || (m.position || '').toLowerCase().includes('spv')));
+        const divSpvMember = allMembers.find(m => (m.division || '').trim().toLowerCase() === divClean && ((m.role || '').toLowerCase().includes('spv') || (m.position || '').toLowerCase().includes('spv') || (m.role || '').toLowerCase().includes('supervisor') || (m.position || '').toLowerCase().includes('supervisor')));
         if (divSpvMember) spvName = divSpvMember.name;
     }
 
@@ -2261,34 +2264,36 @@ const resolveDirectSupervisor = (member, { divisions = [], departments = [], all
             description: `Melapor ke Koordinator (${deptCoordinatorName})`
         };
     }
-    // If no Coordinator
+    // If no Coordinator in dept/division: staff reports directly to SPV
     if (spvName) {
         return {
             name: spvName,
             role: 'SPV',
-            isBypassed: deptName ? true : false,
-            skipped: deptName ? ['Koordinator'] : [],
+            isBypassed: true,
+            skipped: ['Koordinator'],
             badgeColor: 'purple',
-            description: `Melapor ke SPV (${spvName}) ${deptName ? '(Koordinator belum ada)' : ''}`
+            description: `Melapor langsung ke SPV (${spvName}) (Koordinator belum ada)`
         };
     }
+    // If no SPV either: reports directly to Manager
     if (divManagerName) {
         return {
             name: divManagerName,
             role: 'Manager',
             isBypassed: true,
-            skipped: deptName ? ['Koordinator', 'SPV'] : ['SPV'],
+            skipped: ['Koordinator', 'SPV'],
             badgeColor: 'indigo',
-            description: `Melapor ke Manager (${divManagerName}) (Koor & SPV belum ada)`
+            description: `Melapor langsung ke Manager (${divManagerName}) (Koordinator & SPV belum ada)`
         };
     }
+    // If no Manager either: reports directly to Direksi
     return {
         name: 'Direksi',
         role: 'Direksi',
         isBypassed: true,
-        skipped: deptName ? ['Koordinator', 'SPV', 'Manager'] : ['SPV', 'Manager'],
+        skipped: ['Koordinator', 'SPV', 'Manager'],
         badgeColor: 'rose',
-        description: 'Melapor langsung ke Direksi (Posisi atasan divisi belum terisi)'
+        description: 'Melapor langsung ke Direksi (Koordinator, SPV & Manager belum ada)'
     };
 };
 
@@ -2311,7 +2316,7 @@ const EditMemberModal = ({ member, isOpen, onClose, onSave, rolesList, divisions
 
     if (!isOpen || !member) return null;
 
-    const availableDepts = departments.filter(d => !form.division || d.division_name === form.division);
+    const availableDepts = departments.filter(d => !form.division || (d.division_name || '').trim().toLowerCase() === (form.division || '').trim().toLowerCase());
     const isCoordinatorRole = form.role === 'Koordinator' || form.role === 'Kordinator';
 
     const handleSubmit = (e) => {
@@ -2462,6 +2467,7 @@ const DeptModal = ({ isOpen, onClose, onSave, dept, divisionName, members = [] }
     const [spvId, setSpvId] = useState('');
     const [customSpvName, setCustomSpvName] = useState('');
     const [coordinatorId, setCoordinatorId] = useState('');
+    const [selectedMemberIds, setSelectedMemberIds] = useState([]);
 
     useEffect(() => {
         if (dept) {
@@ -2474,18 +2480,25 @@ const DeptModal = ({ isOpen, onClose, onSave, dept, divisionName, members = [] }
                 setSpvMode('select');
             }
             setCoordinatorId(dept.coordinator_id || '');
+            const currentDeptStaff = members.filter(m => 
+                (!divisionName || (m.division || '').trim().toLowerCase() === (divisionName || '').trim().toLowerCase()) && 
+                (m.department || '').trim().toLowerCase() === (dept.name || '').trim().toLowerCase()
+            );
+            setSelectedMemberIds(currentDeptStaff.map(m => m.id));
         } else {
             setName('');
             setSpvId('');
             setCustomSpvName('');
             setSpvMode('select');
             setCoordinatorId('');
+            setSelectedMemberIds([]);
         }
-    }, [dept, isOpen]);
+    }, [dept, isOpen, divisionName, members]);
 
     if (!isOpen) return null;
 
-    const divMembers = members.filter(m => !divisionName || m.division === divisionName);
+    const divNameClean = (divisionName || '').trim().toLowerCase();
+    const divMembers = members.filter(m => !divNameClean || (m.division || '').trim().toLowerCase() === divNameClean);
     const spvCandidates = divMembers.filter(m => {
         const r = (m.role || m.position || '').toLowerCase();
         return r.includes('spv') || r.includes('supervisor') || r.includes('manager');
@@ -2512,7 +2525,8 @@ const DeptModal = ({ isOpen, onClose, onSave, dept, divisionName, members = [] }
             spv_id: finalSpvId,
             spv_name: finalSpvName,
             coordinator_id: coordinatorId || null,
-            coordinator_name: selectedMember ? selectedMember.name : null
+            coordinator_name: selectedMember ? selectedMember.name : null,
+            member_ids: selectedMemberIds
         });
         onClose();
     };
@@ -2635,10 +2649,53 @@ const DeptModal = ({ isOpen, onClose, onSave, dept, divisionName, members = [] }
                         </p>
                     </div>
 
+                    {/* Anggota / Staf Departemen Checklist */}
+                    <div className="p-3.5 rounded-2xl bg-indigo-50/50 border border-indigo-100/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                            <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-1.5">
+                                <i className="fa-solid fa-users text-indigo-600"></i>
+                                Anggota / Staf Departemen ({selectedMemberIds.length})
+                            </label>
+                            <span className="text-[10px] text-slate-500">Centang anggota divisi</span>
+                        </div>
+                        <div className="max-h-36 overflow-y-auto custom-scrollbar space-y-1 bg-white p-2 rounded-xl border border-slate-200/80">
+                            {divMembers.filter(m => m.id !== coordinatorId && m.id !== spvId).map(m => {
+                                const isChecked = selectedMemberIds.includes(m.id);
+                                return (
+                                    <label key={m.id} className={`flex items-center gap-2.5 p-1.5 rounded-lg cursor-pointer text-xs transition ${isChecked ? 'bg-indigo-50 text-indigo-900 font-semibold' : 'hover:bg-slate-50 text-slate-700'}`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedMemberIds(prev => [...prev, m.id]);
+                                                } else {
+                                                    setSelectedMemberIds(prev => prev.filter(id => id !== m.id));
+                                                }
+                                            }}
+                                            className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                                        />
+                                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: m.color || '#6366f1' }}></span>
+                                        <span className="truncate flex-1">{m.name}</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">
+                                            {m.role || 'Staff'}
+                                            {m.department && m.department !== dept?.name ? ` • (${m.department})` : ''}
+                                        </span>
+                                    </label>
+                                );
+                            })}
+                            {divMembers.filter(m => m.id !== coordinatorId && m.id !== spvId).length === 0 && (
+                                <div className="text-[11px] text-slate-400 italic p-2 text-center">
+                                    Belum ada staf lain di divisi ini.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="p-3 bg-indigo-50/70 rounded-2xl border border-indigo-100 text-[11px] text-indigo-900 flex items-start gap-2">
                         <i className="fa-solid fa-sitemap text-indigo-600 mt-0.5 shrink-0"></i>
                         <div className="leading-relaxed">
-                            <span className="font-bold">Eskalasi Rantai Komando:</span> Direksi ➔ Manager Divisi ➔ SPV ➔ Koordinator ➔ Staff. Jika jabatan SPV atau Manager belum terisi di divisi ini, garis komando otomatis naik 1 tingkat ke atas hingga Direksi.
+                            <span className="font-bold">Eskalasi Rantai Komando:</span> Direksi ➔ Manager Divisi ➔ SPV ➔ Koordinator ➔ Staff. Jika jabatan Koordinator, SPV, atau Manager belum terisi, garis komando otomatis melompat naik tingkat (misal: jika Koordinator kosong, Staff melapor langsung ke SPV).
                         </div>
                     </div>
 
@@ -2658,6 +2715,297 @@ const DeptModal = ({ isOpen, onClose, onSave, dept, divisionName, members = [] }
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    );
+};
+
+const DeptMembersModal = ({
+    isOpen,
+    onClose,
+    dept,
+    divisionName,
+    allMembers = [],
+    rolesList = [],
+    onAssignMemberToDept,
+    onRemoveMemberFromDept,
+    onQuickAddMemberToDept
+}) => {
+    const [selectedMemberToAdd, setSelectedMemberToAdd] = useState('');
+    const [isAddingNewMember, setIsAddingNewMember] = useState(false);
+    const [newMemberForm, setNewMemberForm] = useState({ name: '', email: '', role: 'Staff' });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        setSelectedMemberToAdd('');
+        setIsAddingNewMember(false);
+        setNewMemberForm({ name: '', email: '', role: 'Staff' });
+    }, [isOpen, dept]);
+
+    if (!isOpen || !dept) return null;
+
+    const divNameClean = (divisionName || dept.division_name || '').trim().toLowerCase();
+    const deptNameClean = (dept.name || '').trim().toLowerCase();
+
+    // Members currently in this department
+    const currentDeptMembers = allMembers.filter(m => 
+        (!divNameClean || (m.division || '').trim().toLowerCase() === divNameClean) &&
+        (m.department || '').trim().toLowerCase() === deptNameClean
+    );
+
+    // Members in the division not yet in this department
+    const candidateMembers = allMembers.filter(m =>
+        (!divNameClean || (m.division || '').trim().toLowerCase() === divNameClean) &&
+        (m.department || '').trim().toLowerCase() !== deptNameClean &&
+        m.is_active !== false
+    );
+
+    const handleAssign = async () => {
+        if (!selectedMemberToAdd) return;
+        setIsSubmitting(true);
+        try {
+            await onAssignMemberToDept(selectedMemberToAdd, dept.name);
+            setSelectedMemberToAdd('');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleRemove = async (memberId, memberName) => {
+        if (!window.confirm(`Yakin ingin mengeluarkan "${memberName}" dari departemen ${dept.name}?`)) return;
+        setIsSubmitting(true);
+        try {
+            await onRemoveMemberFromDept(memberId);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleQuickAdd = async (e) => {
+        e.preventDefault();
+        if (!newMemberForm.name.trim()) return;
+        setIsSubmitting(true);
+        try {
+            const success = await onQuickAddMemberToDept({
+                name: newMemberForm.name.trim(),
+                email: newMemberForm.email ? newMemberForm.email.trim() : null,
+                role: newMemberForm.role,
+                division: divisionName || dept.division_name,
+                department: dept.name
+            });
+            if (success) {
+                setNewMemberForm({ name: '', email: '', role: 'Staff' });
+                setIsAddingNewMember(false);
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in">
+            <div className="bg-white rounded-3xl border border-white/80 shadow-2xl shadow-slate-900/10 w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
+                {/* Header */}
+                <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-gradient-to-r from-indigo-50/50 via-slate-50 to-white">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-base shadow-xs">
+                            <i className="fa-solid fa-users"></i>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-slate-800 text-base">Kelola Anggota Departemen</h3>
+                            <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                                <span className="font-semibold text-indigo-700">{dept.name}</span>
+                                <span>•</span>
+                                <span>Divisi {divisionName || dept.division_name}</span>
+                            </p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition">
+                        <i className="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+
+                <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar flex-1">
+                    {/* Section 1: Add existing division member */}
+                    <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100/80 space-y-3">
+                        <div className="text-xs font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-1.5">
+                            <i className="fa-solid fa-user-plus text-indigo-600"></i>
+                            Tambah Anggota dari Divisi {divisionName || dept.division_name}
+                        </div>
+                        <div className="flex gap-2">
+                            <select
+                                value={selectedMemberToAdd}
+                                onChange={e => setSelectedMemberToAdd(e.target.value)}
+                                className="flex-1 text-xs sm:text-sm border border-indigo-200 rounded-xl py-2 px-3 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition bg-white"
+                                disabled={isSubmitting}
+                            >
+                                <option value="">-- Pilih Karyawan Divisi --</option>
+                                {candidateMembers.map(m => (
+                                    <option key={m.id} value={m.id}>
+                                        {m.name} ({m.role || 'Staff'}) {m.department ? `[Dept saat ini: ${m.department}]` : '[Belum ada dept]'}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                onClick={handleAssign}
+                                disabled={!selectedMemberToAdd || isSubmitting}
+                                className="px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xs transition shrink-0 flex items-center gap-1.5"
+                            >
+                                <i className="fa-solid fa-plus text-xs"></i>
+                                <span>Masukkan</span>
+                            </button>
+                        </div>
+                        {candidateMembers.length === 0 && (
+                            <p className="text-[11px] text-slate-400 italic">
+                                Seluruh karyawan aktif di divisi ini telah tergabung dalam departemen {dept.name}.
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Section 2: Quick Register New Member directly to this department */}
+                    <div className="border border-slate-200/80 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                                <i className="fa-solid fa-user-tie text-emerald-600"></i>
+                                Belum ada di sistem? Daftarkan Karyawan Baru
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setIsAddingNewMember(!isAddingNewMember)}
+                                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg transition flex items-center gap-1"
+                            >
+                                <i className={`fa-solid ${isAddingNewMember ? 'fa-minus' : 'fa-plus'} text-[10px]`}></i>
+                                <span>{isAddingNewMember ? 'Tutup' : 'Form Baru'}</span>
+                            </button>
+                        </div>
+
+                        {isAddingNewMember && (
+                            <form onSubmit={handleQuickAdd} className="space-y-3 pt-2 border-t border-slate-200/60 animate-fade-in">
+                                <div>
+                                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">Nama Lengkap *</label>
+                                    <input
+                                        type="text"
+                                        value={newMemberForm.name}
+                                        onChange={e => setNewMemberForm({ ...newMemberForm, name: e.target.value })}
+                                        placeholder="cth. Ahmad Fauzi"
+                                        className="w-full text-xs border border-slate-200 rounded-xl py-2 px-3 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none bg-white font-medium"
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="block text-[11px] font-semibold text-slate-500 mb-1">Email Auth (Opsional)</label>
+                                        <input
+                                            type="email"
+                                            value={newMemberForm.email}
+                                            onChange={e => setNewMemberForm({ ...newMemberForm, email: e.target.value })}
+                                            placeholder="nama@perusahaan.com"
+                                            className="w-full text-xs border border-slate-200 rounded-xl py-2 px-3 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none bg-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-semibold text-slate-500 mb-1">Jabatan</label>
+                                        <select
+                                            value={newMemberForm.role}
+                                            onChange={e => setNewMemberForm({ ...newMemberForm, role: e.target.value })}
+                                            className="w-full text-xs border border-slate-200 rounded-xl py-2 px-3 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none bg-white"
+                                        >
+                                            {rolesList?.map(r => <option key={r} value={r}>{r}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end pt-1">
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting || !newMemberForm.name.trim()}
+                                        className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl transition shadow-xs flex items-center gap-1.5"
+                                    >
+                                        <i className="fa-solid fa-check text-xs"></i>
+                                        <span>Daftarkan & Masukkan ke {dept.name}</span>
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
+
+                    {/* Section 3: Current Members List */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                                <i className="fa-solid fa-id-card-clip text-indigo-500"></i>
+                                Anggota Departemen Saat Ini ({currentDeptMembers.length})
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                                {dept.coordinator_name ? `Koordinator: ${dept.coordinator_name}` : 'Belum ada Koordinator'}
+                            </span>
+                        </div>
+
+                        <div className="space-y-2">
+                            {currentDeptMembers.map(m => {
+                                const isKoor = m.id === dept.coordinator_id || (m.role || '').toLowerCase().includes('koordinator');
+                                return (
+                                    <div
+                                        key={m.id}
+                                        className="p-3 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-between gap-3 shadow-2xs hover:border-indigo-200 transition"
+                                    >
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <div
+                                                className="w-8 h-8 rounded-xl text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs"
+                                                style={{ backgroundColor: m.color || '#6366f1' }}
+                                            >
+                                                {m.name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="font-semibold text-xs text-slate-800 flex items-center gap-1.5 truncate">
+                                                    <span className="truncate">{m.name}</span>
+                                                    {isKoor && (
+                                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded-md shrink-0">
+                                                            <i className="fa-solid fa-crown text-[8px] text-amber-500"></i>
+                                                            Koordinator
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                                                    {m.role || 'Staff'} {m.email ? `• ${m.email}` : ''}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemove(m.id, m.name)}
+                                            disabled={isSubmitting}
+                                            className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition text-xs shrink-0"
+                                            title="Keluarkan dari Departemen Ini"
+                                        >
+                                            <i className="fa-solid fa-user-minus"></i>
+                                        </button>
+                                    </div>
+                                );
+                            })}
+
+                            {currentDeptMembers.length === 0 && (
+                                <div className="p-8 text-center text-xs text-slate-400 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
+                                    <i className="fa-solid fa-users-slash text-2xl text-slate-300 mb-2 block"></i>
+                                    Belum ada anggota di departemen ini. Pilih karyawan dari divisi di atas untuk memasukkan ke departemen.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-5 py-2 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-200/70 bg-slate-200/40 rounded-xl transition"
+                    >
+                        Tutup
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -2866,6 +3214,9 @@ const OrgManagementView = ({
     onAddDepartment,
     onUpdateDepartment,
     onDeleteDepartment,
+    onAssignMemberToDept,
+    onRemoveMemberFromDept,
+    onQuickAddMemberToDept,
     onAddRole,
     onUpdateRole,
     onDeleteRole
@@ -3038,11 +3389,39 @@ const OrgManagementView = ({
     const [filterRole, setFilterRole] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
     
+    // Role & Permission Helpers
+    const isSuperUser = currentUser?.role === 'Super User';
+    const isDireksi = currentUser?.role === 'Direksi';
+    const isExecutive = isSuperAdmin || isSuperUser || isDireksi;
+    const isManager = currentUser?.role === 'Manager';
+    const isSpv = currentUser?.role === 'SPV';
+    const isKoordinator = currentUser?.role === 'Koordinator' || currentUser?.role === 'Kordinator';
+
+    const canManageAllDivisions = isExecutive;
+    const canManageDept = (divName) => isExecutive || ((isManager || isSpv) && (!divName || (divName || '').trim().toLowerCase() === (currentUser?.division || '').trim().toLowerCase())) || hasPermission(currentUser, 'organization.manage_department', roles);
+    const canEditMembers = isExecutive || isManager || isSpv || hasPermission(currentUser, 'users.edit_div', roles);
+    const canAddMember = isExecutive || ['SPV', 'Manager', 'Koordinator', 'Kordinator'].includes(currentUser?.role) || hasPermission(currentUser, 'users.create_div', roles) || hasPermission(currentUser, 'users.create_dept', roles);
+    const lockedDivision = !isExecutive ? currentUser?.division : null;
+    const lockedDepartment = isKoordinator ? (activeMemberObj?.department || currentUser?.department || null) : null;
+
     // Add Member Form State
     const [isAddingMember, setIsAddingMember] = useState(false);
-    const canAddMember = isSuperAdmin || ['SPV', 'Manager', 'Direksi'].includes(currentUser?.role);
-    const lockedDivision = !isSuperAdmin ? currentUser?.division : null;
-    const [memberForm, setMemberForm] = useState({ name: '', email: '', role: 'Staff', division: lockedDivision || 'Marcomm', department: '' });
+    const [memberForm, setMemberForm] = useState({ 
+        name: '', 
+        email: '', 
+        role: 'Staff', 
+        division: lockedDivision || 'Marcomm', 
+        department: lockedDepartment || '' 
+    });
+
+    // Auto-sync memberForm when user division or department is loaded
+    useEffect(() => {
+        setMemberForm(prev => ({
+            ...prev,
+            division: lockedDivision || prev.division || (divisionsList?.[0] || 'Marcomm'),
+            department: lockedDepartment || prev.department || ''
+        }));
+    }, [lockedDivision, lockedDepartment, divisionsList]);
     
     // Add Division State
     const [isAddingDiv, setIsAddingDiv] = useState(false);
@@ -3059,6 +3438,7 @@ const OrgManagementView = ({
     const [editingDivision, setEditingDivision] = useState(null);
     const [editingRole, setEditingRole] = useState(null);
     const [deptModal, setDeptModal] = useState({ isOpen: false, dept: null, divisionName: '' });
+    const [deptMembersModal, setDeptMembersModal] = useState({ isOpen: false, dept: null, divisionName: '' });
 
     // Calculated Stats
     const totalMembers = allMembers.length;
@@ -3066,8 +3446,8 @@ const OrgManagementView = ({
     const inactiveMembers = totalMembers - activeMembers;
 
     // Available Departments for selected division in filter
-    const availableFilterDepts = departments.filter(d => filterDiv === 'all' || d.division_name === filterDiv);
-    const availableFormDepts = departments.filter(d => d.division_name === (memberForm.division || 'Marcomm'));
+    const availableFilterDepts = departments.filter(d => filterDiv === 'all' || (d.division_name || '').trim().toLowerCase() === filterDiv.trim().toLowerCase());
+    const availableFormDepts = departments.filter(d => (d.division_name || '').trim().toLowerCase() === (memberForm.division || 'Marcomm').trim().toLowerCase());
 
     // Filtered Members
     const displayedMembers = members.filter(m => {
@@ -3099,7 +3479,13 @@ const OrgManagementView = ({
         e.preventDefault();
         if (!memberForm.name.trim()) return;
         onAddMember(memberForm);
-        setMemberForm({ name: '', email: '', role: 'Staff', division: lockedDivision || 'Marcomm', department: '' });
+        setMemberForm({ 
+            name: '', 
+            email: '', 
+            role: 'Staff', 
+            division: lockedDivision || (divisionsList?.[0] || 'Marcomm'), 
+            department: lockedDepartment || '' 
+        });
         setIsAddingMember(false);
     };
 
@@ -3727,7 +4113,7 @@ const OrgManagementView = ({
                                 </div>
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Divisi</label>
-                                    {isSuperAdmin ? (
+                                    {isExecutive ? (
                                         <select
                                             value={memberForm.division}
                                             onChange={e => setMemberForm({ ...memberForm, division: e.target.value, department: '' })}
@@ -3738,7 +4124,7 @@ const OrgManagementView = ({
                                     ) : (
                                         <input
                                             type="text"
-                                            value={lockedDivision || 'Marcomm'}
+                                            value={lockedDivision || memberForm.division || 'Marcomm'}
                                             disabled
                                             className="w-full text-sm border border-slate-200 rounded-xl py-2 px-3 bg-slate-100 text-slate-500 cursor-not-allowed"
                                         />
@@ -3746,16 +4132,25 @@ const OrgManagementView = ({
                                 </div>
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Departemen</label>
-                                    <select
-                                        value={memberForm.department}
-                                        onChange={e => setMemberForm({ ...memberForm, department: e.target.value })}
-                                        className="w-full text-sm border border-slate-200 rounded-xl py-2 px-3 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
-                                    >
-                                        <option value="">Tanpa Departemen</option>
-                                        {availableFormDepts.map(d => (
-                                            <option key={d.id || d.name} value={d.name}>{d.name}</option>
-                                        ))}
-                                    </select>
+                                    {lockedDepartment ? (
+                                        <input
+                                            type="text"
+                                            value={lockedDepartment}
+                                            disabled
+                                            className="w-full text-sm border border-slate-200 rounded-xl py-2 px-3 bg-slate-100 text-slate-500 cursor-not-allowed font-medium"
+                                        />
+                                    ) : (
+                                        <select
+                                            value={memberForm.department}
+                                            onChange={e => setMemberForm({ ...memberForm, department: e.target.value })}
+                                            className="w-full text-sm border border-slate-200 rounded-xl py-2 px-3 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                                        >
+                                            <option value="">Tanpa Departemen</option>
+                                            {availableFormDepts.map(d => (
+                                                <option key={d.id || d.name} value={d.name}>{d.name}</option>
+                                            ))}
+                                        </select>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex justify-end gap-2 pt-2">
@@ -3788,7 +4183,7 @@ const OrgManagementView = ({
                                         <th className="p-4">Divisi & Departemen</th>
                                         <th className="p-4">Atasan Langsung</th>
                                         <th className="p-4 text-center">Status</th>
-                                        {isSuperAdmin && <th className="p-4 w-36 text-right">Aksi</th>}
+                                        {canEditMembers && <th className="p-4 w-36 text-right">Aksi</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white/40 divide-y divide-slate-100/80">
@@ -3889,45 +4284,55 @@ const OrgManagementView = ({
                                                         {member.is_active === false ? 'Non-aktif' : 'Aktif'}
                                                     </span>
                                                 </td>
-                                                {isSuperAdmin && (
+                                                {canEditMembers && (
                                                     <td className="p-4 text-sm text-right space-x-1">
-                                                        <button
-                                                            onClick={() => setEditingMember(member)}
-                                                            className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 opacity-80 group-hover:opacity-100 transition-all duration-200"
-                                                            title="Edit Data Karyawan"
-                                                        >
-                                                            <i className="fa-solid fa-user-pen"></i>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => onResetPassword(member.id)}
-                                                            className="text-slate-400 hover:text-blue-600 p-2 rounded-xl hover:bg-blue-50 opacity-80 group-hover:opacity-100 transition-all duration-200"
-                                                            title="Reset Password"
-                                                        >
-                                                            <i className="fa-solid fa-key"></i>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => onToggleMemberStatus(member.id, member.is_active !== false)}
-                                                            className={`text-slate-400 p-2 rounded-xl opacity-80 group-hover:opacity-100 transition-all duration-200 ${
-                                                                member.is_active === false ? 'hover:text-emerald-600 hover:bg-emerald-50' : 'hover:text-amber-600 hover:bg-amber-50'
-                                                            }`}
-                                                            title={member.is_active === false ? 'Aktifkan Akun' : 'Non-aktifkan Akun'}
-                                                        >
-                                                            <i className={`fa-solid ${member.is_active === false ? 'fa-user-check' : 'fa-user-slash'}`}></i>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => onMigrateMember ? onMigrateMember(member) : null}
-                                                            className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 opacity-80 group-hover:opacity-100 transition-all duration-200"
-                                                            title="Migrasi Tugas & Kepemilikan"
-                                                        >
-                                                            <i className="fa-solid fa-arrow-right-arrow-left"></i>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => onDeleteMember(member)}
-                                                            className="text-slate-400 hover:text-rose-600 p-2 rounded-xl hover:bg-rose-50 opacity-80 group-hover:opacity-100 transition-all duration-200"
-                                                            title="Hapus Karyawan"
-                                                        >
-                                                            <i className="fa-regular fa-trash-can"></i>
-                                                        </button>
+                                                        {(isExecutive || isManager || (isSpv && (!currentUser?.division || member.division === currentUser.division))) && (
+                                                            <button
+                                                                onClick={() => setEditingMember(member)}
+                                                                className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 opacity-80 group-hover:opacity-100 transition-all duration-200"
+                                                                title="Edit Data Karyawan (Pilih Departemen / Jabatan)"
+                                                            >
+                                                                <i className="fa-solid fa-user-pen"></i>
+                                                            </button>
+                                                        )}
+                                                        {(isExecutive || isManager || (isSpv && (!currentUser?.division || member.division === currentUser.division))) && (
+                                                            <button
+                                                                onClick={() => onResetPassword(member.id)}
+                                                                className="text-slate-400 hover:text-blue-600 p-2 rounded-xl hover:bg-blue-50 opacity-80 group-hover:opacity-100 transition-all duration-200"
+                                                                title="Reset Password"
+                                                            >
+                                                                <i className="fa-solid fa-key"></i>
+                                                            </button>
+                                                        )}
+                                                        {(isExecutive || isManager || (isSpv && (!currentUser?.division || member.division === currentUser.division))) && (
+                                                            <button
+                                                                onClick={() => onToggleMemberStatus(member.id, member.is_active !== false)}
+                                                                className={`text-slate-400 p-2 rounded-xl opacity-80 group-hover:opacity-100 transition-all duration-200 ${
+                                                                    member.is_active === false ? 'hover:text-emerald-600 hover:bg-emerald-50' : 'hover:text-amber-600 hover:bg-amber-50'
+                                                                }`}
+                                                                title={member.is_active === false ? 'Aktifkan Akun' : 'Non-aktifkan Akun'}
+                                                            >
+                                                                <i className={`fa-solid ${member.is_active === false ? 'fa-user-check' : 'fa-user-slash'}`}></i>
+                                                            </button>
+                                                        )}
+                                                        {isExecutive && (
+                                                            <button
+                                                                onClick={() => onMigrateMember ? onMigrateMember(member) : null}
+                                                                className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 opacity-80 group-hover:opacity-100 transition-all duration-200"
+                                                                title="Migrasi Tugas & Kepemilikan"
+                                                            >
+                                                                <i className="fa-solid fa-arrow-right-arrow-left"></i>
+                                                            </button>
+                                                        )}
+                                                        {isExecutive && (
+                                                            <button
+                                                                onClick={() => onDeleteMember(member)}
+                                                                className="text-slate-400 hover:text-rose-600 p-2 rounded-xl hover:bg-rose-50 opacity-80 group-hover:opacity-100 transition-all duration-200"
+                                                                title="Hapus Karyawan"
+                                                            >
+                                                                <i className="fa-regular fa-trash-can"></i>
+                                                            </button>
+                                                        )}
                                                     </td>
                                                 )}
                                             </tr>
@@ -3935,7 +4340,7 @@ const OrgManagementView = ({
                                     })}
                                     {displayedMembers.length === 0 && (
                                         <tr>
-                                            <td colSpan={isSuperAdmin ? 7 : 6} className="p-16 text-center text-slate-400 text-sm">
+                                            <td colSpan={canEditMembers ? 7 : 6} className="p-16 text-center text-slate-400 text-sm">
                                                 <div className="flex flex-col items-center gap-3">
                                                     <div className="w-14 h-14 rounded-3xl bg-slate-100 flex items-center justify-center text-slate-400 text-2xl">
                                                         <i className="fa-solid fa-users-slash"></i>
@@ -4021,9 +4426,14 @@ const OrgManagementView = ({
                             const id = typeof div === 'string' ? div : div.id;
                             const name = typeof div === 'string' ? div : div.name;
                             const managerName = typeof div === 'object' ? div.manager_name : null;
-                            const divMembers = allMembers.filter(m => m.division === name);
+                            const divMembers = allMembers.filter(m => (m.division || '').trim().toLowerCase() === name.trim().toLowerCase());
                             const count = divMembers.length;
-                            const divDepts = departments.filter(dept => dept.division_name === name);
+                            const divDepts = departments.filter(dept => (dept.division_name || '').trim().toLowerCase() === name.trim().toLowerCase());
+
+                            // Check active leadership in this division
+                            const hasManager = Boolean(managerName);
+                            const hasSpv = divDepts.some(d => Boolean(d.spv_name)) || allMembers.some(m => (m.division || '').trim().toLowerCase() === name.trim().toLowerCase() && ((m.role || m.position || '').toLowerCase().includes('spv') || (m.role || m.position || '').toLowerCase().includes('supervisor')));
+                            const hasCoordinator = divDepts.some(d => Boolean(d.coordinator_name || d.coordinator_id)) || allMembers.some(m => (m.division || '').trim().toLowerCase() === name.trim().toLowerCase() && ((m.role || m.position || '').toLowerCase().includes('koordinator') || (m.role || m.position || '').toLowerCase().includes('coordinator') || (m.role || m.position || '').toLowerCase().includes('kordinator')));
 
                             // Group sub-departments by SPV
                             const spvGroups = {};
@@ -4098,72 +4508,96 @@ const OrgManagementView = ({
                                         </div>
 
                                         {/* Alur Komando Aktif Divisi (Skip-Level Escalation Banner) */}
-                                        {(() => {
-                                            const hasManager = Boolean(managerName);
-                                            const hasSpv = divDepts.some(d => Boolean(d.spv_name)) || allMembers.some(m => m.division === name && ((m.role || '').toLowerCase().includes('spv') || (m.position || '').toLowerCase().includes('spv')));
-                                            return (
-                                                <div className="mt-3.5 p-3 rounded-2xl bg-slate-50/90 border border-slate-200/70 text-[11px] space-y-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
-                                                            <i className="fa-solid fa-route text-sky-600"></i>
-                                                            Garis Komando Aktif Divisi
-                                                        </span>
-                                                        {(!hasManager || !hasSpv) && (
-                                                            <span className="text-[10px] font-bold text-amber-700 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-200">
-                                                                Eskalasi Otomatis
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                        <div className="mt-3.5 p-3 rounded-2xl bg-slate-50/90 border border-slate-200/70 text-[11px] space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
+                                                    <i className="fa-solid fa-route text-sky-600"></i>
+                                                    Garis Komando Aktif Divisi
+                                                </span>
+                                                {(!hasManager || !hasSpv || !hasCoordinator) && (
+                                                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-200 shadow-2xs">
+                                                        Eskalasi Otomatis
+                                                    </span>
+                                                )}
+                                            </div>
 
-                                                    <div className="flex flex-wrap items-center gap-1 font-semibold text-slate-600">
-                                                        <span className="text-rose-700 bg-rose-50 border border-rose-200/80 px-2 py-0.5 rounded-lg text-[10px] shadow-2xs">
-                                                            👑 Direksi
-                                                        </span>
-                                                        <i className="fa-solid fa-chevron-right text-[8px] text-slate-400"></i>
-                                                        {hasManager ? (
-                                                            <span className="text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-lg text-[10px] shadow-2xs">
-                                                                👔 Manager ({managerName})
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-slate-400 bg-slate-100/80 line-through px-2 py-0.5 rounded-lg text-[10px]" title="Manager belum ada, alur melompat ke Direksi">
-                                                                👔 Manager (Kosong)
-                                                            </span>
-                                                        )}
-                                                        <i className="fa-solid fa-chevron-right text-[8px] text-slate-400"></i>
-                                                        {hasSpv ? (
-                                                            <span className="text-purple-700 bg-purple-50 border border-purple-200/80 px-2 py-0.5 rounded-lg text-[10px] shadow-2xs">
-                                                                📋 SPV
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-slate-400 bg-slate-100/80 line-through px-2 py-0.5 rounded-lg text-[10px]" title="SPV belum ada, alur eskalasi ke atas">
-                                                                📋 SPV (Kosong)
-                                                            </span>
-                                                        )}
-                                                        <i className="fa-solid fa-chevron-right text-[8px] text-slate-400"></i>
-                                                        <span className="text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-lg text-[10px] shadow-2xs">
-                                                            ⭐ Koordinator
-                                                        </span>
-                                                        <i className="fa-solid fa-chevron-right text-[8px] text-slate-400"></i>
-                                                        <span className="text-teal-700 bg-teal-50 border border-teal-200/80 px-2 py-0.5 rounded-lg text-[10px] shadow-2xs">
-                                                            👥 Staff
-                                                        </span>
-                                                    </div>
+                                            <div className="flex flex-wrap items-center gap-1 font-semibold text-slate-600">
+                                                <span className="text-rose-700 bg-rose-50 border border-rose-200/80 px-2 py-0.5 rounded-lg text-[10px] shadow-2xs">
+                                                    👑 Direksi
+                                                </span>
+                                                <i className="fa-solid fa-chevron-right text-[8px] text-slate-400"></i>
+                                                {hasManager ? (
+                                                    <span className="text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-lg text-[10px] shadow-2xs">
+                                                        👔 Manager ({managerName})
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400 bg-slate-100/80 line-through px-2 py-0.5 rounded-lg text-[10px]" title="Manager belum ada, alur melompat ke Direksi">
+                                                        👔 Manager (Kosong)
+                                                    </span>
+                                                )}
+                                                <i className="fa-solid fa-chevron-right text-[8px] text-slate-400"></i>
+                                                {hasSpv ? (
+                                                    <span className="text-purple-700 bg-purple-50 border border-purple-200/80 px-2 py-0.5 rounded-lg text-[10px] shadow-2xs">
+                                                        📋 SPV
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400 bg-slate-100/80 line-through px-2 py-0.5 rounded-lg text-[10px]" title="SPV belum ada, alur eskalasi ke atas">
+                                                        📋 SPV (Kosong)
+                                                    </span>
+                                                )}
+                                                <i className="fa-solid fa-chevron-right text-[8px] text-slate-400"></i>
+                                                {hasCoordinator ? (
+                                                    <span className="text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-lg text-[10px] shadow-2xs">
+                                                        ⭐ Koordinator
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400 bg-slate-100/80 line-through px-2 py-0.5 rounded-lg text-[10px]" title="Koordinator belum ada, alur melompat langsung ke SPV/atasnya">
+                                                        ⭐ Koordinator (Kosong)
+                                                    </span>
+                                                )}
+                                                <i className="fa-solid fa-chevron-right text-[8px] text-slate-400"></i>
+                                                <span className="text-teal-700 bg-teal-50 border border-teal-200/80 px-2 py-0.5 rounded-lg text-[10px] shadow-2xs">
+                                                    👥 Staff
+                                                </span>
+                                            </div>
 
-                                                    {(!hasManager && !hasSpv) && (
-                                                        <div className="text-[10px] text-amber-800 bg-amber-50/90 p-2 rounded-xl border border-amber-200/80 flex items-start gap-1.5 leading-relaxed">
-                                                            <i className="fa-solid fa-circle-info text-amber-600 mt-0.5 shrink-0"></i>
-                                                            <span>Divisi ini tidak memiliki Manager dan SPV, sehingga Koordinator & Staff melapor <b>langsung ke Direksi</b>.</span>
-                                                        </div>
-                                                    )}
-                                                    {(hasManager && !hasSpv) && (
-                                                        <div className="text-[10px] text-indigo-800 bg-indigo-50/90 p-2 rounded-xl border border-indigo-200/80 flex items-start gap-1.5 leading-relaxed">
-                                                            <i className="fa-solid fa-circle-info text-indigo-600 mt-0.5 shrink-0"></i>
-                                                            <span>SPV belum terisi di divisi ini. Koordinator melapor <b>langsung ke Manager ({managerName})</b>.</span>
-                                                        </div>
-                                                    )}
+                                            {(!hasManager && hasSpv && !hasCoordinator) && (
+                                                <div className="text-[10px] text-purple-900 bg-purple-50/90 p-2 rounded-xl border border-purple-200/80 flex items-start gap-1.5 leading-relaxed">
+                                                    <i className="fa-solid fa-circle-info text-purple-600 mt-0.5 shrink-0"></i>
+                                                    <span>Koordinator & Manager belum ada. Staff melapor <b>langsung ke SPV</b>, dan SPV melapor <b>langsung ke Direksi</b>.</span>
                                                 </div>
-                                            );
-                                        })()}
+                                            )}
+                                            {(hasManager && hasSpv && !hasCoordinator) && (
+                                                <div className="text-[10px] text-amber-900 bg-amber-50/90 p-2 rounded-xl border border-amber-200/80 flex items-start gap-1.5 leading-relaxed">
+                                                    <i className="fa-solid fa-circle-info text-amber-600 mt-0.5 shrink-0"></i>
+                                                    <span>Koordinator belum ada di divisi ini. Staff melapor <b>langsung ke SPV</b>.</span>
+                                                </div>
+                                            )}
+                                            {(!hasManager && !hasSpv && hasCoordinator) && (
+                                                <div className="text-[10px] text-amber-800 bg-amber-50/90 p-2 rounded-xl border border-amber-200/80 flex items-start gap-1.5 leading-relaxed">
+                                                    <i className="fa-solid fa-circle-info text-amber-600 mt-0.5 shrink-0"></i>
+                                                    <span>Divisi ini tidak memiliki Manager dan SPV, sehingga Koordinator melapor <b>langsung ke Direksi</b>.</span>
+                                                </div>
+                                            )}
+                                            {(hasManager && !hasSpv && hasCoordinator) && (
+                                                <div className="text-[10px] text-indigo-800 bg-indigo-50/90 p-2 rounded-xl border border-indigo-200/80 flex items-start gap-1.5 leading-relaxed">
+                                                    <i className="fa-solid fa-circle-info text-indigo-600 mt-0.5 shrink-0"></i>
+                                                    <span>SPV belum terisi di divisi ini. Koordinator melapor <b>langsung ke Manager ({managerName})</b>.</span>
+                                                </div>
+                                            )}
+                                            {(hasManager && !hasSpv && !hasCoordinator) && (
+                                                <div className="text-[10px] text-indigo-800 bg-indigo-50/90 p-2 rounded-xl border border-indigo-200/80 flex items-start gap-1.5 leading-relaxed">
+                                                    <i className="fa-solid fa-circle-info text-indigo-600 mt-0.5 shrink-0"></i>
+                                                    <span>SPV dan Koordinator belum ada di divisi ini. Staff melapor <b>langsung ke Manager ({managerName})</b>.</span>
+                                                </div>
+                                            )}
+                                            {(!hasManager && !hasSpv && !hasCoordinator) && (
+                                                <div className="text-[10px] text-rose-800 bg-rose-50/90 p-2 rounded-xl border border-rose-200/80 flex items-start gap-1.5 leading-relaxed">
+                                                    <i className="fa-solid fa-circle-info text-rose-600 mt-0.5 shrink-0"></i>
+                                                    <span>Divisi ini tidak memiliki Manager, SPV, maupun Koordinator. Seluruh Staff melapor <b>langsung ke Direksi</b>.</span>
+                                                </div>
+                                            )}
+                                        </div>
 
                                         {/* Sub-departments in this Division Grouped by SPV */}
                                         <div className="mt-4 pt-3 border-t border-slate-100/90 space-y-3">
@@ -4172,7 +4606,7 @@ const OrgManagementView = ({
                                                     <i className="fa-solid fa-network-wired text-indigo-500"></i>
                                                     Departemen & SPV ({divDepts.length})
                                                 </span>
-                                                {isSuperAdmin && (
+                                                {canManageDept(name) && (
                                                     <button
                                                         onClick={() => setDeptModal({ isOpen: true, dept: null, divisionName: name })}
                                                         className="text-indigo-600 hover:text-indigo-800 font-semibold text-[11px] flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition"
@@ -4197,7 +4631,10 @@ const OrgManagementView = ({
 
                                                         <div className="space-y-1.5 pl-1">
                                                             {deptsInGroup.map(dept => {
-                                                                const staffCount = allMembers.filter(m => m.division === name && m.department === dept.name).length;
+                                                                const staffCount = allMembers.filter(m => 
+                                                                    (m.division || '').trim().toLowerCase() === name.trim().toLowerCase() && 
+                                                                    (m.department || '').trim().toLowerCase() === (dept.name || '').trim().toLowerCase()
+                                                                ).length;
                                                                 return (
                                                                     <div
                                                                         key={dept.id || dept.name}
@@ -4214,29 +4651,47 @@ const OrgManagementView = ({
                                                                                     Koor: {dept.coordinator_name || 'Belum ada'}
                                                                                 </span>
                                                                                 <span className="text-slate-300">•</span>
-                                                                                <span className="text-slate-500 font-medium">
-                                                                                    {staffCount} Staff
-                                                                                </span>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setDeptMembersModal({ isOpen: true, dept, divisionName: name })}
+                                                                                    className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold hover:bg-indigo-50 px-1.5 py-0.5 rounded transition cursor-pointer"
+                                                                                    title="Lihat & Kelola Anggota Departemen"
+                                                                                >
+                                                                                    <i className="fa-solid fa-users text-[10px]"></i>
+                                                                                    <span>{staffCount} Staff</span>
+                                                                                    <i className="fa-solid fa-arrow-up-right-from-square text-[8px] opacity-70"></i>
+                                                                                </button>
                                                                             </div>
                                                                         </div>
-                                                                        {isSuperAdmin && (
-                                                                            <div className="flex items-center gap-1 shrink-0">
-                                                                                <button
-                                                                                    onClick={() => setDeptModal({ isOpen: true, dept, divisionName: name })}
-                                                                                    className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-indigo-50 transition"
-                                                                                    title="Edit Departemen"
-                                                                                >
-                                                                                    <i className="fa-solid fa-pen-to-square text-xs"></i>
-                                                                                </button>
-                                                                                <button
-                                                                                    onClick={() => onDeleteDepartment(dept.id, dept.name)}
-                                                                                    className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition"
-                                                                                    title="Hapus Departemen"
-                                                                                >
-                                                                                    <i className="fa-regular fa-trash-can text-xs"></i>
-                                                                                </button>
-                                                                            </div>
-                                                                        )}
+                                                                        <div className="flex items-center gap-1 shrink-0">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setDeptMembersModal({ isOpen: true, dept, divisionName: name })}
+                                                                                className="text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition flex items-center gap-1 font-semibold text-xs"
+                                                                                title="Kelola & Tambah Anggota Departemen"
+                                                                            >
+                                                                                <i className="fa-solid fa-user-plus text-xs"></i>
+                                                                                <span className="hidden sm:inline">Anggota</span>
+                                                                            </button>
+                                                                            {canManageDept(name) && (
+                                                                                <>
+                                                                                    <button
+                                                                                        onClick={() => setDeptModal({ isOpen: true, dept, divisionName: name })}
+                                                                                        className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-indigo-50 transition"
+                                                                                        title="Edit Departemen"
+                                                                                    >
+                                                                                        <i className="fa-solid fa-pen-to-square text-xs"></i>
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => onDeleteDepartment(dept.id, dept.name)}
+                                                                                        className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition"
+                                                                                        title="Hapus Departemen"
+                                                                                    >
+                                                                                        <i className="fa-regular fa-trash-can text-xs"></i>
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 );
                                                             })}
@@ -4265,9 +4720,18 @@ const OrgManagementView = ({
                                             <span>Semua Anggota Divisi</span>
                                             <i className="fa-solid fa-arrow-right text-[10px] group-hover/link:translate-x-0.5 transition-transform"></i>
                                         </button>
-                                        <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-lg">
-                                            Manager ➔ SPV ➔ Koor
-                                        </span>
+                                        {(() => {
+                                            const chain = ['Direksi'];
+                                            if (hasManager) chain.push('Manager');
+                                            if (hasSpv) chain.push('SPV');
+                                            if (hasCoordinator) chain.push('Koor');
+                                            chain.push('Staff');
+                                            return (
+                                                <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200/60" title="Alur rantai komando aktif divisi ini">
+                                                    {chain.join(' ➔ ')}
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             );
@@ -4685,7 +5149,7 @@ const OrgManagementView = ({
                 rolesList={rolesList}
                 divisionsList={divisionsList}
                 departments={departments}
-                isSuperAdmin={isSuperAdmin}
+                isSuperAdmin={isExecutive}
                 lockedDivision={lockedDivision}
             />
 
@@ -4697,11 +5161,40 @@ const OrgManagementView = ({
                 members={allMembers}
                 onSave={(deptData) => {
                     if (deptModal.dept) {
-                        onUpdateDepartment(deptModal.dept.id, deptModal.dept.name, deptData.name, deptData.spv_id, deptData.spv_name, deptData.coordinator_id, deptData.coordinator_name);
+                        onUpdateDepartment(
+                            deptModal.dept.id, 
+                            deptModal.dept.name, 
+                            deptData.name, 
+                            deptData.spv_id, 
+                            deptData.spv_name, 
+                            deptData.coordinator_id, 
+                            deptData.coordinator_name,
+                            deptData.member_ids
+                        );
                     } else {
-                        onAddDepartment(deptModal.divisionName, deptData.name, deptData.spv_id, deptData.spv_name, deptData.coordinator_id, deptData.coordinator_name);
+                        onAddDepartment(
+                            deptModal.divisionName, 
+                            deptData.name, 
+                            deptData.spv_id, 
+                            deptData.spv_name, 
+                            deptData.coordinator_id, 
+                            deptData.coordinator_name,
+                            deptData.member_ids
+                        );
                     }
                 }}
+            />
+
+            <DeptMembersModal
+                isOpen={deptMembersModal.isOpen}
+                onClose={() => setDeptMembersModal({ isOpen: false, dept: null, divisionName: '' })}
+                dept={deptMembersModal.dept}
+                divisionName={deptMembersModal.divisionName}
+                allMembers={allMembers}
+                rolesList={rolesList}
+                onAssignMemberToDept={onAssignMemberToDept}
+                onRemoveMemberFromDept={onRemoveMemberFromDept}
+                onQuickAddMemberToDept={onQuickAddMemberToDept}
             />
 
             <EditDivisionModal
@@ -6094,7 +6587,7 @@ export default function TaskManagerApp() {
         });
     };
 
-    const handleAddDepartment = async (divisionName, deptName, spvId, spvName, coordinatorId, coordinatorName) => {
+    const handleAddDepartment = async (divisionName, deptName, spvId, spvName, coordinatorId, coordinatorName, memberIds = []) => {
         const cleanName = deptName.trim();
         if (!cleanName) return;
         const payload = {
@@ -6125,11 +6618,17 @@ export default function TaskManagerApp() {
             setMembers(prev => prev.map(m => m.id === coordinatorId ? { ...m, department: cleanName, role: 'Koordinator', position: 'Koordinator' } : m));
         }
 
+        // If memberIds are provided, assign them to this department
+        if (Array.isArray(memberIds) && memberIds.length > 0) {
+            await supabase.from('members').update({ department: cleanName }).in('id', memberIds);
+            setMembers(prev => prev.map(m => memberIds.includes(m.id) ? { ...m, department: cleanName } : m));
+        }
+
         alert(`Departemen "${cleanName}" berhasil ditambahkan ke divisi ${divisionName}.`);
         return true;
     };
 
-    const handleUpdateDepartment = async (id, oldName, newName, spvId, spvName, coordinatorId, coordinatorName) => {
+    const handleUpdateDepartment = async (id, oldName, newName, spvId, spvName, coordinatorId, coordinatorName, memberIds = null) => {
         const cleanName = newName.trim();
         if (!cleanName) return;
         const payload = {
@@ -6156,8 +6655,92 @@ export default function TaskManagerApp() {
             await supabase.from('members').update({ department: cleanName, role: 'Koordinator', position: 'Koordinator' }).eq('id', coordinatorId);
             setMembers(prev => prev.map(m => m.id === coordinatorId ? { ...m, department: cleanName, role: 'Koordinator', position: 'Koordinator' } : m));
         }
+
+        // Update members if memberIds array is passed
+        if (Array.isArray(memberIds)) {
+            if (memberIds.length > 0) {
+                await supabase.from('members').update({ department: cleanName }).in('id', memberIds);
+            }
+            const membersToRemove = members
+                .filter(m => (m.department === oldName || m.department === cleanName) && !memberIds.includes(m.id) && m.id !== coordinatorId)
+                .map(m => m.id);
+            if (membersToRemove.length > 0) {
+                await supabase.from('members').update({ department: null }).in('id', membersToRemove);
+            }
+            setMembers(prev => prev.map(m => {
+                if (memberIds.includes(m.id)) return { ...m, department: cleanName };
+                if (membersToRemove.includes(m.id)) return { ...m, department: null };
+                return m;
+            }));
+        }
+
         setDepartments(prev => prev.map(d => d.id === id ? { ...d, ...payload } : d));
         alert(`Departemen "${cleanName}" berhasil diperbarui.`);
+        return true;
+    };
+
+    const handleAssignMemberToDept = async (memberId, deptName) => {
+        if (!memberId || !deptName) return false;
+        const { error } = await supabase.from('members').update({ department: deptName }).eq('id', memberId);
+        if (error) {
+            alert('Gagal memasukkan anggota ke departemen: ' + error.message);
+            return false;
+        }
+        setMembers(prev => prev.map(m => m.id === memberId ? { ...m, department: deptName } : m));
+        alert(`Anggota berhasil dimasukkan ke departemen "${deptName}".`);
+        return true;
+    };
+
+    const handleRemoveMemberFromDept = async (memberId) => {
+        if (!memberId) return false;
+        const member = members.find(m => m.id === memberId);
+        const prevDept = member?.department || '';
+        const { error } = await supabase.from('members').update({ department: null }).eq('id', memberId);
+        if (error) {
+            alert('Gagal mengeluarkan anggota dari departemen: ' + error.message);
+            return false;
+        }
+        setMembers(prev => prev.map(m => m.id === memberId ? { ...m, department: null } : m));
+        alert(`Anggota "${member?.name || ''}" berhasil dikeluarkan dari departemen "${prevDept}".`);
+        return true;
+    };
+
+    const handleQuickAddMemberToDept = async ({ name, email, role, division, department }) => {
+        if (!name || !name.trim()) return false;
+        const randomColor = '#' + Math.floor(Math.random() * 16777215).toString(16);
+        const newMember = {
+            id: crypto.randomUUID(),
+            name: name.trim(),
+            email: email ? email.trim() : null,
+            division: division || 'Marcomm',
+            department: department || null,
+            role: role || 'Staff',
+            position: role || 'Staff',
+            color: randomColor
+        };
+        const insertPayload = {
+            id: newMember.id,
+            name: newMember.name,
+            email: newMember.email,
+            position: newMember.position,
+            division: newMember.division,
+            role: newMember.role,
+            color: newMember.color,
+            department: newMember.department
+        };
+        let { error } = await supabase.from('members').insert(insertPayload);
+        if (error && error.message && error.message.includes('department')) {
+            delete insertPayload.department;
+            const retry = await supabase.from('members').insert(insertPayload);
+            error = retry.error;
+        }
+        if (error) {
+            console.error('Supabase member insert error:', error);
+            alert(`Gagal menambah anggota: ${error.message}`);
+            return false;
+        }
+        setMembers(prev => [...prev, newMember]);
+        alert(`Karyawan baru "${newMember.name}" berhasil didaftarkan dan dimasukkan ke departemen "${department}".`);
         return true;
     };
 
@@ -8499,7 +9082,7 @@ export default function TaskManagerApp() {
                                 departments={departments}
                                 roles={roles}
                                 rolesList={roles.map(r => r.name)}
-                                isSuperAdmin={session?.role === 'Super User'}
+                                isSuperAdmin={session?.role === 'Super User' || session?.role === 'Direksi'}
                                 onAddMember={handleAddMember}
                                 onUpdateMember={handleUpdateMember}
                                 onDeleteMember={handleDeleteMember}
@@ -8512,6 +9095,9 @@ export default function TaskManagerApp() {
                                 onAddDepartment={handleAddDepartment}
                                 onUpdateDepartment={handleUpdateDepartment}
                                 onDeleteDepartment={handleDeleteDepartment}
+                                onAssignMemberToDept={handleAssignMemberToDept}
+                                onRemoveMemberFromDept={handleRemoveMemberFromDept}
+                                onQuickAddMemberToDept={handleQuickAddMemberToDept}
                                 onAddRole={handleAddRole}
                                 onUpdateRole={handleUpdateRole}
                                 onDeleteRole={handleDeleteRole}
