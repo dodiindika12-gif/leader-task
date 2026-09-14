@@ -5714,24 +5714,11 @@ const AbsCalendar = ({
     for (let i = 0; i < displayFirstDay; i++) days.push(null);
     for (let i = 1; i <= daysInMonth; i++) days.push(i);
 
-    // Defense in depth: if logged-in user is Staff or Kordinator, only show their own tasks or subtasks
-    const userRole = session?.role;
-    const userMemberId = session?.memberId;
-    const roleFilteredTasks = useMemo(() => {
-        return tasks.filter(t => {
-            if (session && ['Staff', 'Koordinator', 'Kordinator'].includes(userRole)) {
-                const isMainPic = t.picId === userMemberId;
-                const isSubPic = Array.isArray(t.todos) && t.todos.some(todo => (todo.picId || todo.pic_id) === userMemberId);
-                return isMainPic || isSubPic;
-            }
-            return true;
-        });
-    }, [tasks, session, userRole, userMemberId]);
-
+    // Task di dalam workspace otomatis dapat dilihat oleh seluruh anggota workspace
     const visibleTasks = useMemo(() => {
-        if (isProjectCalendar) return roleFilteredTasks;
-        return roleFilteredTasks.filter(t => effectiveSelectedIds.includes(t.projectId));
-    }, [isProjectCalendar, roleFilteredTasks, effectiveSelectedIds]);
+        if (isProjectCalendar) return tasks;
+        return tasks.filter(t => effectiveSelectedIds.includes(t.projectId));
+    }, [isProjectCalendar, tasks, effectiveSelectedIds]);
 
     const getTasksForDate = (date) => {
         if (!date) return [];
@@ -6950,15 +6937,10 @@ export default function TaskManagerApp() {
             if (project.division && project.division !== 'Task ABS' && project.division !== globalDivision) return false;
         }
         
+        // Task di dalam workspace otomatis dapat dilihat oleh seluruh anggota workspace
         if (!isSuperUser && accessibleProjectIds) {
             const project = projects.find(p => p.id === t.projectId);
             if (project && project.owner_id && !accessibleProjectIds.has(t.projectId)) return false;
-        }
-        
-        if (session && ['Staff', 'Koordinator', 'Kordinator'].includes(session.role)) {
-            const isMainPic = t.picId === session.memberId;
-            const isSubPic = Array.isArray(t.todos) && t.todos.some(todo => (todo.picId || todo.pic_id) === session.memberId);
-            return isMainPic || isSubPic;
         }
 
         return true;
