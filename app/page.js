@@ -7204,16 +7204,38 @@ export default function TaskManagerApp() {
                     return;
                 }
 
-            const mappedProjects = (projectsData || []).map((project, index) => ({
-                id: project.id,
-                name: project.name,
-                isPinned: project.is_pinned,
-                owner_id: project.owner_id,
-                division: project.division,
-                color: project.color || getDefaultProjectColor(index),
-                folders: Array.isArray(project.folders) && project.folders.length > 0 ? project.folders : ['General'],
-                showInCalendar: project.show_in_calendar ?? isDefaultCalendarProject(project.name)
-            }));
+            const mappedProjects = (projectsData || []).map((project, index) => {
+                let meta = {};
+                if (Array.isArray(project.folders)) {
+                    const metaFolder = project.folders.find(f => typeof f === 'string' && f.startsWith('__meta__:'));
+                    if (metaFolder) {
+                        try {
+                            meta = JSON.parse(metaFolder.replace('__meta__:', ''));
+                        } catch (e) {}
+                    }
+                }
+                const coOwners = Array.isArray(project.co_owners)
+                    ? project.co_owners
+                    : (Array.isArray(meta.co_owners) ? meta.co_owners : []);
+                const description = project.description || meta.description || '';
+                const cleanFolders = Array.isArray(project.folders) && project.folders.length > 0
+                    ? project.folders.filter(f => typeof f === 'string' && !f.startsWith('__meta__:'))
+                    : ['General'];
+
+                return {
+                    id: project.id,
+                    name: project.name,
+                    isPinned: project.is_pinned,
+                    owner_id: project.owner_id,
+                    co_owners: coOwners,
+                    description: description,
+                    division: project.division,
+                    color: project.color || getDefaultProjectColor(index),
+                    folders: cleanFolders.length > 0 ? cleanFolders : ['General'],
+                    rawFolders: project.folders,
+                    showInCalendar: project.show_in_calendar ?? isDefaultCalendarProject(project.name)
+                };
+            });
 
             const mappedTasks = (tasksData || []).map(task => ({
                 id: task.id,
@@ -7461,7 +7483,7 @@ export default function TaskManagerApp() {
     const closeDialog = () => setDialog({ isOpen: false, type: '', message: '', onConfirm: null, defaultValue: '' });
 
     // Database Actions
-    const handleSaveShareProject = async (projectId, memberIds) => {
+    const handleSaveShareProject = async (projectId, memberIds, coOwners = null) => {
         try {
             // Delete all current accesses for this project
             const { error: deleteError } = await supabase.from('project_access').delete().eq('project_id', projectId);
@@ -7473,6 +7495,28 @@ export default function TaskManagerApp() {
                 if (insertError) throw insertError;
             }
 
+            // Update co_owners if provided
+            if (coOwners !== null) {
+                const project = projects.find(p => p.id === projectId);
+                const cleanFolders = Array.isArray(project?.folders)
+                    ? project.folders.filter(f => typeof f === 'string' && !f.startsWith('__meta__:'))
+                    : ['General'];
+                const meta = { co_owners: coOwners, description: project?.description || '' };
+                const metaFolder = `__meta__:${JSON.stringify(meta)}`;
+                const nextFolders = [...cleanFolders, metaFolder];
+
+                setProjects(prev => prev.map(p => p.id === projectId ? { ...p, co_owners: coOwners } : p));
+
+                try {
+                    const { error: coError } = await supabase.from('projects').update({ co_owners: coOwners, folders: nextFolders }).eq('id', projectId);
+                    if (coError) {
+                        await supabase.from('projects').update({ folders: nextFolders }).eq('id', projectId);
+                    }
+                } catch (e) {
+                    await supabase.from('projects').update({ folders: nextFolders }).eq('id', projectId);
+                }
+            }
+
             // Update local state
             setProjectAccess(prev => [
                 ...prev.filter(pa => pa.project_id !== projectId),
@@ -7480,10 +7524,35 @@ export default function TaskManagerApp() {
             ]);
             
             setIsShareModalOpen(false);
-            alert('Akses project berhasil diperbarui!');
+            setIsProjectSettingsOpen(false);
+            alert('Akses dan peserta project berhasil diperbarui!');
         } catch (error) {
             console.error('Error saving project access:', error);
             alert('Gagal menyimpan akses project: ' + error.message);
+        }
+    };
+
+    const handleUpdateProjectDescription = async (projectId, description) => {
+        const desc = (description || '').trim();
+        const project = projects.find(p => p.id === projectId);
+        if (!project) return;
+
+        const cleanFolders = Array.isArray(project.folders)
+            ? project.folders.filter(f => typeof f === 'string' && !f.startsWith('__meta__:'))
+            : ['General'];
+        const meta = { co_owners: project.co_owners || [], description: desc };
+        const metaFolder = `__meta__:${JSON.stringify(meta)}`;
+        const nextFolders = [...cleanFolders, metaFolder];
+
+        setProjects(prev => prev.map(p => p.id === projectId ? { ...p, description: desc } : p));
+
+        try {
+            const { error } = await supabase.from('projects').update({ description: desc, folders: nextFolders }).eq('id', projectId);
+            if (error) {
+                await supabase.from('projects').update({ folders: nextFolders }).eq('id', projectId);
+            }
+        } catch (e) {
+            await supabase.from('projects').update({ folders: nextFolders }).eq('id', projectId);
         }
     };
 
@@ -9351,6 +9420,7 @@ export default function TaskManagerApp() {
                 onSaveSharing={handleSaveShareProject}
                 onDeleteProject={handleDeleteProject}
                 onUpdateName={handleUpdateProjectName}
+                onUpdateDescription={handleUpdateProjectDescription}
             />
             <MemberMigrationModal
                 isOpen={migrationModalConfig.isOpen}
