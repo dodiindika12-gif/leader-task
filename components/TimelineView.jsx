@@ -8,7 +8,8 @@ export default function TimelineView({
     projects = [],
     onEdit,
     onAdd,
-    onUpdateStatus
+    onUpdateStatus,
+    unreadTaskIds = null
 }) {
     const [timeScale, setTimeScale] = useState('week'); // 'day', 'week', 'month'
     const [groupBy, setGroupBy] = useState('status'); // 'status', 'project', 'pic'
@@ -428,6 +429,12 @@ export default function TimelineView({
                                                                 <i className="fa-solid fa-check-circle text-emerald-500 text-xs"></i>
                                                             )}
                                                             <span className="truncate">{task.title}</span>
+                                                            {unreadTaskIds?.has(task.id) && (
+                                                                <span className="relative flex h-2 w-2 shrink-0" title="Notifikasi belum dibaca">
+                                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-xs ring-1 ring-white"></span>
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400">
                                                             {project && (
@@ -489,6 +496,12 @@ export default function TimelineView({
                                                                 <span className="text-[11px] font-bold truncate">
                                                                     {task.title}
                                                                 </span>
+                                                                {unreadTaskIds?.has(task.id) && (
+                                                                    <span className="relative flex h-2 w-2 shrink-0" title="Notifikasi belum dibaca">
+                                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-xs ring-1 ring-white"></span>
+                                                                    </span>
+                                                                )}
                                                             </div>
 
                                                             <div className="flex items-center gap-1.5 text-[10px] relative z-10 pl-2">

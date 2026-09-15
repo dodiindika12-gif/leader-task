@@ -1591,7 +1591,7 @@ const CustomDialog = ({ dialog, closeDialog }) => {
     );
 };
 
-const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePriority, onUpdateStatus, onUpdateTask, isListView = false, projectAccess = [] }) => {
+const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePriority, onUpdateStatus, onUpdateTask, isListView = false, projectAccess = [], hasNotification = false }) => {
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editedTitle, setEditedTitle] = useState(task.title);
     const [isEditingDeadline, setIsEditingDeadline] = useState(false);
@@ -1658,7 +1658,7 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
 
     if (isListView) {
         return (
-            <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors group" style={{ borderLeft: `3px solid ${accentColor}` }}>
+            <tr onDoubleClick={() => onEdit(task)} className="border-b border-gray-100 hover:bg-gray-50 transition-colors group" style={{ borderLeft: `3px solid ${accentColor}` }}>
                 <td className="p-3">
                     <div className="flex items-start space-x-3">
                         <input
@@ -1684,12 +1684,24 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                                     onClick={(e) => e.stopPropagation()}
                                 />
                             ) : (
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); setIsEditingTitle(true); }}
-                                    className={`text-left text-sm font-medium hover:bg-gray-100 rounded px-1 -ml-1 truncate max-w-md transition-colors ${isDone ? 'text-gray-400 line-through' : 'text-gray-900 hover:text-purple-600'}`}
-                                >
-                                    {task.title}
-                                </button>
+                                <div className="flex items-center gap-2 max-w-md">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setIsEditingTitle(true); }}
+                                        className={`text-left text-sm font-medium hover:bg-gray-100 rounded px-1 -ml-1 truncate transition-colors ${isDone ? 'text-gray-400 line-through' : 'text-gray-900 hover:text-purple-600'}`}
+                                    >
+                                        {task.title}
+                                    </button>
+                                    {hasNotification && (
+                                        <span
+                                            onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+                                            className="relative flex h-2.5 w-2.5 shrink-0 cursor-pointer"
+                                            title="Ada notifikasi belum dibaca • Klik untuk membuka tugas"
+                                        >
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 shadow-xs ring-2 ring-white"></span>
+                                        </span>
+                                    )}
+                                </div>
                             )}
                             <div className="mt-1.5 flex items-center flex-wrap gap-1.5">
                                 {isEditingDeadline ? (
@@ -1805,6 +1817,7 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
     return (
         <div
             draggable="true"
+            onDoubleClick={() => onEdit(task)}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             className={`bg-white/80 p-3.5 rounded-3xl border shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-grab active:cursor-grabbing group mb-3 relative flex flex-col min-h-[110px] backdrop-blur ${isDone ? 'border-white/60 bg-white/45' : isOverdue ? 'border-rose-300 bg-rose-50/25 shadow-xs ring-1 ring-rose-200/50' : isDueToday ? 'border-amber-300 bg-amber-50/25 shadow-xs ring-1 ring-amber-200/50' : 'border-white/75'}`}
@@ -1852,12 +1865,24 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                             onClick={(e) => e.stopPropagation()}
                         />
                     ) : (
-                        <h4
-                            className={`text-sm font-medium leading-snug cursor-text hover:bg-gray-100 rounded px-1 py-0.5 -ml-1 transition-colors ${isDone ? 'text-gray-400 line-through' : 'text-gray-800'}`}
-                            onClick={(e) => { e.stopPropagation(); setIsEditingTitle(true); }}
-                        >
-                            {task.title}
-                        </h4>
+                        <div className="flex items-start justify-between gap-1.5">
+                            <h4
+                                className={`text-sm font-medium leading-snug cursor-text hover:bg-gray-100 rounded px-1 py-0.5 -ml-1 transition-colors flex-1 ${isDone ? 'text-gray-400 line-through' : 'text-gray-800'}`}
+                                onClick={(e) => { e.stopPropagation(); setIsEditingTitle(true); }}
+                            >
+                                {task.title}
+                            </h4>
+                            {hasNotification && (
+                                <span
+                                    onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+                                    className="relative flex h-2.5 w-2.5 shrink-0 mt-1 cursor-pointer"
+                                    title="Ada notifikasi belum dibaca • Klik untuk membuka tugas"
+                                >
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 shadow-xs ring-2 ring-white"></span>
+                                </span>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
@@ -1996,7 +2021,7 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
     );
 };
 
-const KanbanView = ({ tasks, members, projects, onAdd, onEdit, onDelete, onUpdatePriority, onUpdateStatus, onUpdateTask, projectAccess = [] }) => {
+const KanbanView = ({ tasks, members, projects, onAdd, onEdit, onDelete, onUpdatePriority, onUpdateStatus, onUpdateTask, projectAccess = [], unreadTaskIds = null }) => {
     const handleDragOver = (e) => {
         e.preventDefault();
         e.currentTarget.classList.add('bg-gray-200', 'border-gray-400', 'border-dashed');
@@ -2050,6 +2075,7 @@ const KanbanView = ({ tasks, members, projects, onAdd, onEdit, onDelete, onUpdat
                                     onUpdateStatus={onUpdateStatus}
                                     onUpdateTask={onUpdateTask}
                                     projectAccess={projectAccess}
+                                    hasNotification={unreadTaskIds ? unreadTaskIds.has(task.id) : false}
                                 />
                             ))}
 
@@ -2084,7 +2110,8 @@ const TableView = ({
     onCreateFolder,
     onRenameFolder,
     onDeleteFolder,
-    projectAccess = []
+    projectAccess = [],
+    unreadTaskIds = null
 }) => {
     const [collapsedFolders, setCollapsedFolders] = useState({});
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -2278,6 +2305,7 @@ const TableView = ({
                                                     onUpdateTask={onUpdateTask}
                                                     isListView={true}
                                                     projectAccess={projectAccess}
+                                                    hasNotification={unreadTaskIds ? unreadTaskIds.has(task.id) : false}
                                                 />
                                             ))}
                                             {folderTasks.length === 0 ? (
@@ -5961,7 +5989,8 @@ const AbsCalendar = ({
     onToggleProjectCalendar, 
     isProjectCalendar = false, 
     projectName = '',
-    session = null
+    session = null,
+    unreadTaskIds = null
 }) => {
     const [currentMonth, setCurrentMonth] = useState(() => {
         const d = new Date();
@@ -6198,12 +6227,22 @@ const AbsCalendar = ({
                                             style={!isDone ? { backgroundColor: `${proj?.color || '#6366f1'}18`, color: proj?.color || '#4f46e5', borderColor: `${proj?.color || '#6366f1'}35` } : {}}
                                             title={`${task.title}${task.folder ? ` [Folder: ${task.folder}]` : ''}`}
                                         >
-                                            {task.folder && task.folder !== 'General' && (
-                                                <span className="font-semibold text-[9px] opacity-75 mr-1 px-1 py-0.2 rounded bg-white/60">
-                                                    {task.folder}
+                                            <div className="flex items-center justify-between gap-1 overflow-hidden">
+                                                <span className="truncate">
+                                                    {task.folder && task.folder !== 'General' && (
+                                                        <span className="font-semibold text-[9px] opacity-75 mr-1 px-1 py-0.2 rounded bg-white/60">
+                                                            {task.folder}
+                                                        </span>
+                                                    )}
+                                                    {task.title}
                                                 </span>
-                                            )}
-                                            {task.title}
+                                                {unreadTaskIds?.has(task.id) && (
+                                                    <span className="relative flex h-2 w-2 shrink-0" title="Notifikasi belum dibaca">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-xs ring-1 ring-white"></span>
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -7199,11 +7238,9 @@ export default function TaskManagerApp() {
         projects
     });
 
-    // Otomatis hilangkan tick merah notifikasi saat workspace atau menu sedang aktif / dilihat
+    // Otomatis hilangkan tick merah notifikasi saat menu sedang aktif / dilihat
     useEffect(() => {
-        if (activeProject && (view === 'table' || view === 'kanban' || view === 'timeline' || view === 'calendar')) {
-            notifications.markProjectAsViewed(activeProject);
-        } else if (view === 'notes') {
+        if (view === 'notes') {
             if (notesInitialTab === 'mom') {
                 notifications.markMenuAsViewed('notes_mom');
             } else {
@@ -7216,7 +7253,14 @@ export default function TaskManagerApp() {
         } else if (view === 'all_calendar') {
             notifications.markMenuAsViewed('all_calendar');
         }
-    }, [activeProject, view, notesInitialTab, notifications.unreadNotifications]);
+    }, [view, notesInitialTab, notifications.unreadNotifications]);
+
+    // Otomatis tandai notifikasi tugas sebagai dibaca ketika task dibuka
+    useEffect(() => {
+        if (editingTask?.id) {
+            notifications.markTaskAsViewed(editingTask.id);
+        }
+    }, [editingTask?.id, notifications.unreadNotifications]);
     
     // Sharing & Project Settings state
     const [projectAccess, setProjectAccess] = useState([]);
@@ -8184,7 +8228,12 @@ export default function TaskManagerApp() {
         return true;
     };
 
-    const handleEditTask = (task) => setEditingTask(task);
+    const handleEditTask = (task) => {
+        if (task?.id) {
+            notifications.markTaskAsViewed(task.id);
+        }
+        setEditingTask(task);
+    };
 
     const handleSaveEditedTask = async (updatedTask) => {
         if (!updatedTask.title.trim() || !updatedTask.projectId) return false;
@@ -9592,6 +9641,7 @@ export default function TaskManagerApp() {
                                     onCreateTask={handleAddTaskForDate}
                                     onToggleProjectCalendar={handleToggleProjectCalendar}
                                     isProjectCalendar={false}
+                                    unreadTaskIds={notifications?.unreadTaskIds}
                                 />
                             </div>
                         )}
@@ -9669,6 +9719,7 @@ export default function TaskManagerApp() {
                                     onToggleProjectCalendar={handleToggleProjectCalendar}
                                     isProjectCalendar={true}
                                     projectName={currentProjectName}
+                                    unreadTaskIds={notifications?.unreadTaskIds}
                                 />
                             </div>
                         )}
@@ -9784,6 +9835,7 @@ export default function TaskManagerApp() {
                                     onUpdateStatus={handleUpdateStatus}
                                     onUpdateTask={handleSaveEditedTask}
                                     projectAccess={projectAccess}
+                                    unreadTaskIds={notifications?.unreadTaskIds}
                                 />
                             </div>
                         )}
@@ -9867,6 +9919,7 @@ export default function TaskManagerApp() {
                                     onRenameFolder={(oldName, newName) => handleRenameFolder(activeProject, oldName, newName)}
                                     onDeleteFolder={(fName) => handleDeleteFolder(activeProject, fName)}
                                     projectAccess={projectAccess}
+                                    unreadTaskIds={notifications?.unreadTaskIds}
                                 />
                             </div>
                         )}
@@ -9937,6 +9990,7 @@ export default function TaskManagerApp() {
                                     onEdit={handleEditTask}
                                     onAdd={handleAddTask}
                                     onUpdateStatus={handleUpdateStatus}
+                                    unreadTaskIds={notifications?.unreadTaskIds}
                                 />
                             </div>
                         )}
