@@ -10,6 +10,7 @@ import WeeklyScheduleView, { getRoleLevel, isMeetingSchedule, isWorksheetSchedul
 import MainDashboard from '../components/MainDashboard';
 import NotificationCenter from '../components/NotificationCenter';
 import MemberMigrationModal from '../components/MemberMigrationModal';
+import { useNotifications } from '../lib/useNotifications';
 
 
 // Default Data when localStorage/DB is empty
@@ -7185,6 +7186,37 @@ export default function TaskManagerApp() {
     const [folderFilter, setFolderFilter] = useState('all');
     const [sortMode, setSortMode] = useState('deadline_asc');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+    // Mesin Notifikasi Real-time & Unread Tracking
+    const notifications = useNotifications({
+        tasks,
+        schedules,
+        notes,
+        members,
+        currentPicId,
+        session,
+        roles,
+        projects
+    });
+
+    // Otomatis hilangkan tick merah notifikasi saat workspace atau menu sedang aktif / dilihat
+    useEffect(() => {
+        if (activeProject && (view === 'table' || view === 'kanban' || view === 'timeline' || view === 'calendar')) {
+            notifications.markProjectAsViewed(activeProject);
+        } else if (view === 'notes') {
+            if (notesInitialTab === 'mom') {
+                notifications.markMenuAsViewed('notes_mom');
+            } else {
+                notifications.markMenuAsViewed('notes_postit');
+            }
+        } else if (view === 'schedule_meeting') {
+            notifications.markMenuAsViewed('schedule_meeting');
+        } else if (view === 'schedule_worksheet') {
+            notifications.markMenuAsViewed('schedule_worksheet');
+        } else if (view === 'all_calendar') {
+            notifications.markMenuAsViewed('all_calendar');
+        }
+    }, [activeProject, view, notesInitialTab, notifications.unreadNotifications]);
     
     // Sharing & Project Settings state
     const [projectAccess, setProjectAccess] = useState([]);
@@ -9109,6 +9141,12 @@ export default function TaskManagerApp() {
                                         <i className="fa-regular fa-note-sticky"></i>
                                     </span>
                                     <span>Notes</span>
+                                    {notifications.unreadCountByMenu.notes > 0 && (
+                                        <span className="relative flex h-2 w-2 ml-1 shrink-0" title={`${notifications.unreadCountByMenu.notes} catatan baru`}>
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-xs"></span>
+                                        </span>
+                                    )}
                                 </div>
                                 <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200 ${isNotesSubMenuOpen ? 'rotate-180 text-orange-500' : ''}`}></i>
                             </button>
@@ -9122,14 +9160,22 @@ export default function TaskManagerApp() {
                                             setNotesInitialTab('notes');
                                             navigateView('notes');
                                         }}
-                                        className={`w-full flex items-center space-x-2.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                                             view === 'notes' && notesInitialTab === 'notes'
                                                 ? 'bg-amber-100/90 text-amber-900 shadow-xs ring-1 ring-amber-300/60'
                                                 : 'text-slate-500 hover:bg-white/60 hover:text-slate-800'
                                         }`}
                                     >
-                                        <i className={`fa-solid fa-note-sticky text-xs ${view === 'notes' && notesInitialTab === 'notes' ? 'text-amber-600' : 'text-amber-400'}`}></i>
-                                        <span>Post it!</span>
+                                        <div className="flex items-center space-x-2.5 min-w-0">
+                                            <i className={`fa-solid fa-note-sticky text-xs ${view === 'notes' && notesInitialTab === 'notes' ? 'text-amber-600' : 'text-amber-400'}`}></i>
+                                            <span>Post it!</span>
+                                        </div>
+                                        {notifications.unreadCountByMenu.notes_postit > 0 && (
+                                            <span className="relative flex h-2 w-2 shrink-0 ml-1.5" title={`${notifications.unreadCountByMenu.notes_postit} catatan baru`}>
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-xs"></span>
+                                            </span>
+                                        )}
                                     </button>
                                     <button
                                         type="button"
@@ -9137,14 +9183,22 @@ export default function TaskManagerApp() {
                                             setNotesInitialTab('mom');
                                             navigateView('notes');
                                         }}
-                                        className={`w-full flex items-center space-x-2.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                                             view === 'notes' && notesInitialTab === 'mom'
                                                 ? 'bg-emerald-100/90 text-emerald-900 shadow-xs ring-1 ring-emerald-300/60'
                                                 : 'text-slate-500 hover:bg-white/60 hover:text-slate-800'
                                         }`}
                                     >
-                                        <i className={`fa-solid fa-clipboard-list text-xs ${view === 'notes' && notesInitialTab === 'mom' ? 'text-emerald-600' : 'text-emerald-400'}`}></i>
-                                        <span>Minutes of Meeting</span>
+                                        <div className="flex items-center space-x-2.5 min-w-0">
+                                            <i className={`fa-solid fa-clipboard-list text-xs ${view === 'notes' && notesInitialTab === 'mom' ? 'text-emerald-600' : 'text-emerald-400'}`}></i>
+                                            <span className="truncate">Minutes of Meeting</span>
+                                        </div>
+                                        {notifications.unreadCountByMenu.notes_mom > 0 && (
+                                            <span className="relative flex h-2 w-2 shrink-0 ml-1.5" title={`${notifications.unreadCountByMenu.notes_mom} notulensi baru`}>
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-xs"></span>
+                                            </span>
+                                        )}
                                     </button>
                                 </div>
                             )}
@@ -9171,6 +9225,12 @@ export default function TaskManagerApp() {
                                         <i className="fa-solid fa-calendar-week"></i>
                                     </span>
                                     <span>Jadwal</span>
+                                    {notifications.unreadCountByMenu.schedule > 0 && (
+                                        <span className="relative flex h-2 w-2 ml-1 shrink-0" title={`${notifications.unreadCountByMenu.schedule} jadwal baru`}>
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-xs"></span>
+                                        </span>
+                                    )}
                                 </div>
                                 <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200 ${isScheduleSubMenuOpen ? 'rotate-180 text-indigo-600' : ''}`}></i>
                             </button>
@@ -9181,26 +9241,42 @@ export default function TaskManagerApp() {
                                     <button
                                         type="button"
                                         onClick={() => navigateView('schedule_meeting')}
-                                        className={`w-full flex items-center space-x-2.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                                             view === 'schedule_meeting'
                                                 ? 'bg-indigo-100/90 text-indigo-900 shadow-xs ring-1 ring-indigo-300/60'
                                                 : 'text-slate-500 hover:bg-white/60 hover:text-slate-800'
                                         }`}
                                     >
-                                        <i className={`fa-solid fa-handshake text-xs ${view === 'schedule_meeting' ? 'text-indigo-600' : 'text-indigo-400'}`}></i>
-                                        <span>Jadwal Meeting</span>
+                                        <div className="flex items-center space-x-2.5 min-w-0">
+                                            <i className={`fa-solid fa-handshake text-xs ${view === 'schedule_meeting' ? 'text-indigo-600' : 'text-indigo-400'}`}></i>
+                                            <span>Jadwal Meeting</span>
+                                        </div>
+                                        {notifications.unreadCountByMenu.schedule_meeting > 0 && (
+                                            <span className="relative flex h-2 w-2 shrink-0 ml-1.5" title={`${notifications.unreadCountByMenu.schedule_meeting} rapat baru`}>
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-xs"></span>
+                                            </span>
+                                        )}
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => navigateView('schedule_worksheet')}
-                                        className={`w-full flex items-center space-x-2.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                                             view === 'schedule_worksheet'
                                                 ? 'bg-sky-100/90 text-sky-900 shadow-xs ring-1 ring-sky-300/60'
                                                 : 'text-slate-500 hover:bg-white/60 hover:text-slate-800'
                                         }`}
                                     >
-                                        <i className={`fa-solid fa-table-cells text-xs ${view === 'schedule_worksheet' ? 'text-sky-600' : 'text-sky-400'}`}></i>
-                                        <span>Worksheet</span>
+                                        <div className="flex items-center space-x-2.5 min-w-0">
+                                            <i className={`fa-solid fa-table-cells text-xs ${view === 'schedule_worksheet' ? 'text-sky-600' : 'text-sky-400'}`}></i>
+                                            <span>Worksheet</span>
+                                        </div>
+                                        {notifications.unreadCountByMenu.schedule_worksheet > 0 && (
+                                            <span className="relative flex h-2 w-2 shrink-0 ml-1.5" title={`${notifications.unreadCountByMenu.schedule_worksheet} worksheet baru`}>
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-xs"></span>
+                                            </span>
+                                        )}
                                     </button>
                                 </div>
                             )}
@@ -9211,12 +9287,20 @@ export default function TaskManagerApp() {
                                 setActiveProject('');
                                 navigateView('all_calendar');
                             }}
-                            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-2xl text-sm font-medium transition-all ${view === 'all_calendar' || (view === 'calendar' && !activeProject) ? 'tint-pink shadow-sm' : 'text-slate-500 hover:bg-white/55 hover:text-slate-900'}`}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl text-sm font-medium transition-all ${view === 'all_calendar' || (view === 'calendar' && !activeProject) ? 'tint-pink shadow-sm' : 'text-slate-500 hover:bg-white/55 hover:text-slate-900'}`}
                         >
-                            <span className="tint-pink-solid w-7 h-7 rounded-xl flex items-center justify-center text-xs shrink-0">
-                                <i className="fa-regular fa-calendar-days"></i>
-                            </span>
-                            <span>Semua Kalender</span>
+                            <div className="flex items-center space-x-3 min-w-0">
+                                <span className="tint-pink-solid w-7 h-7 rounded-xl flex items-center justify-center text-xs shrink-0">
+                                    <i className="fa-regular fa-calendar-days"></i>
+                                </span>
+                                <span>Semua Kalender</span>
+                            </div>
+                            {notifications.unreadCountByMenu.all_calendar > 0 && (
+                                <span className="relative flex h-2 w-2 shrink-0 ml-1.5" title={`${notifications.unreadCountByMenu.all_calendar} deadline tugas`}>
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-xs"></span>
+                                </span>
+                            )}
                         </button>
                     </nav>
 
@@ -9227,7 +9311,9 @@ export default function TaskManagerApp() {
                         </button>
                     </div>
                     <nav className="flex-1 px-3 space-y-1 overflow-y-auto custom-scrollbar">
-                        {sortedProjects.map(project => (
+                        {sortedProjects.map(project => {
+                            const projectUnread = notifications.unreadCountByProject[project.id] || 0;
+                            return (
                             <div key={project.id} className="group flex flex-col">
                                 <div className="flex items-center justify-between group/proj">
                                     <button
@@ -9239,6 +9325,12 @@ export default function TaskManagerApp() {
                                             style={{ color: project.color || '#6b7280' }}
                                         ></i>
                                         <span className="truncate flex-1">{project.name}</span>
+                                        {projectUnread > 0 && (
+                                            <span className="relative flex h-2 w-2 shrink-0 ml-1 mr-1" title={`${projectUnread} notifikasi baru di project ini`}>
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-xs"></span>
+                                            </span>
+                                        )}
                                         {project.isPinned && (
                                             <i className="fa-solid fa-thumbtack text-[10px] text-orange-500 shrink-0" title="Disematkan (Urgent)"></i>
                                         )}
@@ -9291,7 +9383,8 @@ export default function TaskManagerApp() {
                                     </div>
                                 )}
                             </div>
-                        ))}
+                        );
+                    })}
                     </nav>
                 </div>
 
@@ -9369,6 +9462,7 @@ export default function TaskManagerApp() {
                                 projects={projects}
                                 onOpenTask={handleEditTask}
                                 onNavigate={navigateView}
+                                notificationEngine={notifications}
                             />
 
                             {/* 1. Nama User paling kiri */}
