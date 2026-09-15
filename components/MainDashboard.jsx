@@ -1138,6 +1138,12 @@ export default function MainDashboard({
                                                                 <span>{task.updateLogs.length} update</span>
                                                             </span>
                                                         )}
+                                                        {Array.isArray(task.proofFiles || task.proof_files) && (task.proofFiles || task.proof_files).length > 0 && (
+                                                            <span className="flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60" title={`${(task.proofFiles || task.proof_files).length} Berkas Bukti Terlampir`}>
+                                                                <i className="fa-solid fa-paperclip text-[10px] text-emerald-600"></i>
+                                                                <span>{(task.proofFiles || task.proof_files).length} bukti</span>
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

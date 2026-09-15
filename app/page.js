@@ -11,6 +11,7 @@ import MainDashboard from '../components/MainDashboard';
 import NotificationCenter from '../components/NotificationCenter';
 import MemberMigrationModal from '../components/MemberMigrationModal';
 import SidebarScheduleWidget from '../components/SidebarScheduleWidget';
+import TaskProofSection from '../components/TaskProofSection';
 import { useNotifications } from '../lib/useNotifications';
 
 
@@ -1006,11 +1007,15 @@ const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onC
             const initialLogs = Array.isArray(task.updateLogs)
                 ? task.updateLogs
                 : (Array.isArray(task.update_logs) ? task.update_logs : []);
+            const initialProofs = Array.isArray(task.proofFiles)
+                ? task.proofFiles
+                : (Array.isArray(task.proof_files) ? task.proof_files : []);
             setEditedTask({
                 ...task,
                 folder: task.folder || 'General',
                 memo: task.memo || '',
                 updateLogs: initialLogs,
+                proofFiles: initialProofs,
                 todos: Array.isArray(task.todos)
                     ? task.todos.map(todo => ({ 
                         ...todo, 
@@ -1495,6 +1500,15 @@ const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onC
                             )}
                         </div>
                     </div>
+
+                    {/* Bukti Penuntasan Tugas (PDF, Excel, Word, Link) */}
+                    <TaskProofSection
+                        taskId={editedTask.id}
+                        proofFiles={editedTask.proofFiles || []}
+                        onChangeProofFiles={(nextProofs) => handleChange('proofFiles', nextProofs)}
+                        currentMemberName={currentMemberName}
+                        currentMemberId={loggedInMemberId}
+                    />
                 </div>
 
                 <div className="p-5 border-t border-slate-100 bg-slate-50/70 flex justify-end space-x-3">
@@ -1656,6 +1670,7 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
     const taskLogs = Array.isArray(task.updateLogs) ? task.updateLogs : (Array.isArray(task.update_logs) ? task.update_logs : []);
     const latestLog = taskLogs.length > 0 ? taskLogs[0] : null;
     const hasMemo = !!(task.memo && task.memo.trim());
+    const proofFiles = Array.isArray(task.proofFiles) ? task.proofFiles : (Array.isArray(task.proof_files) ? task.proof_files : []);
 
     if (isListView) {
         return (
@@ -1756,6 +1771,16 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                                     <span className="inline-flex items-center gap-1 text-[10px] text-sky-700 font-medium bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200/70 cursor-pointer" title={`Update Terakhir oleh ${latestLog?.authorName || 'Staff'}:\n${latestLog?.content || ''}`} onClick={(e) => { e.stopPropagation(); onEdit(task); }}>
                                         <i className="fa-solid fa-clock-rotate-left text-[9px] text-sky-600"></i>
                                         <span>{taskLogs.length} Update</span>
+                                    </span>
+                                )}
+                                {proofFiles.length > 0 && (
+                                    <span
+                                        className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/70 cursor-pointer"
+                                        title={`${proofFiles.length} Berkas Bukti Penuntasan Terlampir:\n${proofFiles.map(f => `• ${f.name}`).join('\n')}`}
+                                        onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+                                    >
+                                        <i className="fa-solid fa-paperclip text-[9px] text-emerald-600"></i>
+                                        <span>{proofFiles.length} Bukti</span>
                                     </span>
                                 )}
                             </div>
@@ -1979,6 +2004,16 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                         <span className="text-[10px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200/60 flex items-center gap-0.5 font-medium" title={`${taskLogs.length} Log Update`}>
                             <i className="fa-solid fa-clock-rotate-left text-[8px]"></i>
                             <span>{taskLogs.length}</span>
+                        </span>
+                    )}
+                    {proofFiles.length > 0 && (
+                        <span
+                            className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60 flex items-center gap-0.5 font-medium cursor-pointer"
+                            title={`${proofFiles.length} Berkas Bukti Terlampir:\n${proofFiles.map(f => `• ${f.name}`).join('\n')}`}
+                            onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+                        >
+                            <i className="fa-solid fa-paperclip text-[8px] text-emerald-600"></i>
+                            <span>{proofFiles.length}</span>
                         </span>
                     )}
                 </div>
@@ -7675,12 +7710,14 @@ export default function TaskManagerApp() {
             const mappedTasks = (tasksData || []).map(task => {
                 let taskMemo = task.memo || '';
                 let taskLogs = Array.isArray(task.update_logs) ? task.update_logs : (Array.isArray(task.updateLogs) ? task.updateLogs : []);
+                let taskProofs = Array.isArray(task.proof_files) ? task.proof_files : (Array.isArray(task.proofFiles) ? task.proofFiles : []);
                 let cleanTodos = Array.isArray(task.todos) ? task.todos : [];
                 let taskAuthorId = task.author_id || task.authorId || '';
                 const metaTodo = cleanTodos.find(t => t && (t.id === '__meta_task_props__' || t.isMetaTask));
                 if (metaTodo) {
                     if (!taskMemo && metaTodo.memo) taskMemo = metaTodo.memo;
                     if (taskLogs.length === 0 && Array.isArray(metaTodo.update_logs)) taskLogs = metaTodo.update_logs;
+                    if (taskProofs.length === 0 && Array.isArray(metaTodo.proof_files)) taskProofs = metaTodo.proof_files;
                     if (!taskAuthorId && (metaTodo.author_id || metaTodo.authorId)) taskAuthorId = metaTodo.author_id || metaTodo.authorId;
                     cleanTodos = cleanTodos.filter(t => t && t.id !== '__meta_task_props__' && !t.isMetaTask);
                 }
@@ -7694,6 +7731,8 @@ export default function TaskManagerApp() {
                     folder: task.folder || 'General',
                     memo: taskMemo,
                     updateLogs: taskLogs,
+                    proofFiles: taskProofs,
+                    proof_files: taskProofs,
                     startDate: task.start_date || '',
                     deadline: task.deadline || '',
                     createdAt: task.created_at || task.createdAt || '',
@@ -8154,6 +8193,7 @@ export default function TaskManagerApp() {
             picId: currentPicId || currentUserId,
             authorId: currentUserId,
             author_id: currentUserId,
+            proofFiles: [],
             todos: [],
             isNew: true
         };
@@ -8180,6 +8220,7 @@ export default function TaskManagerApp() {
             picId: currentPicId || currentUserId,
             authorId: currentUserId,
             author_id: currentUserId,
+            proofFiles: [],
             todos: [],
             isNew: true
         });
@@ -8202,6 +8243,7 @@ export default function TaskManagerApp() {
             folder: taskInput.folder || 'General',
             memo: taskInput.memo || '',
             updateLogs: Array.isArray(taskInput.updateLogs) ? taskInput.updateLogs : [],
+            proofFiles: Array.isArray(taskInput.proofFiles) ? taskInput.proofFiles : [],
             deadline: taskInput.deadline || '',
             createdAt: now,
             picId: taskInput.picId || currentPicId || currentUserId,
@@ -8219,6 +8261,7 @@ export default function TaskManagerApp() {
             folder: newTask.folder,
             memo: newTask.memo,
             update_logs: newTask.updateLogs,
+            proof_files: newTask.proofFiles,
             deadline: newTask.deadline || null,
             pic_id: dbPicId,
             todos: newTask.todos,
@@ -8232,6 +8275,7 @@ export default function TaskManagerApp() {
             if (error.message.includes('folder')) delete safePayload.folder;
             if (error.message.includes('memo')) delete safePayload.memo;
             if (error.message.includes('update_logs')) delete safePayload.update_logs;
+            if (error.message.includes('proof_files')) delete safePayload.proof_files;
             const retry = await supabase.from('tasks').insert(safePayload);
             error = retry.error;
         }
@@ -8281,6 +8325,22 @@ export default function TaskManagerApp() {
                 createdAt: log.createdAt || log.created_at || new Date().toISOString()
             }));
 
+        const normalizedProofs = (Array.isArray(updatedTask.proofFiles || updatedTask.proof_files) ? (updatedTask.proofFiles || updatedTask.proof_files) : [])
+            .filter(p => p && typeof p === 'object' && (p.url || p.name))
+            .map(p => ({
+                id: p.id || crypto.randomUUID(),
+                name: p.name || 'Dokumen',
+                url: p.url || '',
+                path: p.path || '',
+                size: p.size || 0,
+                ext: p.ext || '',
+                mimeType: p.mimeType || '',
+                uploadedBy: p.uploadedBy || 'Staff',
+                uploadedById: p.uploadedById || null,
+                uploadedAt: p.uploadedAt || new Date().toISOString(),
+                note: (p.note || '').trim()
+            }));
+
         const normalizedMemo = typeof updatedTask.memo === 'string' ? updatedTask.memo.trim() : '';
 
         const now = new Date().toISOString();
@@ -8296,6 +8356,7 @@ export default function TaskManagerApp() {
             folder: updatedTask.folder || 'General',
             memo: normalizedMemo,
             update_logs: normalizedLogs,
+            proof_files: normalizedProofs,
             start_date: updatedTask.startDate || updatedTask.start_date || null,
             deadline: updatedTask.deadline || null,
             pic_id: dbPicId,
@@ -8315,7 +8376,8 @@ export default function TaskManagerApp() {
                 if (error.message.includes('start_date')) delete safePayload.start_date;
                 if (error.message.includes('memo')) delete safePayload.memo;
                 if (error.message.includes('update_logs')) delete safePayload.update_logs;
-                if (error.message.includes('memo') || error.message.includes('update_logs')) {
+                if (error.message.includes('proof_files')) delete safePayload.proof_files;
+                if (error.message.includes('memo') || error.message.includes('update_logs') || error.message.includes('proof_files')) {
                     safePayload.todos = [
                         ...normalizedTodos.filter(t => !t.isMetaTask),
                         {
@@ -8323,7 +8385,8 @@ export default function TaskManagerApp() {
                             isMetaTask: true,
                             author_id: taskAuthorId,
                             memo: normalizedMemo,
-                            update_logs: normalizedLogs
+                            update_logs: normalizedLogs,
+                            proof_files: normalizedProofs
                         }
                     ];
                 }
@@ -8344,6 +8407,8 @@ export default function TaskManagerApp() {
                 folder: payload.folder || 'General', 
                 memo: normalizedMemo,
                 updateLogs: normalizedLogs,
+                proofFiles: normalizedProofs,
+                proof_files: normalizedProofs,
                 startDate: payload.start_date, 
                 deadline: payload.deadline, 
                 createdAt, 
@@ -8364,14 +8429,16 @@ export default function TaskManagerApp() {
                 if (error.message.includes('start_date')) delete safePayload.start_date;
                 if (error.message.includes('memo')) delete safePayload.memo;
                 if (error.message.includes('update_logs')) delete safePayload.update_logs;
-                if (error.message.includes('memo') || error.message.includes('update_logs')) {
+                if (error.message.includes('proof_files')) delete safePayload.proof_files;
+                if (error.message.includes('memo') || error.message.includes('update_logs') || error.message.includes('proof_files')) {
                     safePayload.todos = [
                         ...normalizedTodos.filter(t => !t.isMetaTask),
                         {
                             id: '__meta_task_props__',
                             isMetaTask: true,
                             memo: normalizedMemo,
-                            update_logs: normalizedLogs
+                            update_logs: normalizedLogs,
+                            proof_files: normalizedProofs
                         }
                     ];
                 }
@@ -8393,6 +8460,8 @@ export default function TaskManagerApp() {
                 folder: payload.folder || 'General', 
                 memo: normalizedMemo,
                 updateLogs: normalizedLogs,
+                proofFiles: normalizedProofs,
+                proof_files: normalizedProofs,
                 startDate: payload.start_date, 
                 deadline: payload.deadline, 
                 createdAt: t.createdAt || taskToSave.createdAt || '', 
