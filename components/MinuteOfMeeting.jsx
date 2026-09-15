@@ -150,6 +150,7 @@ export default function MinuteOfMeeting({
     const [momFilterScope, setMomFilterScope] = useState('all'); // 'all', 'my', 'shared'
     const [isEditingMeeting, setIsEditingMeeting] = useState(false);
     const [selectedMeeting, setSelectedMeeting] = useState(null); // When clicked -> detail view with table
+    const debounceTimerRef = useRef(null);
     const [meetingFormData, setMeetingFormData] = useState({
         id: '',
         title: '',
@@ -161,7 +162,7 @@ export default function MinuteOfMeeting({
         agenda: '',
         content: '',
         actionItems: [
-            { id: 'act-1', issue: '', decision: '', text: '', picId: '', deadline: '', done: false, isConverted: false }
+            { id: 'act-1', issue: '', decision: '', text: '', picId: '', deadline: '', progress: '', done: false, isConverted: false }
         ]
     });
 
@@ -414,6 +415,7 @@ export default function MinuteOfMeeting({
                     text: doc.decision || doc.issue || '',
                     picId: doc.pic_id || doc.picId || activeUserId,
                     deadline: doc.deadline || '',
+                    progress: doc.progress || '',
                     done: !!doc.is_done,
                     isConverted: false
                 }];
@@ -425,6 +427,7 @@ export default function MinuteOfMeeting({
                     text: item.text || item.decision || item.issue || '',
                     picId: item.picId || item.pic_id || activeUserId,
                     deadline: item.deadline || '',
+                    progress: item.progress || item.progress_update || '',
                     done: Boolean(item.done),
                     isConverted: Boolean(item.isConverted)
                 }));
@@ -441,7 +444,7 @@ export default function MinuteOfMeeting({
                 agenda: doc.agenda || '',
                 content: doc.content || '',
                 actionItems: parsedActionItems.length > 0 ? parsedActionItems : [
-                    { id: 'act-1', issue: '', decision: '', text: '', picId: activeUserId, deadline: '', done: false, isConverted: false }
+                    { id: 'act-1', issue: '', decision: '', text: '', picId: activeUserId, deadline: '', progress: '', done: false, isConverted: false }
                 ]
             });
         } else {
@@ -456,7 +459,7 @@ export default function MinuteOfMeeting({
                 agenda: '',
                 content: '',
                 actionItems: [
-                    { id: 'act-1', issue: '', decision: '', text: '', picId: activeUserId, deadline: '', done: false, isConverted: false }
+                    { id: 'act-1', issue: '', decision: '', text: '', picId: activeUserId, deadline: '', progress: '', done: false, isConverted: false }
                 ]
             });
         }
@@ -546,7 +549,7 @@ export default function MinuteOfMeeting({
             ...prev,
             actionItems: [
                 ...prev.actionItems,
-                { id: `act-${Date.now()}`, issue: '', decision: '', text: '', picId: prev.attendees[0] || activeUserId, deadline: '', done: false, isConverted: false }
+                { id: `act-${Date.now()}`, issue: '', decision: '', text: '', picId: prev.attendees[0] || activeUserId, deadline: '', progress: '', done: false, isConverted: false }
             ]
         }));
     };
@@ -584,8 +587,8 @@ export default function MinuteOfMeeting({
             actionItems: updatedItems
         };
 
-        await onUpdateNote(meeting.id, updatedMeeting);
         setSelectedMeeting(updatedMeeting);
+        await onUpdateNote(meeting.id, updatedMeeting);
     };
 
     // Convert SINGLE Action Item row to a Real Project Task
@@ -602,6 +605,8 @@ export default function MinuteOfMeeting({
             return;
         }
 
+        const progressNote = (item.progress || item.progress_update || '').trim();
+
         const taskToCreate = {
             projectId: targetProjectId,
             title: item.issue ? `[MoM] ${item.issue}: ${taskTitle}` : `[MoM] ${taskTitle}`,
@@ -610,6 +615,15 @@ export default function MinuteOfMeeting({
             status: 'To Do',
             priority: 'Medium',
             folder: 'General',
+            memo: progressNote ? `Update Progress MoM: ${progressNote}` : '',
+            updateLogs: progressNote ? [
+                {
+                    id: crypto.randomUUID(),
+                    timestamp: new Date().toISOString(),
+                    user: members.find(m => m.id === activeUserId)?.name || 'User',
+                    text: `Catatan Progress MoM: ${progressNote}`
+                }
+            ] : [],
             todos: [
                 {
                     id: crypto.randomUUID(),
@@ -645,8 +659,8 @@ export default function MinuteOfMeeting({
                 actionItems: updatedItems
             };
 
-            await onUpdateNote(meeting.id, updatedMeeting);
             setSelectedMeeting(updatedMeeting);
+            await onUpdateNote(meeting.id, updatedMeeting);
             alert(`✅ Berhasil membuat task "${taskTitle}" di project!`);
         }
     };
@@ -672,6 +686,7 @@ export default function MinuteOfMeeting({
 
         const tasksToCreate = pendingItems.map(item => {
             const taskTitle = (item.decision || item.issue || item.text || '').trim();
+            const progressNote = (item.progress || item.progress_update || '').trim();
             return {
                 projectId: targetProjectId,
                 title: item.issue ? `[MoM] ${item.issue}: ${taskTitle}` : `[MoM] ${taskTitle}`,
@@ -680,6 +695,15 @@ export default function MinuteOfMeeting({
                 status: 'To Do',
                 priority: 'Medium',
                 folder: 'General',
+                memo: progressNote ? `Update Progress MoM: ${progressNote}` : '',
+                updateLogs: progressNote ? [
+                    {
+                        id: crypto.randomUUID(),
+                        timestamp: new Date().toISOString(),
+                        user: members.find(m => m.id === activeUserId)?.name || 'User',
+                        text: `Catatan Progress MoM: ${progressNote}`
+                    }
+                ] : [],
                 todos: [
                     {
                         id: crypto.randomUUID(),
@@ -710,8 +734,8 @@ export default function MinuteOfMeeting({
                 actionItems: updatedItems
             };
 
-            await onUpdateNote(meeting.id, updatedMeeting);
             setSelectedMeeting(updatedMeeting);
+            await onUpdateNote(meeting.id, updatedMeeting);
             alert(`✅ Berhasil membuat ${tasksToCreate.length} task ke proyek! Cek Kanban atau Timeline.`);
         }
     };
@@ -769,6 +793,7 @@ export default function MinuteOfMeeting({
             text: '',
             picId: defaultPicId,
             deadline: '',
+            progress: '',
             done: false,
             isConverted: false
         };
@@ -780,18 +805,24 @@ export default function MinuteOfMeeting({
             actionItems: updatedItems
         };
 
-        await onUpdateNote(meeting.id, updatedMeeting);
         setSelectedMeeting(updatedMeeting);
+        await onUpdateNote(meeting.id, updatedMeeting);
     };
 
-    // Inline update of cell in Detail View table
-    const handleUpdateRowCellInDetailView = async (meeting, itemId, field, value) => {
+    // Inline update of cell in Detail View table (instant local update + debounced DB sync for typing)
+    const handleUpdateRowCellInDetailView = (meeting, itemId, field, value) => {
         const items = Array.isArray(meeting.action_items || meeting.actionItems)
             ? [...(meeting.action_items || meeting.actionItems)]
             : [];
 
         const updatedItems = items.map(it => {
-            if (it.id === itemId) return { ...it, [field]: value };
+            if (it.id === itemId) {
+                const updated = { ...it, [field]: value };
+                if (field === 'decision') {
+                    updated.text = value;
+                }
+                return updated;
+            }
             return it;
         });
 
@@ -801,8 +832,18 @@ export default function MinuteOfMeeting({
             actionItems: updatedItems
         };
 
-        await onUpdateNote(meeting.id, updatedMeeting);
+        // Instant local update to keep UI typing snappy and prevent dropped characters
         setSelectedMeeting(updatedMeeting);
+
+        const isTextInput = ['issue', 'decision', 'text', 'progress'].includes(field);
+        if (isTextInput) {
+            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = setTimeout(() => {
+                onUpdateNote(meeting.id, updatedMeeting);
+            }, 400);
+        } else {
+            onUpdateNote(meeting.id, updatedMeeting);
+        }
     };
 
     // Delete row directly in Detail View table
@@ -812,14 +853,14 @@ export default function MinuteOfMeeting({
             : [];
 
         if (items.length <= 1) {
-            const resetItem = { id: `act-${Date.now()}`, issue: '', decision: '', text: '', picId: activeUserId, deadline: '', done: false, isConverted: false };
+            const resetItem = { id: `act-${Date.now()}`, issue: '', decision: '', text: '', picId: activeUserId, deadline: '', progress: '', done: false, isConverted: false };
             const updatedMeeting = {
                 ...meeting,
                 action_items: [resetItem],
                 actionItems: [resetItem]
             };
-            await onUpdateNote(meeting.id, updatedMeeting);
             setSelectedMeeting(updatedMeeting);
+            await onUpdateNote(meeting.id, updatedMeeting);
             return;
         }
 
@@ -830,8 +871,8 @@ export default function MinuteOfMeeting({
             actionItems: updatedItems
         };
 
-        await onUpdateNote(meeting.id, updatedMeeting);
         setSelectedMeeting(updatedMeeting);
+        await onUpdateNote(meeting.id, updatedMeeting);
     };
 
     // Delete entire meeting directly from Detail View
@@ -938,9 +979,11 @@ export default function MinuteOfMeeting({
                 const picMember = members.find(m => m.id === it.picId);
                 const picText = picMember ? ` [PIC: ${picMember.name}]` : '';
                 const deadlineText = it.deadline ? ` (Deadline: ${it.deadline})` : '';
+                const progressNote = (it.progress || it.progress_update || '').trim();
+                const progressText = progressNote ? ` 📝 [Progress: ${progressNote}]` : '';
                 const statusText = it.done ? ' ✅ [Selesai]' : '';
                 const issuePrefix = it.issue ? `*${it.issue}*: ` : '';
-                return `${idx + 1}. ${issuePrefix}${it.decision || it.text}${picText}${deadlineText}${statusText}`;
+                return `${idx + 1}. ${issuePrefix}${it.decision || it.text}${picText}${deadlineText}${progressText}${statusText}`;
             }),
             `━━━━━━━━━━━━━━━━━━━━━━`,
             `_Dicatat otomatis via Busana (Beauty Asana)_`
@@ -1407,6 +1450,7 @@ export default function MinuteOfMeeting({
                                             text: doc.decision || doc.issue || '',
                                             picId: doc.pic_id || doc.picId || activeUserId,
                                             deadline: doc.deadline || '',
+                                            progress: '',
                                             done: !!doc.is_done,
                                             isConverted: false
                                         }];
@@ -1807,6 +1851,7 @@ export default function MinuteOfMeeting({
                                     text: selectedMeeting.decision || selectedMeeting.issue || '',
                                     picId: selectedMeeting.pic_id || selectedMeeting.picId || activeUserId,
                                     deadline: selectedMeeting.deadline || '',
+                                    progress: '',
                                     done: !!selectedMeeting.is_done,
                                     isConverted: false
                                 }];
@@ -1818,10 +1863,11 @@ export default function MinuteOfMeeting({
                                         <thead>
                                             <tr className="bg-slate-100/90 text-slate-700 border-b border-slate-200 font-bold">
                                                 <th className="p-3.5 w-12 text-center">#</th>
-                                                <th className="p-3.5 min-w-[240px]">Issue / Pembahasan</th>
-                                                <th className="p-3.5 min-w-[260px]">Keputusan / Solusi</th>
-                                                <th className="p-3.5 min-w-[170px]">PIC (Penanggung Jawab)</th>
-                                                <th className="p-3.5 min-w-[140px]">Tenggat (Deadline)</th>
+                                                <th className="p-3.5 min-w-[220px]">Issue / Pembahasan</th>
+                                                <th className="p-3.5 min-w-[240px]">Keputusan / Solusi</th>
+                                                <th className="p-3.5 min-w-[160px]">PIC (Penanggung Jawab)</th>
+                                                <th className="p-3.5 min-w-[130px]">Tenggat (Deadline)</th>
+                                                <th className="p-3.5 min-w-[200px]">Update Progress</th>
                                                 <th className="p-3.5 w-24 text-center">Selesai</th>
                                                 <th className="p-3.5 w-36 text-center">Aksi Task</th>
                                                 <th className="p-3.5 w-12 text-center"></th>
@@ -1830,7 +1876,7 @@ export default function MinuteOfMeeting({
                                         <tbody className="divide-y divide-slate-100 bg-white">
                                             {items.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                                                    <td colSpan={9} className="p-8 text-center text-slate-400">
                                                         Belum ada baris pembahasan / keputusan. Klik tombol <span className="font-bold text-slate-700">+ Tambah Baris</span> di atas untuk mulai mencatat.
                                                     </td>
                                                 </tr>
@@ -1859,10 +1905,7 @@ export default function MinuteOfMeeting({
                                                                     rows={2}
                                                                     value={item.decision || item.text || ''}
                                                                     placeholder="Tulis keputusan / tindak lanjut..."
-                                                                    onChange={(e) => {
-                                                                        handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'decision', e.target.value);
-                                                                        handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'text', e.target.value);
-                                                                    }}
+                                                                    onChange={(e) => handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'decision', e.target.value)}
                                                                     className={`w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 p-2 rounded-xl outline-none transition text-xs resize-none ${
                                                                         item.done ? 'line-through text-slate-400 bg-slate-100/50' : 'text-slate-700'
                                                                     }`}
@@ -1890,6 +1933,18 @@ export default function MinuteOfMeeting({
                                                                     value={item.deadline ? item.deadline.split('T')[0] : ''}
                                                                     onChange={(e) => handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'deadline', e.target.value)}
                                                                     className="w-full text-xs bg-slate-50 hover:bg-slate-100 focus:bg-white border border-slate-200 rounded-xl p-2 text-slate-700 focus:outline-none focus:border-emerald-500 cursor-pointer font-medium"
+                                                                />
+                                                            </td>
+                                                            {/* Update Progress */}
+                                                            <td className="p-3.5">
+                                                                <textarea
+                                                                    rows={2}
+                                                                    value={item.progress || item.progress_update || ''}
+                                                                    placeholder="Tulis update progress..."
+                                                                    onChange={(e) => handleUpdateRowCellInDetailView(selectedMeeting, item.id, 'progress', e.target.value)}
+                                                                    className={`w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-emerald-500 p-2 rounded-xl outline-none transition text-xs resize-none ${
+                                                                        item.done ? 'line-through text-slate-400 bg-slate-100/50' : 'text-slate-700'
+                                                                    }`}
                                                                 />
                                                             </td>
                                                             {/* Selesai Checklist */}
