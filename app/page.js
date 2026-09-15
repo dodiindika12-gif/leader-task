@@ -986,17 +986,29 @@ const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onC
     const [todoDeadlineDraft, setTodoDeadlineDraft] = useState('');
     const [isAddingNewFolder, setIsAddingNewFolder] = useState(false);
     const [newFolderDraft, setNewFolderDraft] = useState('');
+    const [newLogDraft, setNewLogDraft] = useState('');
+    const [newLogAuthorId, setNewLogAuthorId] = useState(loggedInMemberId);
 
     const currentProject = (projects || []).find(p => p.id === (editedTask.projectId || task?.projectId));
     const projectMembers = useMemo(() => {
         return getProjectMembers(currentProject, members, projectAccess, editedTask.picId);
     }, [currentProject, members, projectAccess, editedTask.picId]);
 
+    const loggedInMember = useMemo(() => {
+        return (members || []).find(m => m.id === loggedInMemberId) || null;
+    }, [members, loggedInMemberId]);
+    const currentMemberName = loggedInMember ? `${loggedInMember.name}${loggedInMember.position ? ` (${loggedInMember.position})` : ''}` : (session?.name || 'Saya');
+
     useEffect(() => {
         if (task) {
+            const initialLogs = Array.isArray(task.updateLogs)
+                ? task.updateLogs
+                : (Array.isArray(task.update_logs) ? task.update_logs : []);
             setEditedTask({
                 ...task,
                 folder: task.folder || 'General',
+                memo: task.memo || '',
+                updateLogs: initialLogs,
                 todos: Array.isArray(task.todos)
                     ? task.todos.map(todo => ({ 
                         ...todo, 
@@ -1010,6 +1022,8 @@ const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onC
             setTodoDeadlineDraft('');
             setIsAddingNewFolder(false);
             setNewFolderDraft('');
+            setNewLogDraft('');
+            setNewLogAuthorId(loggedInMemberId);
         }
     }, [task, loggedInMemberId]);
 
@@ -1018,6 +1032,7 @@ const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onC
     const handleChange = (field, value) => setEditedTask({ ...editedTask, [field]: value });
     const todos = Array.isArray(editedTask.todos) ? editedTask.todos : [];
     const todoProgress = getTodoProgress(editedTask);
+    const updateLogs = Array.isArray(editedTask.updateLogs) ? editedTask.updateLogs : [];
 
     const updateTodos = (nextTodos) => handleChange('todos', nextTodos);
 
@@ -1058,6 +1073,31 @@ const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onC
 
     const handleDeleteTodo = (id) => {
         updateTodos(todos.filter(todo => todo.id !== id));
+    };
+
+    const handleAddUpdateLog = () => {
+        const text = newLogDraft.trim();
+        if (!text) return;
+
+        const author = (members || []).find(m => m.id === (newLogAuthorId || loggedInMemberId));
+        const authorName = author 
+            ? `${author.name}${author.position ? ` (${author.position})` : ''}` 
+            : (session?.name || 'Staff');
+
+        const newLog = {
+            id: crypto.randomUUID(),
+            content: text,
+            authorId: newLogAuthorId || loggedInMemberId || '',
+            authorName,
+            createdAt: new Date().toISOString()
+        };
+
+        handleChange('updateLogs', [newLog, ...updateLogs]);
+        setNewLogDraft('');
+    };
+
+    const handleDeleteUpdateLog = (logId) => {
+        handleChange('updateLogs', updateLogs.filter(l => l.id !== logId));
     };
 
     return (
@@ -1211,6 +1251,33 @@ const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onC
                         </div>
                     </div>
 
+                    {/* Memo Teks / Catatan Tugas */}
+                    <div className="mt-6 border-t border-slate-100 pt-5">
+                        <div className="flex items-center justify-between mb-2.5">
+                            <label className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-xs border border-amber-200/60 shadow-2xs">
+                                    <i className="fa-regular fa-note-sticky"></i>
+                                </span>
+                                <span>Memo / Catatan Tugas</span>
+                            </label>
+                            <span className="text-[11px] text-slate-400">Briefing & instruksi kerja</span>
+                        </div>
+                        <div className="relative rounded-2xl bg-amber-50/25 border border-amber-200/60 p-3 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-100 transition-all">
+                            <textarea
+                                value={editedTask.memo || ''}
+                                onChange={(e) => handleChange('memo', e.target.value)}
+                                rows={3}
+                                placeholder="Tulis memo, instruksi kerja, briefing detail, atau link referensi untuk PIC tugas di sini..."
+                                className="w-full text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 bg-transparent border-none outline-none resize-y min-h-[70px] leading-relaxed"
+                            />
+                            {editedTask.memo && (
+                                <div className="flex justify-end pt-1 text-[10px] text-slate-400">
+                                    {editedTask.memo.length} karakter
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="mt-6 border-t border-gray-100 pt-5">
                         <div className="flex items-center justify-between mb-3">
                             <label className="text-sm font-semibold text-gray-800 flex items-center">
@@ -1330,6 +1397,100 @@ const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onC
                                     Tambah
                                 </button>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Log Update & Progres Tugas */}
+                    <div className="mt-6 border-t border-slate-100 pt-5">
+                        <div className="flex items-center justify-between mb-3">
+                            <label className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xs border border-sky-200/60 shadow-2xs">
+                                    <i className="fa-solid fa-clock-rotate-left"></i>
+                                </span>
+                                <span>Log Update & Progres</span>
+                            </label>
+                            <span className="text-xs text-sky-700 font-semibold bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-200/60">
+                                {updateLogs.length} update
+                            </span>
+                        </div>
+
+                        {/* Form Posting Update Baru */}
+                        <div className="p-3.5 bg-sky-50/40 rounded-2xl border border-sky-100 mb-3.5 space-y-2.5">
+                            <div className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                <i className="fa-solid fa-plus text-[10px] text-sky-600"></i>
+                                <span>Posting Update Terkini</span>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <textarea
+                                    value={newLogDraft}
+                                    onChange={(e) => setNewLogDraft(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                            e.preventDefault();
+                                            handleAddUpdateLog();
+                                        }
+                                    }}
+                                    rows={2}
+                                    placeholder="Tulis ringkasan perkembangan tugas (misal: 'Sudah acc direksi, lanjut cetak')... (Ctrl+Enter untuk posting)"
+                                    className="w-full text-xs sm:text-sm border border-slate-200 rounded-xl p-2.5 outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100 bg-white resize-none"
+                                />
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex items-center gap-1.5 text-[11px] text-slate-600 bg-white px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs">
+                                        <i className="fa-regular fa-user text-slate-400 text-[10px]"></i>
+                                        <span className="font-medium text-slate-700">{currentMemberName}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleAddUpdateLog}
+                                        disabled={!newLogDraft.trim()}
+                                        className="px-4 py-1.5 text-xs font-semibold bg-sky-600 text-white rounded-xl hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto"
+                                    >
+                                        <i className="fa-solid fa-paper-plane text-[10px]"></i>
+                                        <span>Kirim Update</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Daftar Riwayat Update */}
+                        <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                            {updateLogs.map(log => (
+                                <div key={log.id} className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs hover:border-sky-200 transition-colors group">
+                                    <div className="flex items-start justify-between gap-2 mb-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                                {(log.authorName || 'U')[0]}
+                                            </span>
+                                            <span className="text-xs font-semibold text-slate-800">
+                                                {log.authorName || 'Staff'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                                <i className="fa-regular fa-clock text-[9px]"></i>
+                                                {formatInputDate(log.createdAt, true)}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDeleteUpdateLog(log.id)}
+                                                className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 cursor-pointer"
+                                                title="Hapus update ini"
+                                            >
+                                                <i className="fa-regular fa-trash-can text-[11px]"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap pl-7">
+                                        {log.content}
+                                    </p>
+                                </div>
+                            ))}
+                            {updateLogs.length === 0 && (
+                                <div className="text-xs text-slate-400 border border-dashed border-slate-200 rounded-2xl p-4 text-center bg-slate-50/50 flex flex-col items-center gap-1">
+                                    <i className="fa-solid fa-clock-rotate-left text-slate-300 text-sm"></i>
+                                    <span>Belum ada riwayat update. Bagikan progres tugas pertama di form atas.</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1490,6 +1651,9 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
         return getProjectMembers(project, members, projectAccess, task.picId);
     }, [project, members, projectAccess, task.picId]);
     const accentColor = project?.color || '#7c3aed';
+    const taskLogs = Array.isArray(task.updateLogs) ? task.updateLogs : (Array.isArray(task.update_logs) ? task.update_logs : []);
+    const latestLog = taskLogs.length > 0 ? taskLogs[0] : null;
+    const hasMemo = !!(task.memo && task.memo.trim());
 
     if (isListView) {
         return (
@@ -1566,6 +1730,18 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                                     <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/70" title={`Tanggal input: ${formatInputDate(task.createdAt, true)}`}>
                                         <i className="fa-regular fa-clock text-[9px]"></i>
                                         <span>Input: {formatInputDate(task.createdAt)}</span>
+                                    </span>
+                                )}
+                                {hasMemo && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 font-medium bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/70 cursor-pointer" title={`Memo Tugas:\n${task.memo}`} onClick={(e) => { e.stopPropagation(); onEdit(task); }}>
+                                        <i className="fa-regular fa-note-sticky text-[9px] text-amber-600"></i>
+                                        <span>Memo</span>
+                                    </span>
+                                )}
+                                {taskLogs.length > 0 && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-sky-700 font-medium bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200/70 cursor-pointer" title={`Update Terakhir oleh ${latestLog?.authorName || 'Staff'}:\n${latestLog?.content || ''}`} onClick={(e) => { e.stopPropagation(); onEdit(task); }}>
+                                        <i className="fa-solid fa-clock-rotate-left text-[9px] text-sky-600"></i>
+                                        <span>{taskLogs.length} Update</span>
                                     </span>
                                 )}
                             </div>
@@ -1694,8 +1870,44 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                 </div>
             )}
 
+            {/* Memo Preview Snippet */}
+            {hasMemo && (
+                <div
+                    onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+                    className="mb-2.5 mx-0.5 px-2.5 py-1.5 rounded-xl bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-950 flex items-start gap-1.5 cursor-pointer hover:bg-amber-100/70 transition-colors shadow-2xs group/memo"
+                    title={`Memo Tugas:\n${task.memo}`}
+                >
+                    <i className="fa-regular fa-note-sticky text-amber-600 mt-0.5 shrink-0 text-[10px]"></i>
+                    <p className="line-clamp-2 leading-relaxed text-[11px] text-slate-700 select-none">
+                        {task.memo}
+                    </p>
+                </div>
+            )}
+
+            {/* Latest Update Log Snippet */}
+            {latestLog && (
+                <div
+                    onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+                    className="mb-2.5 mx-0.5 px-2.5 py-1.5 rounded-xl bg-sky-50/70 border border-sky-200/60 text-[11px] text-sky-950 flex flex-col gap-0.5 cursor-pointer hover:bg-sky-100/70 transition-colors shadow-2xs group/log"
+                    title={`Update Terakhir oleh ${latestLog.authorName || 'Staff'}:\n${latestLog.content}`}
+                >
+                    <div className="flex items-center justify-between text-[10px] text-sky-700">
+                        <span className="font-semibold flex items-center gap-1 truncate max-w-[130px]">
+                            <i className="fa-solid fa-clock-rotate-left text-[9px]"></i>
+                            <span>{latestLog.authorName || 'Staff'}</span>
+                        </span>
+                        <span className="text-[9px] text-sky-500 font-normal shrink-0">
+                            {formatInputDate(latestLog.createdAt)}
+                        </span>
+                    </div>
+                    <p className="line-clamp-1 leading-snug text-[11px] text-slate-700">
+                        {latestLog.content}
+                    </p>
+                </div>
+            )}
+
             <div className="pt-2 border-t border-gray-100 flex justify-between items-center mt-auto">
-                <div className="flex items-center">
+                <div className="flex items-center flex-wrap gap-1">
                     {isEditingDeadline ? (
                         <input
                             type="date"
@@ -1729,6 +1941,17 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                         <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 bg-slate-50 px-1.5 py-1 rounded border border-slate-200/60 ml-1" title={`Tanggal input: ${formatInputDate(task.createdAt, true)}`}>
                             <i className="fa-regular fa-clock text-[9px]"></i>
                             <span>{formatInputDate(task.createdAt)}</span>
+                        </span>
+                    )}
+                    {hasMemo && (
+                        <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 flex items-center gap-0.5" title="Ada Memo Teks">
+                            <i className="fa-regular fa-note-sticky text-[9px]"></i>
+                        </span>
+                    )}
+                    {taskLogs.length > 0 && (
+                        <span className="text-[10px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200/60 flex items-center gap-0.5 font-medium" title={`${taskLogs.length} Log Update`}>
+                            <i className="fa-solid fa-clock-rotate-left text-[8px]"></i>
+                            <span>{taskLogs.length}</span>
                         </span>
                     )}
                 </div>
@@ -5505,10 +5728,14 @@ const ProjectChecklistDropdown = ({
     projects = [],
     selectedProjectIds = [],
     onChangeSelected,
+    onSave,
+    onResetDefault,
+    hasSavedFilter = false,
     tasks = []
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [justSaved, setJustSaved] = useState(false);
     const dropdownRef = useRef(null);
 
     useEffect(() => {
@@ -5550,6 +5777,15 @@ const ProjectChecklistDropdown = ({
         }
     };
 
+    const handleExplicitSave = () => {
+        onSave?.(selectedProjectIds);
+        setJustSaved(true);
+        setTimeout(() => {
+            setJustSaved(false);
+            setIsOpen(false);
+        }, 750);
+    };
+
     return (
         <div className="relative inline-block text-left" ref={dropdownRef}>
             <button
@@ -5573,11 +5809,17 @@ const ProjectChecklistDropdown = ({
                 }`}>
                     {selectedProjectIds.length}/{projects.length}
                 </span>
+                {hasSavedFilter && (
+                    <span className="flex items-center gap-1 text-[9px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200/80" title="Pilihan filter tersimpan">
+                        <i className="fa-solid fa-bookmark text-[8px]"></i>
+                        <span className="hidden sm:inline">Saved</span>
+                    </span>
+                )}
                 <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-pink-600' : ''}`}></i>
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 z-50 p-3 space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
+                <div className="absolute right-0 mt-2 w-72 sm:w-84 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 z-50 p-3.5 space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
                     <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                         <div className="flex items-center gap-1.5">
                             <span className="text-xs font-bold text-slate-800">Pilih Proyek</span>
@@ -5658,8 +5900,49 @@ const ProjectChecklistDropdown = ({
                         )}
                     </div>
 
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 px-1">
-                        <span>Hanya proyek yang di-share ke akun Anda</span>
+                    <div className="pt-2.5 border-t border-slate-100 space-y-2">
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
+                            <span>Hanya proyek yang di-share ke Anda</span>
+                            {hasSavedFilter && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        onResetDefault?.();
+                                        setJustSaved(false);
+                                    }}
+                                    className="text-slate-400 hover:text-rose-600 font-medium transition cursor-pointer flex items-center gap-1"
+                                    title="Reset ke pengaturan default"
+                                >
+                                    <i className="fa-solid fa-rotate-left text-[9px]"></i>
+                                    <span>Reset Default</span>
+                                </button>
+                            )}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={handleExplicitSave}
+                            className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer ${
+                                justSaved 
+                                    ? 'bg-emerald-600 text-white shadow-emerald-200' 
+                                    : 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white shadow-pink-200 hover:shadow-md active:scale-[0.99]'
+                            }`}
+                        >
+                            {justSaved ? (
+                                <>
+                                    <i className="fa-solid fa-check text-xs"></i>
+                                    <span>Filter Berhasil Disimpan!</span>
+                                </>
+                            ) : (
+                                <>
+                                    <i className="fa-solid fa-floppy-disk text-xs"></i>
+                                    <span>Simpan Filter Kalender</span>
+                                </>
+                            )}
+                        </button>
+                        <p className="text-[10px] text-slate-400 text-center leading-snug">
+                            Filter otomatis diingat setiap Anda membuka Semua Kalender
+                        </p>
                     </div>
                 </div>
             )}
@@ -5685,10 +5968,77 @@ const AbsCalendar = ({
         return d;
     });
 
-    const [selectedProjectIds, setSelectedProjectIds] = useState(null);
+    const storageKey = useMemo(() => {
+        const userId = session?.memberId || session?.id || session?.email || 'default';
+        return `task_leader_all_calendar_projects_${userId}`;
+    }, [session]);
+
+    const [hasSavedPreference, setHasSavedPreference] = useState(false);
+
+    const [selectedProjectIds, setSelectedProjectIds] = useState(() => {
+        if (typeof window === 'undefined') return null;
+        try {
+            const userId = session?.memberId || session?.id || session?.email || 'default';
+            const saved = localStorage.getItem(`task_leader_all_calendar_projects_${userId}`);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load saved calendar projects filter', e);
+        }
+        return null;
+    });
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            const saved = localStorage.getItem(storageKey);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed)) {
+                    setSelectedProjectIds(parsed);
+                    setHasSavedPreference(true);
+                    return;
+                }
+            }
+            setSelectedProjectIds(null);
+            setHasSavedPreference(false);
+        } catch (e) {
+            setSelectedProjectIds(null);
+            setHasSavedPreference(false);
+        }
+    }, [storageKey]);
+
+    const handleUpdateSelectedProjectIds = (newIds) => {
+        setSelectedProjectIds(newIds);
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(newIds));
+            setHasSavedPreference(true);
+        } catch (e) {
+            console.error('Failed to save calendar projects', e);
+        }
+    };
+
+    const handleExplicitSave = (ids) => {
+        const targetIds = ids !== undefined ? ids : (selectedProjectIds ?? effectiveSelectedIds);
+        handleUpdateSelectedProjectIds(targetIds);
+    };
+
+    const handleResetFilter = () => {
+        try {
+            localStorage.removeItem(storageKey);
+        } catch (e) {}
+        setHasSavedPreference(false);
+        const defaultEnabled = projects.filter(p => p.showInCalendar !== false).map(p => p.id);
+        setSelectedProjectIds(defaultEnabled.length > 0 ? defaultEnabled : projects.map(p => p.id));
+    };
 
     const effectiveSelectedIds = useMemo(() => {
         if (selectedProjectIds !== null) {
+            if (projects.length === 0) return selectedProjectIds;
             const validIds = new Set(projects.map(p => p.id));
             return selectedProjectIds.filter(id => validIds.has(id));
         }
@@ -5752,8 +6102,11 @@ const AbsCalendar = ({
                         <ProjectChecklistDropdown
                             projects={projects}
                             selectedProjectIds={effectiveSelectedIds}
-                            onChangeSelected={setSelectedProjectIds}
-                            tasks={roleFilteredTasks}
+                            onChangeSelected={handleUpdateSelectedProjectIds}
+                            onSave={handleExplicitSave}
+                            onResetDefault={handleResetFilter}
+                            hasSavedFilter={hasSavedPreference}
+                            tasks={tasks}
                         />
                     )}
                     <button 
@@ -7119,14 +7472,19 @@ export default function TaskManagerApp() {
     // Ensure active project is accessible within filtered projects
     useEffect(() => {
         if (filteredProjects.length > 0) {
-            const isAccessible = filteredProjects.some(p => p.id === activeProject);
-            if (!isAccessible) {
+            const isProjectView = view === 'table' || view === 'kanban' || view === 'timeline' || view === 'calendar';
+            if (activeProject) {
+                const isAccessible = filteredProjects.some(p => p.id === activeProject);
+                if (!isAccessible) {
+                    setActiveProject(filteredProjects[0].id);
+                }
+            } else if (isProjectView) {
                 setActiveProject(filteredProjects[0].id);
             }
         } else if (projects.length > 0 && filteredProjects.length === 0) {
             setActiveProject('');
         }
-    }, [filteredProjects, activeProject, projects.length]);
+    }, [filteredProjects, activeProject, projects.length, view]);
 
 
     useEffect(() => {
@@ -7237,25 +7595,37 @@ export default function TaskManagerApp() {
                 };
             });
 
-            const mappedTasks = (tasksData || []).map(task => ({
-                id: task.id,
-                projectId: task.project_id,
-                title: task.title,
-                status: task.status,
-                priority: task.priority,
-                folder: task.folder || 'General',
-                startDate: task.start_date || '',
-                deadline: task.deadline || '',
-                createdAt: task.created_at || task.createdAt || '',
-                picId: task.pic_id || '',
-                todos: Array.isArray(task.todos)
-                    ? task.todos.map(todo => ({
+            const mappedTasks = (tasksData || []).map(task => {
+                let taskMemo = task.memo || '';
+                let taskLogs = Array.isArray(task.update_logs) ? task.update_logs : (Array.isArray(task.updateLogs) ? task.updateLogs : []);
+                let cleanTodos = Array.isArray(task.todos) ? task.todos : [];
+                const metaTodo = cleanTodos.find(t => t && (t.id === '__meta_task_props__' || t.isMetaTask));
+                if (metaTodo) {
+                    if (!taskMemo && metaTodo.memo) taskMemo = metaTodo.memo;
+                    if (taskLogs.length === 0 && Array.isArray(metaTodo.update_logs)) taskLogs = metaTodo.update_logs;
+                    cleanTodos = cleanTodos.filter(t => t && t.id !== '__meta_task_props__' && !t.isMetaTask);
+                }
+
+                return {
+                    id: task.id,
+                    projectId: task.project_id,
+                    title: task.title,
+                    status: task.status,
+                    priority: task.priority,
+                    folder: task.folder || 'General',
+                    memo: taskMemo,
+                    updateLogs: taskLogs,
+                    startDate: task.start_date || '',
+                    deadline: task.deadline || '',
+                    createdAt: task.created_at || task.createdAt || '',
+                    picId: task.pic_id || '',
+                    todos: cleanTodos.map(todo => ({
                         ...todo,
                         picId: todo.picId || todo.pic_id || '',
                         deadline: todo.deadline || todo.due_date || ''
                     }))
-                    : []
-            }));
+                };
+            });
 
             const mappedMembers = membersData || [];
             if (divsData && divsData.length > 0) {
@@ -7603,7 +7973,7 @@ export default function TaskManagerApp() {
 
         setProjects(prev => [...prev, newProject]);
         setActiveProject(newProject.id);
-        if (view === 'members' || view === 'settings' || view === 'dashboard' || view === 'notes' || view === 'calendar' || view === 'schedule_meeting' || view === 'schedule_worksheet') setView('table');
+        if (view === 'members' || view === 'settings' || view === 'dashboard' || view === 'notes' || view === 'calendar' || view === 'all_calendar' || view === 'schedule_meeting' || view === 'schedule_worksheet') setView('table');
         setIsCreateModalOpen(false);
     };
 
@@ -7735,28 +8105,42 @@ export default function TaskManagerApp() {
             id: crypto.randomUUID(),
             projectId: taskInput.projectId,
             title: taskInput.title.trim(),
-            status: 'To Do',
+            status: taskInput.status || 'To Do',
             priority: taskInput.priority || 'Medium',
             folder: taskInput.folder || 'General',
+            memo: taskInput.memo || '',
+            updateLogs: Array.isArray(taskInput.updateLogs) ? taskInput.updateLogs : [],
             deadline: taskInput.deadline || '',
             createdAt: now,
             picId: taskInput.picId || currentPicId || '',
             todos: []
         };
 
-        const { error } = await supabase.from('tasks').insert({
+        const payload = {
             id: newTask.id,
             project_id: dbProjectId,
             title: newTask.title,
             status: newTask.status,
             priority: newTask.priority,
             folder: newTask.folder,
+            memo: newTask.memo,
+            update_logs: newTask.updateLogs,
             deadline: newTask.deadline || null,
             pic_id: dbPicId,
             todos: newTask.todos,
             created_at: now,
             updated_at: now
-        });
+        };
+
+        let { error } = await supabase.from('tasks').insert(payload);
+        if (error && error.message) {
+            let safePayload = { ...payload };
+            if (error.message.includes('folder')) delete safePayload.folder;
+            if (error.message.includes('memo')) delete safePayload.memo;
+            if (error.message.includes('update_logs')) delete safePayload.update_logs;
+            const retry = await supabase.from('tasks').insert(safePayload);
+            error = retry.error;
+        }
 
         if (error) {
             console.error('Supabase quick task insert error:', error);
@@ -7782,6 +8166,18 @@ export default function TaskManagerApp() {
                 deadline: todo.deadline || todo.due_date || ''
             }));
 
+        const normalizedLogs = (Array.isArray(updatedTask.updateLogs || updatedTask.update_logs) ? (updatedTask.updateLogs || updatedTask.update_logs) : [])
+            .filter(log => log && typeof log === 'object' && (log.content || '').trim())
+            .map(log => ({
+                id: log.id || crypto.randomUUID(),
+                content: (log.content || '').trim(),
+                authorId: log.authorId || log.author_id || '',
+                authorName: log.authorName || log.author_name || 'Staff',
+                createdAt: log.createdAt || log.created_at || new Date().toISOString()
+            }));
+
+        const normalizedMemo = typeof updatedTask.memo === 'string' ? updatedTask.memo.trim() : '';
+
         const now = new Date().toISOString();
         const dbProjectId = safeUUID(updatedTask.projectId, null);
         const dbPicId = safeUUID(updatedTask.picId, null);
@@ -7793,6 +8189,8 @@ export default function TaskManagerApp() {
             status: updatedTask.status || 'To Do',
             priority: updatedTask.priority || 'Medium',
             folder: updatedTask.folder || 'General',
+            memo: normalizedMemo,
+            update_logs: normalizedLogs,
             start_date: updatedTask.startDate || updatedTask.start_date || null,
             deadline: updatedTask.deadline || null,
             pic_id: dbPicId,
@@ -7810,6 +8208,19 @@ export default function TaskManagerApp() {
                 let safePayload = { ...payload };
                 if (error.message.includes('folder')) delete safePayload.folder;
                 if (error.message.includes('start_date')) delete safePayload.start_date;
+                if (error.message.includes('memo')) delete safePayload.memo;
+                if (error.message.includes('update_logs')) delete safePayload.update_logs;
+                if (error.message.includes('memo') || error.message.includes('update_logs')) {
+                    safePayload.todos = [
+                        ...normalizedTodos.filter(t => !t.isMetaTask),
+                        {
+                            id: '__meta_task_props__',
+                            isMetaTask: true,
+                            memo: normalizedMemo,
+                            update_logs: normalizedLogs
+                        }
+                    ];
+                }
                 const retry = await supabase.from('tasks').insert(safePayload);
                 error = retry.error;
             }
@@ -7820,7 +8231,18 @@ export default function TaskManagerApp() {
                 return false;
             }
 
-            setTasks(prev => [...prev, { ...taskToSave, status: payload.status, priority: payload.priority, folder: payload.folder || 'General', startDate: payload.start_date, deadline: payload.deadline, createdAt, todos: normalizedTodos }]);
+            setTasks(prev => [...prev, { 
+                ...taskToSave, 
+                status: payload.status, 
+                priority: payload.priority, 
+                folder: payload.folder || 'General', 
+                memo: normalizedMemo,
+                updateLogs: normalizedLogs,
+                startDate: payload.start_date, 
+                deadline: payload.deadline, 
+                createdAt, 
+                todos: normalizedTodos 
+            }]);
             return true;
         } else {
             const { isNew, ...taskToSave } = updatedTask;
@@ -7829,6 +8251,19 @@ export default function TaskManagerApp() {
                 let safePayload = { ...payload };
                 if (error.message.includes('folder')) delete safePayload.folder;
                 if (error.message.includes('start_date')) delete safePayload.start_date;
+                if (error.message.includes('memo')) delete safePayload.memo;
+                if (error.message.includes('update_logs')) delete safePayload.update_logs;
+                if (error.message.includes('memo') || error.message.includes('update_logs')) {
+                    safePayload.todos = [
+                        ...normalizedTodos.filter(t => !t.isMetaTask),
+                        {
+                            id: '__meta_task_props__',
+                            isMetaTask: true,
+                            memo: normalizedMemo,
+                            update_logs: normalizedLogs
+                        }
+                    ];
+                }
                 const retry = await supabase.from('tasks').update(safePayload).eq('id', updatedTask.id);
                 error = retry.error;
             }
@@ -7839,7 +8274,19 @@ export default function TaskManagerApp() {
                 return false;
             }
 
-            setTasks(prev => prev.map(t => (t.id === updatedTask.id ? { ...t, ...taskToSave, status: payload.status, priority: payload.priority, folder: payload.folder || 'General', startDate: payload.start_date, deadline: payload.deadline, createdAt: t.createdAt || taskToSave.createdAt || '', todos: normalizedTodos } : t)));
+            setTasks(prev => prev.map(t => (t.id === updatedTask.id ? { 
+                ...t, 
+                ...taskToSave, 
+                status: payload.status, 
+                priority: payload.priority, 
+                folder: payload.folder || 'General', 
+                memo: normalizedMemo,
+                updateLogs: normalizedLogs,
+                startDate: payload.start_date, 
+                deadline: payload.deadline, 
+                createdAt: t.createdAt || taskToSave.createdAt || '', 
+                todos: normalizedTodos 
+            } : t)));
             return true;
         }
     };
@@ -7854,6 +8301,9 @@ export default function TaskManagerApp() {
             title: item.title.trim(),
             status: item.status || 'To Do',
             priority: item.priority || 'Medium',
+            folder: item.folder || 'General',
+            memo: item.memo || '',
+            update_logs: Array.isArray(item.updateLogs) ? item.updateLogs : [],
             start_date: item.startDate || null,
             deadline: item.deadline || null,
             pic_id: safeUUID(item.picId, null),
@@ -7863,8 +8313,15 @@ export default function TaskManagerApp() {
         }));
 
         let { error } = await supabase.from('tasks').insert(preparedTasks);
-        if (error && error.message && error.message.includes('start_date')) {
-            const safeTasks = preparedTasks.map(({ start_date, ...t }) => t);
+        if (error && error.message) {
+            let safeTasks = preparedTasks.map(t => {
+                let copy = { ...t };
+                if (error.message.includes('start_date')) delete copy.start_date;
+                if (error.message.includes('folder')) delete copy.folder;
+                if (error.message.includes('memo')) delete copy.memo;
+                if (error.message.includes('update_logs')) delete copy.update_logs;
+                return copy;
+            });
             const retry = await supabase.from('tasks').insert(safeTasks);
             error = retry.error;
         }
@@ -7881,6 +8338,9 @@ export default function TaskManagerApp() {
             title: t.title,
             status: t.status,
             priority: t.priority,
+            folder: t.folder || 'General',
+            memo: t.memo || '',
+            updateLogs: t.update_logs || [],
             startDate: t.start_date,
             deadline: t.deadline,
             createdAt: t.created_at,
@@ -8559,7 +9019,7 @@ export default function TaskManagerApp() {
 
     const handleSelectProject = (projectId) => {
         setActiveProject(projectId);
-        if (view === 'members' || view === 'settings' || view === 'dashboard' || view === 'notes' || view === 'schedule_meeting' || view === 'schedule_worksheet') setView('table');
+        if (view === 'members' || view === 'settings' || view === 'dashboard' || view === 'notes' || view === 'schedule_meeting' || view === 'schedule_worksheet' || view === 'all_calendar') setView('table');
         closeMobileSidebar();
     };
 
@@ -8749,9 +9209,9 @@ export default function TaskManagerApp() {
                         <button
                             onClick={() => {
                                 setActiveProject('');
-                                navigateView('calendar');
+                                navigateView('all_calendar');
                             }}
-                            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-2xl text-sm font-medium transition-all ${view === 'calendar' && !activeProject ? 'tint-pink shadow-sm' : 'text-slate-500 hover:bg-white/55 hover:text-slate-900'}`}
+                            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-2xl text-sm font-medium transition-all ${view === 'all_calendar' || (view === 'calendar' && !activeProject) ? 'tint-pink shadow-sm' : 'text-slate-500 hover:bg-white/55 hover:text-slate-900'}`}
                         >
                             <span className="tint-pink-solid w-7 h-7 rounded-xl flex items-center justify-center text-xs shrink-0">
                                 <i className="fa-regular fa-calendar-days"></i>
@@ -8871,7 +9331,7 @@ export default function TaskManagerApp() {
                                         <span className="text-gray-400">Jadwal /</span>
                                         <span className="font-medium text-gray-800">Worksheet</span>
                                     </>
-                                ) : view === 'calendar' && !activeProject ? (
+                                ) : (view === 'all_calendar' || (view === 'calendar' && !activeProject)) ? (
                                     <>
                                         <i className="fa-regular fa-calendar-days text-pink-500"></i>
                                         <span className="font-medium text-gray-800">Semua Kalender</span>
@@ -9017,7 +9477,7 @@ export default function TaskManagerApp() {
                             />
                         )}
 
-                        {view === 'calendar' && !activeProject && (
+                        {(view === 'all_calendar' || (view === 'calendar' && !activeProject)) && (
                             <div className="w-full animate-fade-in space-y-4">
                                 <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
                                     <div>

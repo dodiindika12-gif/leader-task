@@ -1126,6 +1126,18 @@ export default function MainDashboard({
                                                                 <span>{task.todos.filter(t => t.done).length}/{task.todos.length} sub-tugas</span>
                                                             </span>
                                                         )}
+                                                        {task.memo && (
+                                                            <span className="flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60" title={`Memo: ${task.memo}`}>
+                                                                <i className="fa-regular fa-note-sticky text-[10px] text-amber-600"></i>
+                                                                <span>Memo</span>
+                                                            </span>
+                                                        )}
+                                                        {Array.isArray(task.updateLogs) && task.updateLogs.length > 0 && (
+                                                            <span className="flex items-center gap-1 text-[11px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200/60" title={`Update Terakhir: ${task.updateLogs[0]?.content || ''}`}>
+                                                                <i className="fa-solid fa-clock-rotate-left text-[10px] text-sky-600"></i>
+                                                                <span>{task.updateLogs.length} update</span>
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
