@@ -7676,10 +7676,12 @@ export default function TaskManagerApp() {
                 let taskMemo = task.memo || '';
                 let taskLogs = Array.isArray(task.update_logs) ? task.update_logs : (Array.isArray(task.updateLogs) ? task.updateLogs : []);
                 let cleanTodos = Array.isArray(task.todos) ? task.todos : [];
+                let taskAuthorId = task.author_id || task.authorId || '';
                 const metaTodo = cleanTodos.find(t => t && (t.id === '__meta_task_props__' || t.isMetaTask));
                 if (metaTodo) {
                     if (!taskMemo && metaTodo.memo) taskMemo = metaTodo.memo;
                     if (taskLogs.length === 0 && Array.isArray(metaTodo.update_logs)) taskLogs = metaTodo.update_logs;
+                    if (!taskAuthorId && (metaTodo.author_id || metaTodo.authorId)) taskAuthorId = metaTodo.author_id || metaTodo.authorId;
                     cleanTodos = cleanTodos.filter(t => t && t.id !== '__meta_task_props__' && !t.isMetaTask);
                 }
 
@@ -7696,6 +7698,8 @@ export default function TaskManagerApp() {
                     deadline: task.deadline || '',
                     createdAt: task.created_at || task.createdAt || '',
                     picId: task.pic_id || '',
+                    authorId: taskAuthorId,
+                    author_id: taskAuthorId,
                     todos: cleanTodos.map(todo => ({
                         ...todo,
                         picId: todo.picId || todo.pic_id || '',
@@ -8137,6 +8141,7 @@ export default function TaskManagerApp() {
 
     const handleAddTask = async (status = 'To Do', folder = 'General') => {
         if (!activeProject) return;
+        const currentUserId = session?.memberId || currentPicId || '';
         const newTaskTemplate = {
             id: crypto.randomUUID(),
             projectId: activeProject,
@@ -8146,7 +8151,9 @@ export default function TaskManagerApp() {
             folder: folder || 'General',
             deadline: '',
             startDate: '',
-            picId: currentPicId || '',
+            picId: currentPicId || currentUserId,
+            authorId: currentUserId,
+            author_id: currentUserId,
             todos: [],
             isNew: true
         };
@@ -8159,6 +8166,7 @@ export default function TaskManagerApp() {
             alert('Buat project terlebih dahulu sebelum menambah task kalender.');
             return;
         }
+        const currentUserId = session?.memberId || currentPicId || '';
 
         setEditingTask({
             id: crypto.randomUUID(),
@@ -8169,7 +8177,9 @@ export default function TaskManagerApp() {
             folder: 'General',
             deadline,
             createdAt: new Date().toISOString(),
-            picId: currentPicId || '',
+            picId: currentPicId || currentUserId,
+            authorId: currentUserId,
+            author_id: currentUserId,
             todos: [],
             isNew: true
         });
@@ -8179,8 +8189,9 @@ export default function TaskManagerApp() {
         if (!taskInput.title?.trim() || !taskInput.projectId) return false;
 
         const now = new Date().toISOString();
+        const currentUserId = session?.memberId || currentPicId || '';
         const dbProjectId = safeUUID(taskInput.projectId, null);
-        const dbPicId = safeUUID(taskInput.picId || currentPicId, null);
+        const dbPicId = safeUUID(taskInput.picId || currentPicId || currentUserId, null);
 
         const newTask = {
             id: crypto.randomUUID(),
@@ -8193,7 +8204,9 @@ export default function TaskManagerApp() {
             updateLogs: Array.isArray(taskInput.updateLogs) ? taskInput.updateLogs : [],
             deadline: taskInput.deadline || '',
             createdAt: now,
-            picId: taskInput.picId || currentPicId || '',
+            picId: taskInput.picId || currentPicId || currentUserId,
+            authorId: currentUserId,
+            author_id: currentUserId,
             todos: []
         };
 
@@ -8230,6 +8243,9 @@ export default function TaskManagerApp() {
         }
 
         setTasks(prev => [...prev, newTask]);
+        if (notifications?.markTaskAsViewed) {
+            notifications.markTaskAsViewed(newTask.id);
+        }
         return true;
     };
 
@@ -8242,6 +8258,9 @@ export default function TaskManagerApp() {
 
     const handleSaveEditedTask = async (updatedTask) => {
         if (!updatedTask.title.trim() || !updatedTask.projectId) return false;
+        const currentUserId = session?.memberId || currentPicId || '';
+        const taskAuthorId = updatedTask.authorId || updatedTask.author_id || currentUserId;
+
         const normalizedTodos = (Array.isArray(updatedTask.todos) ? updatedTask.todos : [])
             .filter(todo => (todo.title || '').trim())
             .map(todo => ({
@@ -8302,6 +8321,7 @@ export default function TaskManagerApp() {
                         {
                             id: '__meta_task_props__',
                             isMetaTask: true,
+                            author_id: taskAuthorId,
                             memo: normalizedMemo,
                             update_logs: normalizedLogs
                         }
@@ -8327,8 +8347,13 @@ export default function TaskManagerApp() {
                 startDate: payload.start_date, 
                 deadline: payload.deadline, 
                 createdAt, 
+                authorId: taskAuthorId,
+                author_id: taskAuthorId,
                 todos: normalizedTodos 
             }]);
+            if (notifications?.markTaskAsViewed) {
+                notifications.markTaskAsViewed(updatedTask.id);
+            }
             return true;
         } else {
             const { isNew, ...taskToSave } = updatedTask;
