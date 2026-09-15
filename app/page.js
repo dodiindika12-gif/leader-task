@@ -1780,7 +1780,7 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                                         onClick={(e) => { e.stopPropagation(); onEdit(task); }}
                                     >
                                         <i className="fa-solid fa-paperclip text-[9px] text-emerald-600"></i>
-                                        <span>{proofFiles.length} Bukti</span>
+                                        <span>{proofFiles.length} File</span>
                                     </span>
                                 )}
                             </div>

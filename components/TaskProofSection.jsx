@@ -251,7 +251,7 @@ export default function TaskProofSection({
                 </div>
                 <div className="flex items-center gap-1.5">
                     <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/60">
-                        {proofFiles.length} berkas bukti
+                        {proofFiles.length} file
                     </span>
                 </div>
             </div>
