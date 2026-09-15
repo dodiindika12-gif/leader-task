@@ -2571,12 +2571,17 @@ function PostItCard({
                         <i className="fa-regular fa-user text-[9px]"></i>
                         <span>{authorMember ? (authorMember.id === activeUserId ? 'Saya' : authorMember.name) : 'User'}</span>
                     </span>
-                    {sharedList.length > 0 && (
+                    {!isOwner ? (
+                        <span className="flex items-center gap-1 font-bold text-indigo-700 bg-white/80 px-2 py-0.5 rounded-lg border border-indigo-200/60 shadow-xs" title={`Catatan ini dibagikan oleh ${authorMember?.name || 'pemilik'} kepada Anda`}>
+                            <i className="fa-solid fa-share-nodes text-[9px] text-indigo-600"></i>
+                            <span>Dibagikan ke Anda</span>
+                        </span>
+                    ) : sharedList.length > 0 ? (
                         <span className="flex items-center gap-1 font-bold text-indigo-700 bg-white/70 px-1.5 py-0.5 rounded-md border border-black/5" title={`Dibagikan ke ${sharedList.length} orang`}>
                             <i className="fa-solid fa-users text-[9px]"></i>
                             <span>{sharedList.length}</span>
                         </span>
-                    )}
+                    ) : null}
                 </div>
 
                 {/* Action buttons toolbar */}

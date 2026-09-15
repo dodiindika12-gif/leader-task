@@ -7763,7 +7763,11 @@ export default function TaskManagerApp() {
                     action_items: Array.isArray(note.action_items) ? note.action_items : [],
                     color: note.color || noteMeta.color || 'yellow',
                     isPinned: Boolean(note.is_pinned ?? noteMeta.isPinned),
-                    sharedWith: Array.isArray(note.shared_with) ? note.shared_with : (noteMeta.sharedWith || (Array.isArray(note.attendees) ? note.attendees : [])),
+                    sharedWith: (Array.isArray(note.shared_with) && note.shared_with.length > 0)
+                        ? note.shared_with
+                        : ((Array.isArray(noteMeta.sharedWith) && noteMeta.sharedWith.length > 0)
+                            ? noteMeta.sharedWith
+                            : (Array.isArray(note.attendees) ? note.attendees : [])),
                     createdAt: note.created_at,
                     updatedAt: note.updated_at
                 };
@@ -8651,12 +8655,19 @@ export default function TaskManagerApp() {
             location: locationValue,
             project_id: dbProjectId,
             attendees: sharedWithList,
+            shared_with: sharedWithList,
             agenda: noteInput.agenda || null,
             action_items: noteInput.actionItems || noteInput.action_items || [],
             updated_at: updatedAt
         };
 
         let { error } = await supabase.from('notes').update(payload).eq('id', id);
+        if (error && error.message && (error.message.includes('column') || error.message.includes('does not exist'))) {
+            const safePayload = { ...payload };
+            delete safePayload.shared_with;
+            const retrySafe = await supabase.from('notes').update(safePayload).eq('id', id);
+            error = retrySafe.error;
+        }
         if (error && error.message && (error.message.includes('column') || error.message.includes('does not exist'))) {
             const legacyPayload = {
                 type: noteInput.type,
