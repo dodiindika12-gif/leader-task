@@ -98,7 +98,8 @@ export default function NotificationCenter({
         markAsRead,
         markAllAsRead,
         dismiss,
-        clearAll
+        clearAll,
+        resetAllNotifications
     } = engine;
 
     // Tutup popover saat klik di luar (support desktop & mobile touch)
@@ -441,7 +442,7 @@ export default function NotificationCenter({
                         </div>
 
                         {/* Footer Actions */}
-                        <div className="p-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-xs shrink-0">
+                        <div className="p-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between gap-2 text-xs shrink-0 flex-wrap">
                             <button
                                 type="button"
                                 onClick={handleMarkAllAsRead}
@@ -456,19 +457,33 @@ export default function NotificationCenter({
                                 <span>Tandai Semua Dibaca</span>
                             </button>
 
-                            <button
-                                type="button"
-                                onClick={handleClearAll}
-                                disabled={activeNotifications.length === 0}
-                                className={`flex items-center gap-1.5 font-semibold transition ${
-                                    activeNotifications.length > 0 
-                                        ? 'text-slate-500 hover:text-rose-600 cursor-pointer' 
-                                        : 'text-slate-300 cursor-not-allowed'
-                                }`}
-                            >
-                                <i className="fa-regular fa-trash-can text-[11px]"></i>
-                                <span>Bersihkan</span>
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (resetAllNotifications) resetAllNotifications();
+                                    }}
+                                    className="flex items-center gap-1 font-semibold text-slate-500 hover:text-indigo-600 transition cursor-pointer text-[11px]"
+                                    title="Reset dan muat ulang notifikasi agar berstatus belum dibaca kembali"
+                                >
+                                    <i className="fa-solid fa-arrows-rotate text-[10px]"></i>
+                                    <span>Push Ulang</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={handleClearAll}
+                                    disabled={activeNotifications.length === 0}
+                                    className={`flex items-center gap-1 font-semibold transition ${
+                                        activeNotifications.length > 0 
+                                            ? 'text-slate-500 hover:text-rose-600 cursor-pointer' 
+                                            : 'text-slate-300 cursor-not-allowed'
+                                    }`}
+                                >
+                                    <i className="fa-regular fa-trash-can text-[11px]"></i>
+                                    <span>Bersihkan</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </>
