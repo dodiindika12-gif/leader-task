@@ -119,7 +119,12 @@ export default function WeeklyScheduleView({
     // State
     const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedMemberFilter, setSelectedMemberFilter] = useState('all');
+    const [selectedMemberFilter, setSelectedMemberFilter] = useState(() => {
+        if (type === 'worksheet') {
+            return session?.memberId || 'me';
+        }
+        return 'all';
+    });
     const [selectedDayFilter, setSelectedDayFilter] = useState('all');
     const [slotDensity, setSlotDensity] = useState('normal'); // 'compact' (46px) | 'normal' (56px) | 'spacious' (68px)
 
@@ -264,12 +269,42 @@ export default function WeeklyScheduleView({
         );
     }, [isMeeting, userLevel, viewableWorksheetMembers, userIdentifiers]);
 
-    // Ensure staff is locked to their own worksheet
+    // Current user's member ID for worksheet identification
+    const myMemberId = useMemo(() => {
+        return currentUserMember?.id || userIdentifiers.primaryId || session?.memberId || '';
+    }, [currentUserMember, userIdentifiers.primaryId, session?.memberId]);
+
+    // Check if current view is user's own worksheet
+    const isViewingSelf = useMemo(() => {
+        if (isMeeting) return false;
+        if (!selectedMemberFilter || selectedMemberFilter === 'all' || selectedMemberFilter === 'me') return true;
+        if (myMemberId && selectedMemberFilter === myMemberId) return true;
+        if (userIdentifiers.ids.has(selectedMemberFilter)) return true;
+        return false;
+    }, [isMeeting, selectedMemberFilter, myMemberId, userIdentifiers]);
+
+    // Currently selected member object (when leader inspects a team member's worksheet)
+    const selectedMemberObj = useMemo(() => {
+        if (!selectedMemberFilter || isViewingSelf) return currentUserMember;
+        return members.find(m => m.id === selectedMemberFilter) || null;
+    }, [selectedMemberFilter, isViewingSelf, currentUserMember, members]);
+
+    // Ensure Worksheet always defaults to current user's worksheet ("Worksheet Saya")
     useEffect(() => {
-        if (!isMeeting && userLevel <= 1) {
-            setSelectedMemberFilter('all');
+        if (!isMeeting) {
+            if (userLevel <= 1) {
+                if (selectedMemberFilter !== (myMemberId || 'me')) {
+                    setSelectedMemberFilter(myMemberId || 'me');
+                }
+            } else if (!selectedMemberFilter || selectedMemberFilter === 'all') {
+                setSelectedMemberFilter(myMemberId || 'me');
+            }
+        } else {
+            if (!selectedMemberFilter) {
+                setSelectedMemberFilter('all');
+            }
         }
-    }, [isMeeting, userLevel]);
+    }, [isMeeting, userLevel, myMemberId, selectedMemberFilter]);
 
     // Check if user is owner (PIC / creator)
     const checkIsOwner = (item) => {
@@ -397,13 +432,31 @@ export default function WeeklyScheduleView({
             if (selectedDayFilter !== 'all' && item.day !== selectedDayFilter) return false;
             
             // Filter by member:
-            // For worksheet: strictly filter by PIC (the person whose worksheet it is)
+            // For worksheet: strictly filter to ONE person's worksheet (no combining team members)
             // For meeting: match PIC OR any Attendee
-            if (selectedMemberFilter !== 'all') {
-                if (!isMeeting) {
-                    const pic = item.picId || item.pic_id || item.author_id || item.userId;
-                    if (pic !== selectedMemberFilter) return false;
+            if (!isMeeting) {
+                const pic = item.picId || item.pic_id || item.author_id || item.authorId || item.userId;
+                if (!pic) return false;
+                const picStr = String(pic).trim();
+
+                if (isViewingSelf) {
+                    const matchSelf = userIdentifiers.ids.has(picStr) || 
+                                      userIdentifiers.emails.has(picStr.toLowerCase()) || 
+                                      userIdentifiers.names.has(picStr.toLowerCase());
+                    if (!matchSelf) return false;
                 } else {
+                    if (picStr === selectedMemberFilter) {
+                        // direct match by member ID
+                    } else if (selectedMemberObj) {
+                        const matchEmail = selectedMemberObj.email && picStr.toLowerCase() === selectedMemberObj.email.toLowerCase();
+                        const matchName = selectedMemberObj.name && picStr.toLowerCase() === selectedMemberObj.name.toLowerCase();
+                        if (!matchEmail && !matchName) return false;
+                    } else {
+                        return false;
+                    }
+                }
+            } else {
+                if (selectedMemberFilter !== 'all') {
                     const isPic = item.picId === selectedMemberFilter;
                     const isAttendee = Array.isArray(item.attendees) && item.attendees.includes(selectedMemberFilter);
                     if (!isPic && !isAttendee) return false;
@@ -429,7 +482,7 @@ export default function WeeklyScheduleView({
 
             return true;
         });
-    }, [typeSchedules, selectedDayFilter, selectedMemberFilter, searchQuery, members, isMeeting]);
+    }, [typeSchedules, selectedDayFilter, selectedMemberFilter, searchQuery, members, isMeeting, isViewingSelf, selectedMemberObj, userIdentifiers]);
 
     // Statistics
     const stats = useMemo(() => {
@@ -475,12 +528,12 @@ export default function WeeklyScheduleView({
         // Staff can only create for self. Leader can create for selected subordinate or self.
         let defaultPic = session?.memberId || '';
         if (!isMeeting) {
-            if (userLevel <= 1) {
-                defaultPic = currentUserMember?.id || session?.memberId || '';
-            } else if (selectedMemberFilter !== 'all') {
+            if (userLevel <= 1 || isViewingSelf) {
+                defaultPic = myMemberId || session?.memberId || '';
+            } else if (selectedMemberFilter && selectedMemberFilter !== 'all' && selectedMemberFilter !== 'me') {
                 defaultPic = selectedMemberFilter;
             } else {
-                defaultPic = currentUserMember?.id || session?.memberId || '';
+                defaultPic = myMemberId || session?.memberId || '';
             }
         } else if (currentUserMember?.id) {
             defaultPic = currentUserMember.id;
@@ -834,23 +887,22 @@ export default function WeeklyScheduleView({
                                 <span>Worksheet Saya ({currentUserMember?.name || session?.name || 'Staff'})</span>
                             </div>
                         ) : (
-                            /* Pimpinan (SPV, Koordinator, Manager, Direksi, Super User): Filter by Nama */
+                            /* Pimpinan (SPV, Koordinator, Manager, Direksi, Super User): Pilih Worksheet */
                             <div className="flex items-center gap-1.5">
                                 <label className="text-[11px] font-semibold text-slate-500 hidden sm:inline-flex items-center gap-1">
-                                    <i className="fa-solid fa-user-group text-indigo-500"></i>
-                                    Filter Nama:
+                                    <i className="fa-solid fa-calendar-check text-sky-500"></i>
+                                    Worksheet:
                                 </label>
                                 <select
-                                    value={selectedMemberFilter}
+                                    value={isViewingSelf ? (myMemberId || 'me') : selectedMemberFilter}
                                     onChange={(e) => setSelectedMemberFilter(e.target.value)}
-                                    className="bg-white border border-indigo-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-xs hover:border-indigo-300 transition-all"
+                                    className="bg-white border border-sky-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer shadow-xs hover:border-sky-300 transition-all"
                                 >
-                                    <option value="all">👥 Semua Tim ({viewableWorksheetMembers.length} Anggota)</option>
-                                    {currentUserMember && (
-                                        <option value={currentUserMember.id}>👤 Worksheet Saya ({currentUserMember.name})</option>
-                                    )}
+                                    <option value={myMemberId || 'me'}>
+                                        👤 Worksheet Saya ({currentUserMember?.name || session?.name || 'Saya'})
+                                    </option>
                                     {subordinateMembers.length > 0 && (
-                                        <optgroup label="Bawahan (Koordinator & Staff)">
+                                        <optgroup label="Worksheet Tim">
                                             {subordinateMembers.map(m => (
                                                 <option key={m.id} value={m.id}>
                                                     📋 {m.name} — {m.position || m.role || 'Staff'} {m.department ? `(${m.department})` : ''}
@@ -880,6 +932,30 @@ export default function WeeklyScheduleView({
                     Menampilkan <span className="font-bold text-slate-700">{filteredSchedules.length}</span> agenda
                 </div>
             </div>
+
+            {/* Banner info ketika pimpinan sedang memeriksa Worksheet Tim */}
+            {!isMeeting && !isViewingSelf && selectedMemberObj && (
+                <div className="flex items-center justify-between px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 shadow-xs animate-fade-in">
+                    <div className="flex items-center gap-2.5">
+                        <span className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 font-bold shrink-0">
+                            <i className="fa-solid fa-user-check"></i>
+                        </span>
+                        <div>
+                            <span className="text-[11px] text-amber-700 font-semibold uppercase tracking-wider block">Menampilkan Worksheet Tim:</span>
+                            <span className="font-bold text-amber-950 text-sm">{selectedMemberObj.name}</span>
+                            <span className="text-amber-700 ml-1.5 font-medium">({selectedMemberObj.position || selectedMemberObj.role || 'Staff'})</span>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setSelectedMemberFilter(myMemberId || 'me')}
+                        className="px-3 py-1.5 bg-white border border-amber-300 hover:bg-amber-100 rounded-xl font-bold text-amber-800 text-xs transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                    >
+                        <i className="fa-solid fa-arrow-left text-[11px]"></i>
+                        <span>Kembali ke Worksheet Saya</span>
+                    </button>
+                </div>
+            )}
 
             {/* MAIN CONTENT: GRID VIEW OR LIST VIEW */}
             {viewMode === 'grid' ? (
