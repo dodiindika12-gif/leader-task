@@ -5737,7 +5737,7 @@ const TaskSummary = ({ stats }) => {
     );
 };
 
-const TaskControls = ({ members, searchQuery, setSearchQuery, statusFilter, setStatusFilter, priorityFilter, setPriorityFilter, folderFilter, setFolderFilter, foldersList = [], picFilter, setPicFilter, divisionFilter, setDivisionFilter, divisionsList = [], sortMode, setSortMode, onReset }) => (
+const TaskControls = ({ members, searchQuery, setSearchQuery, statusFilter, setStatusFilter, priorityFilter, setPriorityFilter, folderFilter, setFolderFilter, foldersList = [], picFilter, setPicFilter, divisionFilter, setDivisionFilter, divisionsList = [], sortMode, setSortMode, onReset, currentMemberId }) => (
     <div className="flex flex-wrap items-center gap-3 mb-6 bg-white/60 p-3 rounded-2xl shadow-sm border border-white/50 backdrop-blur-sm">
         <div className="flex-1 min-w-[200px] relative">
             <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
@@ -5774,7 +5774,11 @@ const TaskControls = ({ members, searchQuery, setSearchQuery, statusFilter, setS
         )}
         <select value={picFilter} onChange={(e) => setPicFilter(e.target.value)} className="bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[150px]">
             <option value="all">Semua PIC</option>
-            {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            {members.map(m => (
+                <option key={m.id} value={m.id}>
+                    {m.name}{currentMemberId && m.id === currentMemberId ? ' (Saya)' : ''}
+                </option>
+            ))}
         </select>
         <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} className="bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="created_desc">Urut Input: Terbaru</option>
@@ -7297,6 +7301,25 @@ export default function TaskManagerApp() {
             notifications.markTaskAsViewed(editingTask.id);
         }
     }, [editingTask?.id, notifications.unreadNotifications]);
+
+    // Identifikasi pengguna yang sedang login & perannya (Staff vs Leader/Super User)
+    const loggedInUserObj = useMemo(() => {
+        return (members || []).find(m => m.id === session?.memberId || m.id === currentPicId || m.email === session?.email) || null;
+    }, [members, session, currentPicId]);
+
+    const currentUserRole = session?.role || session?.position || loggedInUserObj?.role || loggedInUserObj?.position || 'Staff';
+    const currentUserLevel = useMemo(() => getRoleLevel(currentUserRole, roles), [currentUserRole, roles]);
+    const isStaffUser = currentUserLevel <= 1;
+    const myMemberId = loggedInUserObj?.id || session?.memberId || currentPicId || '';
+
+    // Auto set default PIC filter ke diri sendiri khusus untuk role Staff
+    const hasInitializedStaffPicRef = useRef(false);
+    useEffect(() => {
+        if (!hasInitializedStaffPicRef.current && isStaffUser && myMemberId) {
+            setPicFilter(myMemberId);
+            hasInitializedStaffPicRef.current = true;
+        }
+    }, [isStaffUser, myMemberId]);
     
     // Sharing & Project Settings state
     const [projectAccess, setProjectAccess] = useState([]);
@@ -7925,6 +7948,17 @@ export default function TaskManagerApp() {
                 if (fallbackPic) localStorage.setItem(CURRENT_PIC_KEY, fallbackPic);
                 return fallbackPic;
             });
+
+            // Jika role user adalah Staff, default PIC filter ke dirinya sendiri
+            const finalUserId = resolvedMemberId || (session && session.memberId) || '';
+            const userObj = nextMembers.find(m => m.id === finalUserId || (session?.email && m.email === session.email));
+            const roleName = session?.role || session?.position || userObj?.role || userObj?.position || 'Staff';
+            const userRoleLevel = getRoleLevel(roleName, rolesData || []);
+            if (userRoleLevel <= 1 && (userObj?.id || finalUserId)) {
+                setPicFilter(userObj?.id || finalUserId);
+                hasInitializedStaffPicRef.current = true;
+            }
+
             setIsMounted(true);
             
                 if (session && session.requiresPasswordChange) {
@@ -7968,6 +8002,8 @@ export default function TaskManagerApp() {
     const handleLogout = async () => {
         localStorage.removeItem(LOCAL_SESSION_KEY);
         localStorage.removeItem(CURRENT_PIC_KEY);
+        hasInitializedStaffPicRef.current = false;
+        setPicFilter('all');
         setSession(null);
         setCurrentPicId('');
         setActiveProject('');
@@ -9186,7 +9222,7 @@ export default function TaskManagerApp() {
         setStatusFilter('all');
         setPriorityFilter('all');
         setFolderFilter('all');
-        setPicFilter('all');
+        setPicFilter(isStaffUser && myMemberId ? myMemberId : 'all');
         setDivisionFilter('all');
         setSortMode('deadline_asc');
     };
@@ -9216,7 +9252,6 @@ export default function TaskManagerApp() {
         return a.isPinned ? -1 : 1;
     });
 
-    const loggedInUserObj = members.find(m => m.id === session?.memberId || m.id === currentPicId || m.email === session?.email);
     const currentUserName = loggedInUserObj?.name || session?.name || (session?.role === 'Super User' ? 'Dodi' : (session?.email ? session.email.split('@')[0] : 'Dodi'));
 
     return (
@@ -9827,6 +9862,7 @@ export default function TaskManagerApp() {
                                     sortMode={sortMode}
                                     setSortMode={setSortMode}
                                     onReset={resetTaskControls}
+                                    currentMemberId={myMemberId}
                                 />
                                 <AbsCalendar
                                     tasks={currentTasks}
@@ -9943,6 +9979,7 @@ export default function TaskManagerApp() {
                                     sortMode={sortMode}
                                     setSortMode={setSortMode}
                                     onReset={resetTaskControls}
+                                    currentMemberId={myMemberId}
                                 />
                                 <KanbanView
                                     tasks={currentTasks}
@@ -10021,6 +10058,7 @@ export default function TaskManagerApp() {
                                     sortMode={sortMode}
                                     setSortMode={setSortMode}
                                     onReset={resetTaskControls}
+                                    currentMemberId={myMemberId}
                                 />
                                 <TableView
                                     tasks={currentTasks}
@@ -10102,6 +10140,7 @@ export default function TaskManagerApp() {
                                     sortMode={sortMode}
                                     setSortMode={setSortMode}
                                     onReset={resetTaskControls}
+                                    currentMemberId={myMemberId}
                                 />
                                 <TimelineView
                                     tasks={currentTasks}
