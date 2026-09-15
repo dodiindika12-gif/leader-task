@@ -10,6 +10,7 @@ import WeeklyScheduleView, { getRoleLevel, isMeetingSchedule, isWorksheetSchedul
 import MainDashboard from '../components/MainDashboard';
 import NotificationCenter from '../components/NotificationCenter';
 import MemberMigrationModal from '../components/MemberMigrationModal';
+import SidebarScheduleWidget from '../components/SidebarScheduleWidget';
 import { useNotifications } from '../lib/useNotifications';
 
 
@@ -9446,6 +9447,20 @@ export default function TaskManagerApp() {
                         );
                     })}
                     </nav>
+
+                    {/* Widget "Now Playing" Jadwal Saya di Sudut Kiri Bawah Sidebar */}
+                    <div className="p-3 pt-1 shrink-0">
+                        <SidebarScheduleWidget
+                            schedules={schedules}
+                            session={session}
+                            members={members}
+                            isSuperUser={isSuperUser}
+                            onNavigate={(targetView) => {
+                                navigateView(targetView);
+                                closeMobileSidebar();
+                            }}
+                        />
+                    </div>
                 </div>
 
                 {/* Main Content Area */}
