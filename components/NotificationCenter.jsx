@@ -89,11 +89,12 @@ export default function NotificationCenter({
     });
 
     const engine = externalEngine || internalEngine;
+    const userLevel = engine?.userLevel ?? getRoleLevel(session?.role, roles);
     const {
-        activeNotifications,
-        unreadCount,
-        categoryCounts,
-        readIds,
+        activeNotifications = [],
+        unreadCount = 0,
+        categoryCounts = { all: 0, unread: 0, shared: 0, deadline: 0, schedule: 0, radar: 0 },
+        readIds = new Set(),
         markAsRead,
         markAllAsRead,
         dismiss,
