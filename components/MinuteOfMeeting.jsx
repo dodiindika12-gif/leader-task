@@ -167,17 +167,48 @@ export default function MinuteOfMeeting({
     });
 
     const [attendeeSearch, setAttendeeSearch] = useState('');
+    const [attendeeDivisionFilter, setAttendeeDivisionFilter] = useState('all');
+
+    // Daftar divisi unik dari anggota untuk tombol filter cepat antar divisi
+    const availableAttendeeDivisions = useMemo(() => {
+        const set = new Set();
+        (members || []).forEach(m => {
+            if (m.division && m.division.trim()) {
+                set.add(m.division.trim());
+            }
+        });
+        return Array.from(set).sort();
+    }, [members]);
 
     const filteredMembersForMeeting = useMemo(() => {
         const q = attendeeSearch.toLowerCase().trim();
-        if (!q) return members;
-        return members.filter(m => 
-            (m.name || '').toLowerCase().includes(q) ||
-            (m.division || '').toLowerCase().includes(q) ||
-            (m.role || '').toLowerCase().includes(q) ||
-            (m.email || '').toLowerCase().includes(q)
-        );
-    }, [members, attendeeSearch]);
+        let list = (members || []).filter(m => m.is_active !== false);
+
+        // Filter berdasarkan tombol divisi cepat jika dipilih
+        if (attendeeDivisionFilter !== 'all') {
+            list = list.filter(m => (m.division || '').trim().toLowerCase() === attendeeDivisionFilter.toLowerCase());
+        }
+
+        // Filter berdasarkan teks pencarian
+        if (q) {
+            list = list.filter(m => 
+                (m.name || '').toLowerCase().includes(q) ||
+                (m.division || '').toLowerCase().includes(q) ||
+                (m.role || '').toLowerCase().includes(q) ||
+                (m.email || '').toLowerCase().includes(q)
+            );
+        }
+
+        // Urutkan: Diri sendiri dulu, kemudian urut divisi, lalu nama
+        return [...list].sort((a, b) => {
+            if (a.id === activeUserId) return -1;
+            if (b.id === activeUserId) return 1;
+            const divA = a.division || '';
+            const divB = b.division || '';
+            if (divA !== divB) return divA.localeCompare(divB);
+            return (a.name || '').localeCompare(b.name || '');
+        });
+    }, [members, attendeeSearch, attendeeDivisionFilter, activeUserId]);
 
     const selectedAttendeesList = useMemo(() => {
         return (meetingFormData.attendees || []).map(id => {
@@ -187,9 +218,10 @@ export default function MinuteOfMeeting({
     }, [meetingFormData.attendees, members]);
 
     const handleSelectAllAttendees = () => {
+        const idsToAdd = filteredMembersForMeeting.map(m => m.id);
         setMeetingFormData(prev => ({
             ...prev,
-            attendees: members.map(m => m.id)
+            attendees: Array.from(new Set([...(prev.attendees || []), ...idsToAdd]))
         }));
     };
 
@@ -2142,6 +2174,43 @@ export default function MinuteOfMeeting({
                                             </button>
                                         )}
                                     </div>
+
+                                    {/* Filter Divisi Cepat (Antar Divisi) */}
+                                    {availableAttendeeDivisions.length > 0 && (
+                                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 custom-scrollbar text-[11px]">
+                                            <span className="text-slate-400 text-[10px] font-bold uppercase shrink-0 mr-0.5">
+                                                Divisi:
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setAttendeeDivisionFilter('all')}
+                                                className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 cursor-pointer ${
+                                                    attendeeDivisionFilter === 'all'
+                                                        ? 'bg-emerald-600 text-white shadow-xs'
+                                                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                                                }`}
+                                            >
+                                                Semua ({members.filter(m => m.is_active !== false).length})
+                                            </button>
+                                            {availableAttendeeDivisions.map(div => {
+                                                const count = members.filter(m => m.is_active !== false && (m.division || '').trim().toLowerCase() === div.toLowerCase()).length;
+                                                return (
+                                                    <button
+                                                        key={div}
+                                                        type="button"
+                                                        onClick={() => setAttendeeDivisionFilter(div)}
+                                                        className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 cursor-pointer ${
+                                                            attendeeDivisionFilter.toLowerCase() === div.toLowerCase()
+                                                                ? 'bg-emerald-600 text-white shadow-xs'
+                                                                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                                                        }`}
+                                                    >
+                                                        {div} ({count})
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
 
                                     <div className="max-h-44 overflow-y-auto space-y-1 p-2 bg-slate-50/60 rounded-2xl border border-slate-200/80 custom-scrollbar">
                                         {filteredMembersForMeeting.length === 0 ? (

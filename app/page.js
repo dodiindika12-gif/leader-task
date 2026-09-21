@@ -9970,7 +9970,7 @@ export default function TaskManagerApp() {
                         {view === 'notes' && (
                             <MinuteOfMeeting
                                 notes={filteredAccessibleNotes}
-                                members={filteredMembers}
+                                members={members}
                                 projects={filteredProjects}
                                 divisions={divisionsList}
                                 currentPicId={currentPicId}
@@ -9989,7 +9989,7 @@ export default function TaskManagerApp() {
                             <WeeklyScheduleView
                                 type="meeting"
                                 schedules={filteredAccessibleSchedules}
-                                members={filteredMembers}
+                                members={members}
                                 divisionsList={divisionsList}
                                 session={session}
                                 roles={roles}
@@ -10003,7 +10003,7 @@ export default function TaskManagerApp() {
                             <WeeklyScheduleView
                                 type="worksheet"
                                 schedules={filteredAccessibleSchedules}
-                                members={filteredMembers}
+                                members={members}
                                 divisionsList={divisionsList}
                                 session={session}
                                 roles={roles}
