@@ -7253,6 +7253,68 @@ export default function TaskManagerApp() {
         return true;
     };
 
+    const getPersonalWorkspaceName = (fullName) => {
+        if (!fullName) return 'Task Pribadi';
+        const clean = fullName.trim().replace(/^(dr\.|drg\.|drs\.|dra\.|ir\.|h\.|hj\.)\s+/i, '');
+        const parts = clean.split(/\s+/).filter(Boolean);
+        if (!parts.length) return 'Task Pribadi';
+        let firstName = parts[0];
+        if (parts[0]?.toLowerCase() === 'la' && parts[1]?.toLowerCase() === 'ode') {
+            firstName = 'La Ode';
+        }
+        firstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+        return `Task ${firstName}`;
+    };
+
+    const createDefaultPersonalWorkspace = async (member) => {
+        try {
+            const workspaceName = getPersonalWorkspaceName(member.name);
+            const projectId = crypto.randomUUID();
+            const projectPayload = {
+                id: projectId,
+                name: workspaceName,
+                color: member.color || '#6366f1',
+                isPinned: false,
+                showInCalendar: false,
+                division: member.division || 'Task ABS',
+                owner_id: member.id,
+                folders: ['General'],
+                description: 'personal'
+            };
+
+            const dbPayload = {
+                id: projectPayload.id,
+                name: projectPayload.name,
+                color: projectPayload.color,
+                is_pinned: projectPayload.isPinned,
+                show_in_calendar: projectPayload.showInCalendar,
+                division: projectPayload.division,
+                owner_id: projectPayload.owner_id,
+                folders: projectPayload.folders,
+                description: projectPayload.description
+            };
+
+            const { error: pErr } = await supabase.from('projects').insert(dbPayload);
+            if (pErr) {
+                console.error('Failed to auto-create personal workspace:', pErr);
+                return null;
+            }
+
+            const accessPayload = {
+                project_id: projectId,
+                member_id: member.id
+            };
+            await supabase.from('project_access').insert(accessPayload);
+
+            setProjects(prev => [...prev, projectPayload]);
+            setProjectAccess(prev => [...prev, accessPayload]);
+            return projectPayload;
+        } catch (err) {
+            console.error('Error auto-creating personal workspace:', err);
+            return null;
+        }
+    };
+
     const handleQuickAddMemberToDept = async ({ name, email, role, division, department }) => {
         if (!name || !name.trim()) return false;
         const randomColor = '#' + Math.floor(Math.random() * 16777215).toString(16);
@@ -7288,7 +7350,8 @@ export default function TaskManagerApp() {
             return false;
         }
         setMembers(prev => [...prev, newMember]);
-        alert(`Karyawan baru "${newMember.name}" berhasil didaftarkan dan dimasukkan ke departemen "${department}".`);
+        await createDefaultPersonalWorkspace(newMember);
+        alert(`Karyawan baru "${newMember.name}" berhasil didaftarkan dan dimasukkan ke departemen "${department}". Workspace pribadi "${getPersonalWorkspaceName(newMember.name)}" otomatis dibuat.`);
         return true;
     };
 
@@ -7530,7 +7593,7 @@ export default function TaskManagerApp() {
 
     // Filtered global lists based on Division
     const isSuperUser = session?.role === 'Super User';
-    const memberId = session?.memberId;
+    const memberId = session?.memberId || myMemberId;
 
     const accessibleProjectIds = isSuperUser ? null : new Set([
         ...projects.filter(p => p.owner_id === memberId).map(p => p.id),
@@ -7539,22 +7602,35 @@ export default function TaskManagerApp() {
 
     const filteredMembers = members.filter(m => globalDivision === 'All' || m.division === globalDivision);
     const filteredProjects = projects.filter(p => {
+        const isPersonal = p.description === 'personal' || (p.owner_id && p.name && p.name.startsWith('Task '));
+        // Workspace pribadi hanya untuk pemiliknya, atau yang diberikan akses secara eksplisit
+        if (isPersonal) {
+            if (memberId && p.owner_id === memberId) return true;
+            return projectAccess.some(a => a.project_id === p.id && a.member_id === memberId);
+        }
+
         if (globalDivision !== 'All' && p.division && p.division !== 'Task ABS' && p.division !== globalDivision) return false;
         if (isSuperUser) return true;
         if (!p.owner_id) return true; // Legacy projects without owner are visible to all
         return accessibleProjectIds.has(p.id);
     });
     const filteredTasks = tasks.filter(t => {
+        const project = projects.find(p => p.id === t.projectId);
+        if (!project) return false;
+
+        const isPersonal = project.description === 'personal' || (project.owner_id && project.name && project.name.startsWith('Task '));
+        if (isPersonal) {
+            if (memberId && project.owner_id === memberId) return true;
+            return projectAccess.some(a => a.project_id === project.id && a.member_id === memberId);
+        }
+
         if (globalDivision !== 'All') {
-            const project = projects.find(p => p.id === t.projectId);
-            if (!project) return false;
             if (project.division && project.division !== 'Task ABS' && project.division !== globalDivision) return false;
         }
         
         // Task di dalam workspace otomatis dapat dilihat oleh seluruh anggota workspace
         if (!isSuperUser && accessibleProjectIds) {
-            const project = projects.find(p => p.id === t.projectId);
-            if (project && project.owner_id && !accessibleProjectIds.has(t.projectId)) return false;
+            if (project.owner_id && !accessibleProjectIds.has(t.projectId)) return false;
         }
 
         return true;
@@ -8085,6 +8161,21 @@ export default function TaskManagerApp() {
                 hasInitializedStaffPicRef.current = true;
             }
 
+            // Auto-ensure personal workspace for logged in user if missing
+            if (finalUserId && userObj) {
+                const hasPersonal = mappedProjects.some(p => (p.owner_id === finalUserId || p.owner_id === userObj.id) && p.description === 'personal');
+                if (!hasPersonal) {
+                    createDefaultPersonalWorkspace(userObj).then(personalProj => {
+                        if (personalProj) {
+                            setProjects(prev => {
+                                if (prev.some(p => p.id === personalProj.id)) return prev;
+                                return [personalProj, ...prev];
+                            });
+                        }
+                    }).catch(e => console.warn('[PersonalWorkspace] Auto-create failed:', e));
+                }
+            }
+
             setIsMounted(true);
             
                 if (session && session.requiresPasswordChange) {
@@ -8316,6 +8407,11 @@ export default function TaskManagerApp() {
 
     const handleDeleteProject = async (id, e) => {
         if (e?.stopPropagation) e.stopPropagation();
+        const targetProj = projects.find(p => p.id === id);
+        if (targetProj?.description === 'personal') {
+            openDialog({ type: 'confirm', message: 'Workspace pribadi default tidak dapat dihapus.', onConfirm: () => { } });
+            return;
+        }
         if (projects.length <= 1) {
             openDialog({ type: 'confirm', message: 'Tidak dapat menghapus project terakhir.', onConfirm: () => { } });
             return;
@@ -9145,6 +9241,7 @@ export default function TaskManagerApp() {
         }
 
         setMembers(prev => [...prev, newMember]);
+        await createDefaultPersonalWorkspace(newMember);
     };
 
     const handleOpenMigrationModal = (memberOrId) => {
@@ -9378,6 +9475,12 @@ export default function TaskManagerApp() {
 
     const currentProjectName = projects.find(p => p.id === activeProject)?.name || 'Pilih Project';
     const sortedProjects = [...filteredProjects].sort((a, b) => {
+        // Workspace pribadi milik user saat ini selalu diprioritaskan paling atas
+        const isMyPersonalA = a.description === 'personal' && (a.owner_id === memberId || a.owner_id === myMemberId);
+        const isMyPersonalB = b.description === 'personal' && (b.owner_id === memberId || b.owner_id === myMemberId);
+        if (isMyPersonalA && !isMyPersonalB) return -1;
+        if (!isMyPersonalA && isMyPersonalB) return 1;
+
         if (a.isPinned === b.isPinned) return 0;
         return a.isPinned ? -1 : 1;
     });
@@ -9641,10 +9744,15 @@ export default function TaskManagerApp() {
                                         className={`flex-1 flex items-center space-x-2.5 px-3 py-2 rounded-2xl text-sm font-medium transition-all text-left min-w-0 ${activeProject === project.id && (view === 'table' || view === 'kanban' || view === 'timeline' || view === 'calendar') ? 'bg-white text-slate-950 shadow-sm font-semibold' : 'text-slate-600 hover:bg-white/55 hover:text-slate-900'}`}
                                     >
                                         <i
-                                            className={`fa-${activeProject === project.id && (view === 'table' || view === 'kanban' || view === 'timeline' || view === 'calendar') ? 'solid' : 'regular'} fa-folder w-4 text-center shrink-0`}
+                                            className={`fa-${activeProject === project.id && (view === 'table' || view === 'kanban' || view === 'timeline' || view === 'calendar') ? 'solid' : 'regular'} ${project.description === 'personal' ? 'fa-id-badge' : 'fa-folder'} w-4 text-center shrink-0`}
                                             style={{ color: project.color || '#6b7280' }}
                                         ></i>
                                         <span className="truncate flex-1">{project.name}</span>
+                                        {project.description === 'personal' && (
+                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-200/70 shrink-0">
+                                                Pribadi
+                                            </span>
+                                        )}
                                         {projectUnread > 0 && (
                                             <span className="relative flex h-2 w-2 shrink-0 ml-1 mr-1" title={`${projectUnread} notifikasi baru di project ini`}>
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>

@@ -290,13 +290,18 @@ export default function ProjectSettingsModal({
                             className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg shadow-sm shrink-0 transition-colors"
                             style={{ backgroundColor: selectedColor }}
                         >
-                            <i className="fa-solid fa-folder-gear"></i>
+                            <i className={`fa-solid ${project.description === 'personal' ? 'fa-id-badge' : 'fa-folder-gear'}`}></i>
                         </div>
                         <div className="min-w-0">
                             <div className="flex items-center gap-2">
                                 <h3 className="text-base font-bold text-slate-900 truncate">
                                     {project.name}
                                 </h3>
+                                {project.description === 'personal' && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold border border-indigo-200 shrink-0">
+                                        Pribadi
+                                    </span>
+                                )}
                                 {isPrimaryOwner ? (
                                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold border border-amber-200 shrink-0 flex items-center gap-1">
                                         <i className="fa-solid fa-crown text-amber-600 text-[9px]"></i>
@@ -359,8 +364,8 @@ export default function ProjectSettingsModal({
                         <span>Peserta ({participantMembers.length})</span>
                     </button>
 
-                    {/* Tab 3: Hapus Workspace (HANYA UNTUK PEMILIK) */}
-                    {isOwner && (
+                    {/* Tab 3: Hapus Workspace (HANYA UNTUK PEMILIK, tidak berlaku untuk workspace pribadi default) */}
+                    {isOwner && project.description !== 'personal' && (
                         <button
                             onClick={() => setActiveTab('danger')}
                             className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ml-auto ${
