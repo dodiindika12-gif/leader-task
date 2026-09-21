@@ -1674,7 +1674,11 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
 
     if (isListView) {
         return (
-            <tr onDoubleClick={() => onEdit(task)} className="border-b border-gray-100 hover:bg-gray-50 transition-colors group" style={{ borderLeft: `3px solid ${accentColor}` }}>
+            <tr
+                onDoubleClick={() => onEdit(task)}
+                className={`border-b border-gray-100 hover:bg-gray-50 transition-colors group ${isDone ? 'bg-slate-50/40 opacity-75' : ''}`}
+                style={{ borderLeft: `3px solid ${isDone ? '#10b981' : accentColor}` }}
+            >
                 <td className="p-3">
                     <div className="flex items-start space-x-3">
                         <input
@@ -1682,7 +1686,7 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                             checked={isDone}
                             onChange={toggleStatusDone}
                             className="mt-1 w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer accent-purple-600 flex-shrink-0"
-                            title="Tandai Selesai"
+                            title={isDone ? "Batal Selesai (Kembalikan ke To Do)" : "Tandai Selesai"}
                         />
                         <div className="flex flex-col flex-1">
                             {isEditingTitle ? (
@@ -2137,6 +2141,7 @@ const TableView = ({
     foldersList = ['General'],
     sortMode,
     setSortMode,
+    statusFilter = 'all',
     onAdd,
     onEdit,
     onDelete,
@@ -2150,6 +2155,7 @@ const TableView = ({
     unreadTaskIds = null
 }) => {
     const [collapsedFolders, setCollapsedFolders] = useState({});
+    const [openCompletedFolders, setOpenCompletedFolders] = useState({});
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [renamingFolder, setRenamingFolder] = useState(null);
@@ -2157,6 +2163,26 @@ const TableView = ({
 
     const toggleCollapse = (folder) => {
         setCollapsedFolders(prev => ({ ...prev, [folder]: !prev[folder] }));
+    };
+
+    const toggleCompletedFolder = (folder) => {
+        setOpenCompletedFolders(prev => ({ ...prev, [folder]: !prev[folder] }));
+    };
+
+    // Ensure all folders present in tasks are covered
+    const allFolders = Array.from(new Set([...(foldersList || []), 'General', ...tasks.map(t => t.folder).filter(Boolean)]));
+
+    const totalCompletedCount = tasks.filter(t => t.status === 'Done').length;
+    const isAnyCompletedOpen = allFolders.some(f => !!openCompletedFolders[f]);
+
+    const toggleAllCompleted = () => {
+        if (isAnyCompletedOpen) {
+            setOpenCompletedFolders({});
+        } else {
+            const next = {};
+            allFolders.forEach(f => { next[f] = true; });
+            setOpenCompletedFolders(next);
+        }
     };
 
     const handleCreateFolderSubmit = (e) => {
@@ -2178,9 +2204,6 @@ const TableView = ({
         setRenameDraft('');
     };
 
-    // Ensure all folders present in tasks are covered
-    const allFolders = Array.from(new Set([...(foldersList || []), 'General', ...tasks.map(t => t.folder).filter(Boolean)]));
-
     return (
         <div className="bg-white/75 rounded-3xl border border-white/70 shadow-xl shadow-slate-200/50 overflow-hidden animate-fade-in backdrop-blur">
             <div className="overflow-x-auto">
@@ -2188,7 +2211,7 @@ const TableView = ({
                     <thead>
                         <tr className="bg-white/80 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                             <th className="p-3 font-medium">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <span>Nama Tugas & Jadwal</span>
                                     {setSortMode && (
                                         <button
@@ -2211,6 +2234,21 @@ const TableView = ({
                                             </span>
                                         </button>
                                     )}
+                                    {totalCompletedCount > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={toggleAllCompleted}
+                                            className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-0.5 rounded-lg border transition cursor-pointer ${
+                                                isAnyCompletedOpen
+                                                    ? 'bg-emerald-100 border-emerald-300 text-emerald-800 shadow-2xs'
+                                                    : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                            }`}
+                                            title="Buka / tutup semua tugas selesai"
+                                        >
+                                            <i className={`fa-solid ${isAnyCompletedOpen ? 'fa-chevron-up' : 'fa-circle-check'} text-[9px]`}></i>
+                                            <span>{totalCompletedCount} Selesai</span>
+                                        </button>
+                                    )}
                                 </div>
                             </th>
                             <th className="p-3 font-medium w-32">Status</th>
@@ -2222,7 +2260,10 @@ const TableView = ({
                     <tbody className="bg-white/60">
                         {allFolders.map(folder => {
                             const folderTasks = tasks.filter(t => (t.folder || 'General') === folder);
+                            const activeTasks = folderTasks.filter(t => t.status !== 'Done');
+                            const completedTasks = folderTasks.filter(t => t.status === 'Done');
                             const isCollapsed = !!collapsedFolders[folder];
+                            const isCompletedOpen = statusFilter === 'Done' ? true : !!openCompletedFolders[folder];
 
                             return (
                                 <React.Fragment key={folder}>
@@ -2276,9 +2317,22 @@ const TableView = ({
                                                             {folder}
                                                         </span>
                                                     )}
-                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/90 text-slate-600 border border-slate-200/80 shadow-xs">
-                                                        {folderTasks.length} {folderTasks.length === 1 ? 'task' : 'tasks'}
-                                                    </span>
+                                                    {folderTasks.length > 0 ? (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/90 text-slate-600 border border-slate-200/80 shadow-xs">
+                                                                {activeTasks.length} aktif
+                                                            </span>
+                                                            {completedTasks.length > 0 && (
+                                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-xs">
+                                                                    {completedTasks.length} selesai
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/90 text-slate-400 border border-slate-200/80 shadow-xs">
+                                                            0 task
+                                                        </span>
+                                                    )}
                                                 </div>
 
                                                 {/* Action buttons */}
@@ -2328,7 +2382,8 @@ const TableView = ({
                                     {/* Folder Tasks */}
                                     {!isCollapsed && (
                                         <>
-                                            {folderTasks.map(task => (
+                                            {/* Active Tasks */}
+                                            {activeTasks.map(task => (
                                                 <TaskCard
                                                     key={task.id}
                                                     task={task}
@@ -2344,6 +2399,7 @@ const TableView = ({
                                                     hasNotification={unreadTaskIds ? unreadTaskIds.has(task.id) : false}
                                                 />
                                             ))}
+
                                             {folderTasks.length === 0 ? (
                                                 <tr>
                                                     <td colSpan="5" className="py-3 px-8 text-xs text-slate-400 italic">
@@ -2351,25 +2407,94 @@ const TableView = ({
                                                         <button
                                                             type="button"
                                                             onClick={() => onAdd('To Do', folder)}
-                                                            className="text-indigo-600 hover:underline font-semibold ml-1 not-italic"
+                                                            className="text-indigo-600 hover:underline font-semibold ml-1 not-italic cursor-pointer"
                                                         >
                                                             + Tambah Task Baru
                                                         </button>
                                                     </td>
                                                 </tr>
-                                            ) : (
+                                            ) : activeTasks.length === 0 && completedTasks.length > 0 ? (
+                                                <tr>
+                                                    <td colSpan="5" className="py-2.5 px-6 text-xs text-emerald-800 bg-emerald-50/50 border-b border-emerald-100/70">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="flex items-center gap-2 font-medium">
+                                                                <i className="fa-solid fa-circle-check text-emerald-600"></i>
+                                                                Semua tugas aktif di folder ini sudah selesai! ({completedTasks.length} tugas) 🎉
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => toggleCompletedFolder(folder)}
+                                                                className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline ml-2 cursor-pointer"
+                                                            >
+                                                                {isCompletedOpen ? 'Tutup riwayat selesai' : 'Lihat tugas selesai'}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ) : null}
+
+                                            {/* Quick Add Task button */}
+                                            {folderTasks.length > 0 && (
                                                 <tr className="border-b border-dashed border-slate-100 hover:bg-slate-50/50 transition">
                                                     <td colSpan="5" className="px-6 py-2">
                                                         <button
                                                             type="button"
                                                             onClick={() => onAdd('To Do', folder)}
-                                                            className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1.5 font-medium transition"
+                                                            className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1.5 font-medium transition cursor-pointer"
                                                         >
                                                             <i className="fa-solid fa-plus text-[10px]"></i>
                                                             <span>Tambah task di folder {folder}...</span>
                                                         </button>
                                                     </td>
                                                 </tr>
+                                            )}
+
+                                            {/* Collapsible Completed Section */}
+                                            {completedTasks.length > 0 && (
+                                                <>
+                                                    <tr
+                                                        onClick={() => toggleCompletedFolder(folder)}
+                                                        className="bg-slate-50/80 hover:bg-slate-100/90 border-t border-b border-slate-200/70 cursor-pointer transition-colors select-none group/donehdr"
+                                                        title={isCompletedOpen ? "Klik untuk menyembunyikan tugas selesai" : "Klik untuk menampilkan tugas selesai"}
+                                                    >
+                                                        <td colSpan="5" className="px-4 py-2">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-5 h-5 flex items-center justify-center text-slate-400 group-hover/donehdr:text-emerald-600 transition">
+                                                                        <i className={`fa-solid fa-chevron-${isCompletedOpen ? 'down' : 'right'} text-[10px]`}></i>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                                                                        <i className="fa-solid fa-circle-check text-emerald-600"></i>
+                                                                        <span>Selesai</span>
+                                                                        <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200/80">
+                                                                            {completedTasks.length}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-[11px] text-slate-400 group-hover/donehdr:text-slate-600 flex items-center gap-1">
+                                                                    <span>{isCompletedOpen ? 'Sembunyikan' : 'Tampilkan'}</span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+
+                                                    {isCompletedOpen && completedTasks.map(task => (
+                                                        <TaskCard
+                                                            key={task.id}
+                                                            task={task}
+                                                            members={members}
+                                                            projects={projects}
+                                                            onEdit={onEdit}
+                                                            onDelete={onDelete}
+                                                            onUpdatePriority={onUpdatePriority}
+                                                            onUpdateStatus={onUpdateStatus}
+                                                            onUpdateTask={onUpdateTask}
+                                                            isListView={true}
+                                                            projectAccess={projectAccess}
+                                                            hasNotification={unreadTaskIds ? unreadTaskIds.has(task.id) : false}
+                                                        />
+                                                    ))}
+                                                </>
                                             )}
                                         </>
                                     )}
@@ -5757,6 +5882,7 @@ const TaskControls = ({ members, searchQuery, setSearchQuery, statusFilter, setS
         )}
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="all">Semua Status</option>
+            <option value="active">Tugas Aktif (Belum Selesai)</option>
             {COLUMNS.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -9163,7 +9289,11 @@ export default function TaskManagerApp() {
     const currentTasks = projectTasks
         .filter(task => {
             const matchesSearch = (task.title || '').toLowerCase().includes(searchQuery.trim().toLowerCase());
-            const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+            const matchesStatus = statusFilter === 'all'
+                ? true
+                : statusFilter === 'active'
+                    ? task.status !== 'Done'
+                    : task.status === statusFilter;
             const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
             const matchesFolder = folderFilter === 'all' || (task.folder || 'General') === folderFilter;
             const matchesPic = picFilter === 'all' || (picFilter === 'none' ? !task.picId : task.picId === picFilter);
@@ -10067,6 +10197,7 @@ export default function TaskManagerApp() {
                                     foldersList={projectFoldersList}
                                     sortMode={sortMode}
                                     setSortMode={setSortMode}
+                                    statusFilter={statusFilter}
                                     onAdd={handleAddTask}
                                     onEdit={handleEditTask}
                                     onDelete={handleDeleteTask}
