@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getRoleLevel, isMeetingSchedule, isWorksheetSchedule } from './WeeklyScheduleView';
+import { isPersonalProject } from '../lib/personal';
 
 // Helper format tanggal deadline
 const formatDeadline = (dateStr) => {
@@ -321,7 +322,12 @@ export default function MainDashboard({
         const urgentSubordinateTasks = [];
 
         const membersWithStats = subordinateMembers.map(sub => {
-            const subTasks = effectiveTasks.filter(t => t.picId === sub.id && t.status !== 'Done');
+            const subTasks = effectiveTasks.filter(t => {
+                if (t.picId !== sub.id || t.status === 'Done') return false;
+                // Task workspace pribadi tidak boleh dieskalasi ke atasan
+                if (isPersonalProject(projects.find(p => p.id === t.projectId))) return false;
+                return true;
+            });
             let subOverdue = 0;
             let subToday = 0;
 

@@ -10,9 +10,11 @@ import WeeklyScheduleView, { getRoleLevel, isMeetingSchedule, isWorksheetSchedul
 import MainDashboard from '../components/MainDashboard';
 import NotificationCenter from '../components/NotificationCenter';
 import MemberMigrationModal from '../components/MemberMigrationModal';
+import WhatsAppSetupModal from '../components/WhatsAppSetupModal';
 import SidebarScheduleWidget from '../components/SidebarScheduleWidget';
 import TaskProofSection from '../components/TaskProofSection';
 import { useNotifications } from '../lib/useNotifications';
+import { isPersonalProject, canAccessPersonalProject } from '../lib/personal';
 
 
 // Default Data when localStorage/DB is empty
@@ -7596,6 +7598,42 @@ export default function TaskManagerApp() {
             hasInitializedStaffPicRef.current = true;
         }
     }, [isStaffUser, myMemberId]);
+
+    // Modal wajib input Nomor WhatsApp: muncul selama user belum punya nomor WA terdaftar
+    const resolvedWhatsappNumber = (loggedInUserObj?.whatsapp_number ?? session?.whatsapp_number ?? '') || '';
+    const hasWhatsappNumber = Boolean(String(resolvedWhatsappNumber).trim());
+    const isForcingPasswordChange = Boolean(session?.requiresPasswordChange);
+    const showWhatsappModal = isMounted && !hasWhatsappNumber && !isForcingPasswordChange;
+
+    const handleSaveWhatsappFromModal = async (rawNumber) => {
+        const memberId = session?.memberId;
+        if (!memberId) return false;
+
+        const cleanNumber = String(rawNumber || '').trim();
+        const updatePayload = { whatsapp_number: cleanNumber || null };
+
+        let { error } = await supabase.from('members').update(updatePayload).eq('id', memberId);
+        if (error && (error.code === '42703' || (error.message && error.message.includes('whatsapp_number')))) {
+            console.warn('Kolom whatsapp_number belum ada di tabel members DB:', error.message);
+            return false;
+        }
+        if (error) {
+            alert('Gagal menyimpan nomor WhatsApp: ' + error.message);
+            return false;
+        }
+
+        const updatedMember = { id: memberId, whatsapp_number: cleanNumber };
+        setMembers(prev => Array.isArray(prev)
+            ? prev.map(m => (m.id === memberId ? { ...m, ...updatedMember } : m))
+            : [{ ...updatedMember, email: session?.email }]
+        );
+
+        const updatedSession = { ...session, whatsapp_number: cleanNumber };
+        setSession(updatedSession);
+        localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(updatedSession));
+
+        return true;
+    };
     
     // Sharing & Project Settings state
     const [projectAccess, setProjectAccess] = useState([]);
@@ -7692,12 +7730,10 @@ export default function TaskManagerApp() {
     const filteredProjects = projects.filter(p => {
         if (globalDivision !== 'All' && p.division && p.division !== 'Task ABS' && p.division !== globalDivision) return false;
 
-        const isPersonal = p.description === 'personal' || (p.owner_id && p.name && p.name.startsWith('Task '));
-        // Workspace pribadi hanya untuk pemiliknya, atau yang diberikan akses secara eksplisit (Direksi/Super User memiliki akses penuh)
+        const isPersonal = isPersonalProject(p);
+        // Workspace pribadi mutlak hanya untuk pemiliknya (termasuk Direksi/Super User tidak bisa melihat)
         if (isPersonal) {
-            if (isExecutive) return true;
-            if (memberId && p.owner_id === memberId) return true;
-            return projectAccess.some(a => a.project_id === p.id && a.member_id === memberId);
+            return canAccessPersonalProject(p, memberId);
         }
 
         if (isSuperUser) return true;
@@ -7712,11 +7748,9 @@ export default function TaskManagerApp() {
             if (project.division && project.division !== 'Task ABS' && project.division !== globalDivision) return false;
         }
 
-        const isPersonal = project.description === 'personal' || (project.owner_id && project.name && project.name.startsWith('Task '));
+        const isPersonal = isPersonalProject(project);
         if (isPersonal) {
-            if (isExecutive) return true;
-            if (memberId && project.owner_id === memberId) return true;
-            return projectAccess.some(a => a.project_id === project.id && a.member_id === memberId);
+            return canAccessPersonalProject(project, memberId);
         }
         
         // Task di dalam workspace otomatis dapat dilihat oleh seluruh anggota workspace
@@ -10622,6 +10656,7 @@ export default function TaskManagerApp() {
 
             <CustomDialog dialog={dialog} closeDialog={closeDialog} />
             <PasswordModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} onSave={handleChangePassword} isForced={session?.requiresPasswordChange} />
+            <WhatsAppSetupModal isOpen={showWhatsappModal} onSave={handleSaveWhatsappFromModal} />
             <TaskEditModal
                 task={editingTask}
                 projects={filteredProjects}
