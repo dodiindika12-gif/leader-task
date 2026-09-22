@@ -203,6 +203,7 @@ export default function ChatMessage({ message }) {
             }
             const cleaned = part.text.replace(/\[FILE_CSV\]\s*\S*/g, '').trimEnd();
             if (cleaned) {
+                const hasTable = !isUser && lastTableMarkdown && lastTableMarkdown.includes('\n');
                 rendered.push(
                     <div key={`t-${idx}`} className={`px-4 py-3 rounded-2xl shadow-sm text-[15px] leading-relaxed break-words w-fit max-w-full
                         ${isUser
@@ -210,10 +211,10 @@ export default function ChatMessage({ message }) {
                             : 'bg-white text-slate-800 border border-slate-100 rounded-tl-md'
                         }`}
                     >
-                        <div className={`prose prose-sm max-w-none prose-p:my-1 prose-pre:my-1.5 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-table:text-xs ${isUser ? 'prose-invert' : ''}`}>
+                        <div className={`chat-bubble ${isUser ? 'chat-bubble-own ' : ''}prose prose-sm max-w-none prose-p:my-1 prose-pre:my-1.5 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1`}>
                             <ReactMarkdown>{cleaned}</ReactMarkdown>
                         </div>
-                        {!isUser && lastTableMarkdown && (
+                        {!isUser && hasTable && (
                             <div className="mt-2 pt-2 border-t border-slate-100">
                                 <TableCsvButton tableMarkdown={lastTableMarkdown} />
                             </div>

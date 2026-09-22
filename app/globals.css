@@ -69,3 +69,59 @@ body {
 .tint-pink-solid { background-image: var(--tint-pink-solid); color: #fff; }
 .tint-peach-solid { background-image: var(--tint-peach-solid); color: #fff; }
 .tint-mint-solid { background-image: var(--tint-mint-solid); color: #fff; }
+
+/* ===== Tabel di bubble chat (ReactMarkdown) ===== */
+.chat-bubble {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-bubble table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.chat-bubble thead th {
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 10px;
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.chat-bubble tbody td {
+  padding: 7px 10px;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+}
+
+.chat-bubble tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.chat-bubble tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+.chat-bubble tbody tr:hover td {
+  background: #ecfdf5;
+}
+
+/* Bubble user (invert): header & zebra gelap tipis */
+.chat-bubble-own table { border-color: rgba(255,255,255,0.25); }
+.chat-bubble-own thead th { background: rgba(255,255,255,0.15); color: #fff; border-bottom-color: rgba(255,255,255,0.25); }
+.chat-bubble-own tbody td { color: rgba(255,255,255,0.92); border-bottom-color: rgba(255,255,255,0.12); }
+.chat-bubble-own tbody tr:nth-child(even) td { background: rgba(255,255,255,0.06); }
+.chat-bubble-own tbody tr:hover td { background: rgba(255,255,255,0.12); }
