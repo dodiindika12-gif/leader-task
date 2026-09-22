@@ -19,9 +19,11 @@
     "@supabase/supabase-js": "^2.109.0",
     "@tailwindcss/typography": "^0.5.20",
     "ai": "^7.0.76",
+    "exceljs": "^4.4.0",
     "framer-motion": "^13.1.1",
     "lucide-react": "^1.33.0",
     "next": "16.2.9",
+    "pptxgenjs": "^4.0.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0"

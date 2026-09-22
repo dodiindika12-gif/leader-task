@@ -73,24 +73,82 @@ function ToolPart({ part }) {
     const input = part.input || {};
     const output = part.output || {};
 
+    // Hasil generate_file: tampilkan sebagai kartu unduhan, bukan detail tool
+    if (part.toolName === 'generate_file' && isResult && output?.ok && output?.downloadUrl) {
+        return (
+            <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-2">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-600 via-pink-500 to-rose-400 flex items-center justify-center shrink-0">
+                        <i className="fa-solid fa-file-arrow-down text-white text-sm" aria-hidden="true"></i>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-slate-900 truncate">{output.title || output.fileName}</div>
+                        <div className="text-[10px] text-slate-400">
+                            {(output.format || '').toUpperCase()}
+                            {output.sizeKb ? ` • ${output.sizeKb} KB` : ''} • siap diunduh
+                        </div>
+                    </div>
+                </div>
+                <a
+                    href={output.downloadUrl}
+                    download={output.fileName}
+                    className="block w-full text-center py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white text-xs font-bold transition-colors"
+                >
+                    Unduh {output.fileName}
+                </a>
+            </div>
+        );
+    }
+
     return (
         <details className="w-full text-[11px] rounded-xl border border-slate-200 bg-slate-50 overflow-hidden group">
             <summary className="px-3 py-2 cursor-pointer select-none flex items-center gap-2 text-slate-600 hover:bg-slate-100 transition-colors list-none">
                 <Wrench size={12} className={isResult ? 'text-emerald-600' : 'animate-spin text-amber-500'} />
-                <span className="font-semibold">BigQuery {isResult ? 'selesai' : 'menjalankan query'}</span>
+                <span className="font-semibold">
+                    {part.toolName === 'generate_file'
+                        ? 'Membuat file'
+                        : part.toolName === 'remember'
+                            ? 'Menyimpan memori'
+                            : part.toolName === 'refine_skill'
+                                ? 'Menyempurnakan skill'
+                                : 'BigQuery'}{' '}
+                    {isResult ? 'selesai' : 'sedang berjalan'}
+                </span>
                 {isResult && typeof output.rowCount === 'number' && (
                     <span className="ml-auto font-mono text-[10px] text-slate-400">{output.rowCount} baris</span>
+                )}
+                {isResult && output.ok === false && (
+                    <span className="ml-auto font-mono text-[10px] text-rose-500">gagal</span>
                 )}
             </summary>
             <div className="px-3 py-2 border-t border-slate-200 space-y-2">
                 {input.sql && (
                     <pre className="p-2 rounded-lg bg-slate-950 text-emerald-200/90 font-mono text-[10px] overflow-x-auto whitespace-pre">{input.sql}</pre>
                 )}
-                {isResult && output.ok === false && (
+                {part.toolName === 'remember' && input.content && (
+                    <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-900 text-[11px]">
+                        <span className="font-semibold">{input.scope === 'global' ? 'Memori global:' : 'Memori pribadi:'}</span> {input.content}
+                    </div>
+                )}
+                {part.toolName === 'refine_skill' && input.slug && (
+                    <div className="p-2 rounded-lg bg-amber-50 border border-amber-100 text-amber-900 text-[11px]">
+                        <span className="font-semibold">Skill {input.slug}:</span> {input.reason || 'perbaikan otomatis'}
+                    </div>
+                )}
+                {part.toolName === 'generate_file' && input.format && (
+                    <div className="p-2 rounded-lg bg-slate-100 text-slate-600 text-[11px]">
+                        Format <span className="font-mono font-bold">{input.format}</span>
+                        {input.title ? `: ${input.title}` : ''}
+                    </div>
+                )}
+                {isResult && !output.ok && output.error && (
                     <div className="flex items-start gap-1.5 text-rose-600 font-medium">
                         <AlertCircle size={12} className="mt-0.5 shrink-0" />
                         <span className="break-all">{output.error}</span>
                     </div>
+                )}
+                {isResult && part.toolName !== 'generate_file' && output.note && (
+                    <div className="text-slate-500 text-[11px] leading-relaxed">{output.note}</div>
                 )}
                 {isResult && Array.isArray(output.rows) && output.rows.length > 0 && (
                     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">

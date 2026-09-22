@@ -9,6 +9,7 @@ import {
     createMemory,
     proposeSkillUpdate,
 } from '@/lib/chat-memory';
+import { generateAgentFile } from '@/lib/file-generator';
 
 export const maxDuration = 60;
 
@@ -111,9 +112,12 @@ function systemPrompt({ memories, skills }) {
         '- Data apa adanya: jangan merevisi atau menafsirkan ulang angka dari database.',
         '',
         '== FILE HASIL ==',
-        'Jika user meminta file/CSV: tulis tabel Markdown lengkap lalu akhiri dengan baris:',
-        '[FILE_CSV] nama-file.csv',
-        'Client mengubah penanda itu menjadi tombol unduh CSV.',
+        'Gunakan tool generate_file untuk SEMUA permintaan file (PPTX, Excel, CSV): user akan dapat tombol unduh langsung di chat.',
+        '- PPTX: isi payload.slides dengan struktur slide (title, subtitle, text, bullets, table). Ikuti standar ABS: tema Merah Muda #FF0088, 16:9, konten ringkas per slide.',
+        '- XLSX: isi payload.rows (baris pertama = header), atau payload.sheets untuk multi-sheet.',
+        '- CSV: isi payload.rows.',
+        'Setelah tool sukses, cukup tulis kalimat singkat: file sudah jadi + nama file. JANGAN gambar ulang seluruh isi file di chat.',
+        'Untuk data tabel biasa di chat tetap pakai Markdown table; tabel diakhiri [FILE_CSV] hanya jika user minta file CSV tanpa generate_file.',
         '',
         (guide ? ('== PANDUAN BIGQUERY ABS GROUP (FONT OF TRUTH) ==\n\n' + guide) : ''),
     ].filter(Boolean).join('\n');
@@ -266,6 +270,47 @@ export async function POST(req) {
                                 note: res.applied
                                     ? `Skill "${res.skillName}" otomatis ter-update ke versi ${res.version}.`
                                     : `Versi ${res.version} skill "${res.skillName}" masuk antrean review karena auto-refine nonaktif pada skill ini.`,
+                            };
+                        } catch (err) {
+                            return { ok: false, error: String(err.message || err).slice(0, 300) };
+                        }
+                    },
+                }),
+
+                generate_file: tool({
+                    description: 'Buat file nyata (PPTX presentasi / XLSX Excel / CSV) yang bisa langsung diunduh user. Wajib dipakai saat user meminta file, laporan PowerPoint, atau rekap Excel.',
+                    inputSchema: z.object({
+                        format: z.enum(['pptx', 'xlsx', 'csv']).describe('Jenis file yang diminta user.'),
+                        fileName: z.string().max(60).optional().describe('Nama file tanpa ekstensi, mis. laporan-penjualan-bt01-september.'),
+                        title: z.string().max(120).optional().describe('Judul dokumen/laporan, dipakai sebagai judul utama.'),
+                        /* PPTX: sebuah slide = { title, subtitle?, text?, bullets?[], table?[[...]] } */
+                        slides: z.array(z.object({
+                            title: z.string().max(120),
+                            subtitle: z.string().max(200).optional(),
+                            text: z.string().max(1200).optional(),
+                            bullets: z.array(z.string().max(300)).max(10).optional(),
+                            table: z.array(z.array(z.string()).max(12)).max(25).optional(),
+                        })).max(15).optional().describe('PPTX only: daftar slide. Slide 1 biasanya cover, terakhir closing.'),
+                        /* XLSX/CSV: baris pertama = header */
+                        rows: z.array(z.array(z.union([z.string(), z.number()]))).max(1000).optional().describe('XLSX/CSV only: data tabel, baris pertama adalah header.'),
+                        sheets: z.array(z.object({
+                            name: z.string().max(30),
+                            title: z.string().max(120).optional(),
+                            rows: z.array(z.array(z.union([z.string(), z.number()]))).max(1000),
+                        })).max(5).optional().describe('XLSX only: multi-sheet.'),
+                    }),
+                    execute: async (payload) => {
+                        try {
+                            const file = await generateAgentFile(payload);
+                            const downloadUrl = `/api/chat/files?name=${encodeURIComponent(file.fileName)}`;
+                            return {
+                                ok: true,
+                                fileName: file.fileName,
+                                downloadUrl,
+                                sizeKb: Math.round(file.size / 1024),
+                                format: payload.format,
+                                title: payload.title || payload.fileName || file.fileName,
+                                note: 'File siap. Tampilkan kalimat singkat ke user bahwa file sudah jadi dan bisa diunduh, sertakan nama file.',
                             };
                         } catch (err) {
                             return { ok: false, error: String(err.message || err).slice(0, 300) };
