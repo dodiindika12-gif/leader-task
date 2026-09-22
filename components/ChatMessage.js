@@ -71,74 +71,92 @@ function FilePart({ part, isUser }) {
 /**
  * Beberapa model menulis tabel dalam SATU baris:
  * "| Tipe | Jumlah | |---|---| | BEAUTY | 17 |"
- * Fungsi ini merekonstruksinya menjadi tabel Markdown multi-baris yang valid.
- * Aman untuk teks biasa: hanya memproses jika ada sel pemisah "---".
+ * Fungsi ini merekonstruksi SEMUA kemunculannya menjadi tabel Markdown
+ * multi-baris yang valid. Aman untuk teks & tabel biasa.
  */
 export function normalizeInlineTables(md) {
-    if (!md || !md.includes('|') || !/\|\s*:?-{2,}:?\s*\|/.test(md)) return md;
+    if (!md || !md.includes('|')) return md;
+
+    const runMarker = /\|\s*:?-{3,}:?\s*\|\s*\|?\s*:?-{3,}:?\s*\|/;
+    if (!runMarker.test(md)) return md;
 
     const lines = md.split('\n');
-    const sepIdx = lines.findIndex((l) => /\|\s*:?-{2,}:?\s*\|/.test(l));
-    if (sepIdx === -1) return md;
+    const out = [];
+    let processedAny = false;
 
-    // Perluas region: baris di atas & bawah yang masih mengandung '|'
-    let start = sepIdx;
-    let end = sepIdx;
-    while (start > 0 && lines[start - 1].includes('|')) start -= 1;
-    while (end < lines.length - 1 && lines[end + 1].includes('|')) end += 1;
+    const SEP_CELL = /^:?-{3,}:?$/;
 
-    const regionLines = lines.slice(start, end + 1);
-    const prefixMatch = regionLines[0].match(/^([^|]*)\|/);
-    const prefix = prefixMatch ? prefixMatch[1] : '';
-
-    const joined = regionLines
-        .map((l, i) => (i === 0 && prefix ? l.slice(prefix.length) : l))
-        .join(' ');
-
-    const cells = joined
-        .replace(/^\s*\|/, '')
-        .replace(/\|\s*$/, '')
-        .split('|')
-        .map((c) => c.trim())
-        .filter((c) => c.length > 0);
-
-    if (cells.length < 4) return md;
-
-    // Pisahkan: header sel -> run pemisah (---) -> sisa isi
-    let sepStart = -1;
-    let sepEnd = -1;
-    for (let i = 0; i < cells.length; i += 1) {
-        if (/^:?-{2,}:?$/.test(cells[i])) {
-            if (sepStart === -1) sepStart = i;
-            sepEnd = i;
-        } else if (sepStart !== -1) {
-            break;
+    // Proses per baris: satu baris fisik bisa memuat beberapa tabel inline.
+    for (const line of lines) {
+        // Baris tabel normal (dimulai & diakhiri pipe, tanpa sambungan "| |---|") diteruskan apa adanya
+        if (!runMarker.test(line)) {
+            out.push(line);
+            continue;
         }
+
+        // Potong prefix teks sebelum pipe pertama
+        const prefixMatch = line.match(/^([^|]*)\|/);
+        const prefix = prefixMatch ? prefixMatch[1] : '';
+        const rest = prefix ? line.slice(prefix.length) : line;
+
+        // Split sel: buang pipe tepi
+        const cells = rest
+            .replace(/^\s*\|/, '')
+            .replace(/\|\s*$/, '')
+            .split('|')
+            .map((c) => c.trim());
+
+        // Cari run pemisah: >=2 sel "---" berurutan
+        let sepStart = -1;
+        let sepEnd = -1;
+        for (let i = 0; i < cells.length; i += 1) {
+            if (SEP_CELL.test(cells[i])) {
+                let j = i;
+                while (j < cells.length && SEP_CELL.test(cells[j])) j += 1;
+                if (j - i >= 2) {
+                    sepStart = i;
+                    sepEnd = j - 1;
+                    break;
+                }
+                i = j;
+            }
+        }
+
+        // Tidak ada run pemisah valid → perbarui hanya jika ada pipe ganda "| |" (indikasi tabel rusak)
+        if (sepStart === -1) {
+            out.push(line);
+            continue;
+        }
+
+        const header = cells.slice(0, sepStart).filter((c) => c.length > 0);
+        const width = header.length;
+        if (width < 1) {
+            out.push(line);
+            continue;
+        }
+
+        // Sisa sel setelah run pemisah. Sel kosong interior berasal dari sambungan
+        // "| |" antar baris yang dirapatkan model, bukan data; buang semua agar
+        // perataan baris (chunking) tidak bergeser.
+        const body = cells.slice(sepEnd + 1).filter((c) => c !== '');
+
+        const rows = [];
+        for (let i = 0; i < body.length; i += width) {
+            rows.push(body.slice(i, i + width));
+        }
+        // Baris terakhir boleh pendek (tabel terpotong); isi dengan '' agar rapi
+        if (rows.length > 0 && rows[rows.length - 1].length < width) {
+            const last = rows[rows.length - 1];
+            while (last.length < width) last.push('');
+        }
+
+        out.push(prefix + `| ${header.join(' | ')} |`);
+        out.push(`| ${header.map(() => '---').join(' | ')} |`);
+        rows.forEach((r) => out.push(`| ${r.join(' | ')} |`));
+        processedAny = true;
     }
-    if (sepStart <= 0) return md;
 
-    const header = cells.slice(0, sepStart);
-    const body = cells.slice(sepEnd + 1);
-    const width = header.length;
-    if (width < 1 || body.length === 0) return md;
-
-    const rows = [];
-    for (let i = 0; i < body.length; i += width) {
-        rows.push(body.slice(i, i + width));
-    }
-
-    const table = [
-        `| ${header.join(' | ')} |`,
-        `| ${header.map(() => '---').join(' | ')} |`,
-        ...rows.map((r) => `| ${Array.from({ length: width }, (_, c) => r[c] ?? '').join(' | ')} |`),
-    ];
-
-    return [
-        ...lines.slice(0, start),
-        prefix + table[0],
-        ...table.slice(1),
-        ...lines.slice(end + 1),
-    ].join('\n');
+    return processedAny ? out.join('\n') : md;
 }
 
 function ToolPart({ part }) {
