@@ -2,7 +2,7 @@
 
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
-import { useState, useEffect, useRef, useCallback, startTransition } from 'react';
+import { useState, useEffect, useRef, useCallback, startTransition, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import {
     Settings2, X, Check, Loader2, Feather, ShieldCheck, Database,
@@ -42,6 +42,42 @@ function loadDashboardSession() {
     } catch {
         return null;
     }
+}
+
+// Snapshot session dashboard via useSyncExternalStore:
+// server snapshot selalu null; client membaca localStorage dan subscribe ke event storage.
+// Ini menghindari hydration mismatch (React memakai server snapshot saat hydrate,
+// lalu re-render otomatis dengan nilai client setelah mount).
+let cachedSessionSnapshot;
+const sessionStore = {
+    subscribe(callback) {
+        window.addEventListener('storage', callback);
+        // Polling ringan untuk perubahan login di tab yang sama (login menulis localStorage)
+        const interval = setInterval(() => {
+            const next = loadDashboardSession();
+            const prev = cachedSessionSnapshot;
+            const changed = (prev?.memberId || null) !== (next?.memberId || null) ||
+                (prev?.email || null) !== (next?.email || null);
+            if (changed) callback();
+        }, 1000);
+        return () => {
+            window.removeEventListener('storage', callback);
+            clearInterval(interval);
+        };
+    },
+    getSnapshot() {
+        if (cachedSessionSnapshot === undefined) {
+            cachedSessionSnapshot = loadDashboardSession();
+        }
+        return cachedSessionSnapshot;
+    },
+    getServerSnapshot() {
+        return null;
+    },
+};
+
+function useDashboardSession() {
+    return useSyncExternalStore(sessionStore.subscribe, sessionStore.getSnapshot, sessionStore.getServerSnapshot);
 }
 
 function TestResult({ result, loading, target }) {
@@ -365,12 +401,10 @@ export default function ChatPage() {
         setTimeout(() => setToast(''), 2600);
     }, []);
 
-    // Cek session dashboard utama: eager state initializer (aman SSR: baca localStorage hanya di client)
-    const [session] = useState(() => {
-        if (typeof window === 'undefined') return null;
-        return loadDashboardSession();
-    });
-    const [sessionChecked] = useState(() => typeof window !== 'undefined');
+    // Session dashboard via external store: server render = null (LoginRequired),
+    // client re-render otomatis dengan session asli setelah hydration. Zero mismatch.
+    const session = useDashboardSession();
+    const sessionChecked = session !== undefined;
 
     const settingsRef = useRef(DEFAULT_SETTINGS);
 
@@ -396,7 +430,7 @@ export default function ChatPage() {
     const [transport, setTransport] = useState(null);
     const transportInitializedRef = useRef(false);
     useEffect(() => {
-        if (transportInitializedRef.current || !sessionChecked) return;
+        if (transportInitializedRef.current) return;
         transportInitializedRef.current = true;
         setTransport(new DefaultChatTransport({
             api: '/api/chat',
@@ -415,7 +449,7 @@ export default function ChatPage() {
                 return h;
             },
         }));
-    }, [sessionChecked]);
+    }, []);
 
     const chatState = useChat({
         transport: transport ?? undefined,
@@ -472,10 +506,7 @@ export default function ChatPage() {
         setSettingsOpen(true);
     };
 
-    if (!sessionChecked) {
-        return <div className="h-screen bg-[linear-gradient(135deg,#ede9fe_0%,#e0f2fe_35%,#fce7f3_65%,#dbeafe_100%)]" />;
-    }
-
+    // sessionChecked selalu true; dipertahankan sebagai penjelas alur. Server render = null session → LoginRequired.
     if (!session) {
         return <LoginRequired />;
     }
