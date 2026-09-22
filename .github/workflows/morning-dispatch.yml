@@ -1,0 +1,49 @@
+name: Morning WhatsApp Task Dispatch (07:00 WITA)
+
+on:
+  schedule:
+    # 23:00 UTC = 07:00 WITA (Asia/Makassar, UTC+8)
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Jalankan sebagai simulasi (dry run)?'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  dispatch:
+    name: Execute Task Dispatch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel Cron Endpoint
+        env:
+          VERCEL_URL: ${{ secrets.VERCEL_PROJECT_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          IS_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ -z "$VERCEL_URL" ]; then
+            echo "::warning::Secret VERCEL_PROJECT_URL belum diset di GitHub Secrets. Melewati pemanggilan via GitHub Actions (Vercel Cron tetap berjalan otomatis via vercel.json)."
+            exit 0
+          fi
+          
+          ENDPOINT="${VERCEL_URL%/}/api/cron/morning-dispatch"
+          if [ "$IS_DRY_RUN" = "true" ]; then
+            ENDPOINT="${ENDPOINT}?dryRun=1"
+          fi
+          
+          echo "Memanggil endpoint: $ENDPOINT"
+          HTTP_STATUS=$(curl -s -o response.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$ENDPOINT")
+            
+          cat response.json
+          echo ""
+          
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "✅ Berhasil dieksekusi dengan status HTTP $HTTP_STATUS"
+          else
+            echo "❌ Gagal dieksekusi. HTTP status: $HTTP_STATUS"
+            exit 1
+          fi

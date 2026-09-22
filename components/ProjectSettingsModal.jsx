@@ -546,10 +546,8 @@ export default function ProjectSettingsModal({
 
                                 {/* Pin Toggle */}
                                 <div 
-                                    onClick={() => isOwner && onTogglePin && onTogglePin(project.id)}
-                                    className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between ${
-                                        !isOwner ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
-                                    } ${
+                                    onClick={() => onTogglePin && onTogglePin(project.id)}
+                                    className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
                                         project.isPinned 
                                             ? 'bg-orange-50/70 border-orange-200 text-orange-900' 
                                             : 'bg-slate-50 border-slate-200/70 text-slate-700 hover:bg-slate-100/70'
@@ -563,7 +561,7 @@ export default function ProjectSettingsModal({
                                         </div>
                                         <div>
                                             <p className="text-xs font-bold leading-tight">Sematkan Proyek (Urgent)</p>
-                                            <p className="text-[11px] text-slate-500 mt-0.5">Menempatkan proyek ini di posisi teratas</p>
+                                            <p className="text-[11px] text-slate-500 mt-0.5">Sematkan di posisi teratas untuk akun Anda</p>
                                         </div>
                                     </div>
                                     <div className={`w-10 h-6 flex items-center rounded-full p-1 transition-colors ${

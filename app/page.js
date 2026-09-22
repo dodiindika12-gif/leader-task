@@ -2712,13 +2712,14 @@ const resolveDirectSupervisor = (member, { divisions = [], departments = [], all
 
 
 const EditMemberModal = ({ member, isOpen, onClose, onSave, rolesList, divisionsList, departments = [], isSuperAdmin, lockedDivision }) => {
-    const [form, setForm] = useState({ name: '', email: '', role: 'Staff', division: 'Marcomm', department: '', is_active: true });
+    const [form, setForm] = useState({ name: '', email: '', whatsapp_number: '', role: 'Staff', division: 'Marcomm', department: '', is_active: true });
 
     useEffect(() => {
         if (member) {
             setForm({
                 name: member.name || '',
                 email: member.email || '',
+                whatsapp_number: member.whatsapp_number || '',
                 role: member.role || member.position || (rolesList?.[0] || 'Staff'),
                 division: member.division || lockedDivision || (divisionsList?.[0] || 'Marcomm'),
                 department: member.department || '',
@@ -2738,6 +2739,7 @@ const EditMemberModal = ({ member, isOpen, onClose, onSave, rolesList, divisions
         onSave(member.id, {
             name: form.name.trim(),
             email: form.email ? form.email.trim() : null,
+            whatsapp_number: form.whatsapp_number ? form.whatsapp_number.trim() : null,
             role: form.role,
             position: form.role,
             division: isSuperAdmin ? form.division : (lockedDivision || form.division),
@@ -2781,6 +2783,22 @@ const EditMemberModal = ({ member, isOpen, onClose, onSave, rolesList, divisions
                             placeholder="nama@perusahaan.com"
                             className="w-full text-sm border border-slate-200 rounded-xl py-2.5 px-3.5 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition"
                         />
+                    </div>
+                    <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">Nomor WhatsApp</label>
+                            <span className="text-[10px] text-slate-400 font-normal">Opsional</span>
+                        </div>
+                        <div className="relative">
+                            <i className="fa-brands fa-whatsapp absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-500 text-sm"></i>
+                            <input
+                                type="tel"
+                                value={form.whatsapp_number || ''}
+                                onChange={e => setForm({ ...form, whatsapp_number: e.target.value })}
+                                placeholder="cth. 08123456789 atau 628123456789"
+                                className="w-full text-sm border border-slate-200 rounded-xl py-2.5 pl-9 pr-3.5 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition"
+                            />
+                        </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -3648,6 +3666,7 @@ const OrgManagementView = ({
     // Profile Edit Form State
     const [profileName, setProfileName] = useState(activeMemberObj?.name || currentUser?.name || '');
     const [profileEmail, setProfileEmail] = useState(activeMemberObj?.email || currentUser?.email || '');
+    const [profileWhatsapp, setProfileWhatsapp] = useState(activeMemberObj?.whatsapp_number || currentUser?.whatsapp_number || '');
     const [profileColor, setProfileColor] = useState(activeMemberObj?.color || '#2563eb');
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [profileMsg, setProfileMsg] = useState({ type: '', text: '' });
@@ -3657,6 +3676,7 @@ const OrgManagementView = ({
         if (activeMemberObj) {
             setProfileName(activeMemberObj.name || currentUser?.name || '');
             setProfileEmail(activeMemberObj.email || currentUser?.email || '');
+            setProfileWhatsapp(activeMemberObj.whatsapp_number || currentUser?.whatsapp_number || '');
             setProfileColor(activeMemberObj.color || '#2563eb');
         }
     }, [activeMemberObj, currentUser]);
@@ -3714,6 +3734,7 @@ const OrgManagementView = ({
             const success = await onUpdateMyProfile({
                 name: profileName.trim(),
                 email: profileEmail.trim(),
+                whatsapp_number: profileWhatsapp ? profileWhatsapp.trim() : null,
                 color: profileColor
             });
             if (success) {
@@ -3822,6 +3843,7 @@ const OrgManagementView = ({
     const [memberForm, setMemberForm] = useState({ 
         name: '', 
         email: '', 
+        whatsapp_number: '',
         role: 'Staff', 
         division: lockedDivision || 'Marcomm', 
         department: lockedDepartment || '' 
@@ -3895,6 +3917,7 @@ const OrgManagementView = ({
         setMemberForm({ 
             name: '', 
             email: '', 
+            whatsapp_number: '',
             role: 'Staff', 
             division: lockedDivision || (divisionsList?.[0] || 'Marcomm'), 
             department: lockedDepartment || '' 
@@ -4112,39 +4135,64 @@ const OrgManagementView = ({
                                 </div>
 
                                 {/* Form Fields */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
-                                            Nama Lengkap
-                                        </label>
-                                        <div className="relative">
-                                            <i className="fa-regular fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                                            <input
-                                                type="text"
-                                                value={profileName}
-                                                onChange={e => setProfileName(e.target.value)}
-                                                placeholder="Masukkan nama lengkap"
-                                                className="w-full text-sm pl-9 pr-3.5 py-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition"
-                                                required
-                                            />
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
+                                                Nama Lengkap
+                                            </label>
+                                            <div className="relative">
+                                                <i className="fa-regular fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                                                <input
+                                                    type="text"
+                                                    value={profileName}
+                                                    onChange={e => setProfileName(e.target.value)}
+                                                    placeholder="Masukkan nama lengkap"
+                                                    className="w-full text-sm pl-9 pr-3.5 py-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition"
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
+                                                Alamat Email
+                                            </label>
+                                            <div className="relative">
+                                                <i className="fa-regular fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                                                <input
+                                                    type="email"
+                                                    value={profileEmail}
+                                                    onChange={e => setProfileEmail(e.target.value)}
+                                                    placeholder="nama@abskdi.biz.id"
+                                                    className="w-full text-sm pl-9 pr-3.5 py-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition"
+                                                    required
+                                                />
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
-                                            Alamat Email
-                                        </label>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                                                Nomor WhatsApp
+                                            </label>
+                                            <span className="text-[10px] text-slate-400 font-medium">Opsional</span>
+                                        </div>
                                         <div className="relative">
-                                            <i className="fa-regular fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                                            <i className="fa-brands fa-whatsapp absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-500 text-base"></i>
                                             <input
-                                                type="email"
-                                                value={profileEmail}
-                                                onChange={e => setProfileEmail(e.target.value)}
-                                                placeholder="nama@abskdi.biz.id"
-                                                className="w-full text-sm pl-9 pr-3.5 py-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition"
-                                                required
+                                                type="tel"
+                                                value={profileWhatsapp}
+                                                onChange={e => setProfileWhatsapp(e.target.value)}
+                                                placeholder="08123456789 atau 628123456789"
+                                                className="w-full text-sm pl-9 pr-3.5 py-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition"
                                             />
                                         </div>
+                                        <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5">
+                                            <i className="fa-solid fa-bell text-emerald-500 text-[10px]"></i>
+                                            <span>Nomor WhatsApp akan digunakan untuk fitur notifikasi dan pengiriman jadwal tugas setiap pagi jam 07:00.</span>
+                                        </p>
                                     </div>
                                 </div>
 
@@ -4491,7 +4539,7 @@ const OrgManagementView = ({
                                 <i className="fa-solid fa-user-plus text-emerald-600"></i>
                                 Formulir Pendaftaran Karyawan Baru
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Nama Lengkap</label>
                                     <input
@@ -4511,6 +4559,16 @@ const OrgManagementView = ({
                                         value={memberForm.email}
                                         onChange={e => setMemberForm({ ...memberForm, email: e.target.value })}
                                         placeholder="nama@perusahaan.com"
+                                        className="w-full text-sm border border-slate-200 rounded-xl py-2 px-3 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Nomor WhatsApp (Opsional)</label>
+                                    <input
+                                        type="tel"
+                                        value={memberForm.whatsapp_number || ''}
+                                        onChange={e => setMemberForm({ ...memberForm, whatsapp_number: e.target.value })}
+                                        placeholder="cth. 08123456789"
                                         className="w-full text-sm border border-slate-200 rounded-xl py-2 px-3 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                                     />
                                 </div>
@@ -5659,7 +5717,8 @@ const LoginScreen = ({ onLoginSuccess }) => {
                     email, 
                     role: 'Super User',
                     memberId: superId,
-                    division: data?.division || 'Direksi'
+                    division: data?.division || 'Direksi',
+                    whatsapp_number: data?.whatsapp_number || null
                 };
                 localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(sessionObj));
                 localStorage.setItem(CURRENT_PIC_KEY, superId);
@@ -5685,6 +5744,7 @@ const LoginScreen = ({ onLoginSuccess }) => {
                     role: data.role, 
                     memberId: data.id, 
                     division: data.division,
+                    whatsapp_number: data.whatsapp_number || null,
                     requiresPasswordChange
                 };
                 localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(sessionObj));
@@ -6933,17 +6993,33 @@ export default function TaskManagerApp() {
 
         // If hardcoded superadmin
         if (memberId === 'superadmin') {
-            const updatedSession = { ...session, name: profileData.name, email: profileData.email, color: profileData.color };
+            const updatedSession = { 
+                ...session, 
+                name: profileData.name, 
+                email: profileData.email, 
+                color: profileData.color,
+                whatsapp_number: profileData.whatsapp_number || null
+            };
             setSession(updatedSession);
             localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(updatedSession));
             return true;
         }
 
-        const { error } = await supabase.from('members').update({
+        const updatePayload = {
             name: profileData.name,
             email: profileData.email,
-            color: profileData.color
-        }).eq('id', memberId);
+            color: profileData.color,
+            whatsapp_number: profileData.whatsapp_number ? profileData.whatsapp_number.trim() : null
+        };
+
+        let { error } = await supabase.from('members').update(updatePayload).eq('id', memberId);
+
+        if (error && (error.code === '42703' || (error.message && error.message.includes('whatsapp_number')))) {
+            console.warn('Kolom whatsapp_number belum ada di tabel members DB, fallback simpan tanpa whatsapp_number:', error.message);
+            const { whatsapp_number, ...fallbackPayload } = updatePayload;
+            const retry = await supabase.from('members').update(fallbackPayload).eq('id', memberId);
+            error = retry.error;
+        }
 
         if (error) {
             alert('Gagal memperbarui profil: ' + error.message);
@@ -6954,7 +7030,13 @@ export default function TaskManagerApp() {
         setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...profileData } : m));
 
         // Update session state & storage
-        const updatedSession = { ...session, name: profileData.name, email: profileData.email, color: profileData.color };
+        const updatedSession = { 
+            ...session, 
+            name: profileData.name, 
+            email: profileData.email, 
+            color: profileData.color,
+            whatsapp_number: profileData.whatsapp_number || null
+        };
         setSession(updatedSession);
         localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(updatedSession));
 
@@ -7043,6 +7125,11 @@ export default function TaskManagerApp() {
 
     const handleUpdateMember = async (id, updatedData) => {
         let { error } = await supabase.from('members').update(updatedData).eq('id', id);
+        if (error && (error.code === '42703' || (error.message && error.message.includes('whatsapp_number')))) {
+            const { whatsapp_number, ...fallbackData } = updatedData;
+            const retry = await supabase.from('members').update(fallbackData).eq('id', id);
+            error = retry.error;
+        }
         if (error && error.message && error.message.includes('department')) {
             const { department, ...fallbackData } = updatedData;
             const retry = await supabase.from('members').update(fallbackData).eq('id', id);
@@ -7592,7 +7679,8 @@ export default function TaskManagerApp() {
     };
 
     // Filtered global lists based on Division
-    const isSuperUser = session?.role === 'Super User';
+    const isExecutive = session?.role === 'Super User' || session?.role === 'Direksi' || currentUserRole === 'Super User' || currentUserRole === 'Direksi' || currentUserLevel >= 5;
+    const isSuperUser = isExecutive;
     const memberId = session?.memberId || myMemberId;
 
     const accessibleProjectIds = isSuperUser ? null : new Set([
@@ -7602,14 +7690,16 @@ export default function TaskManagerApp() {
 
     const filteredMembers = members.filter(m => globalDivision === 'All' || m.division === globalDivision);
     const filteredProjects = projects.filter(p => {
+        if (globalDivision !== 'All' && p.division && p.division !== 'Task ABS' && p.division !== globalDivision) return false;
+
         const isPersonal = p.description === 'personal' || (p.owner_id && p.name && p.name.startsWith('Task '));
-        // Workspace pribadi hanya untuk pemiliknya, atau yang diberikan akses secara eksplisit
+        // Workspace pribadi hanya untuk pemiliknya, atau yang diberikan akses secara eksplisit (Direksi/Super User memiliki akses penuh)
         if (isPersonal) {
+            if (isExecutive) return true;
             if (memberId && p.owner_id === memberId) return true;
             return projectAccess.some(a => a.project_id === p.id && a.member_id === memberId);
         }
 
-        if (globalDivision !== 'All' && p.division && p.division !== 'Task ABS' && p.division !== globalDivision) return false;
         if (isSuperUser) return true;
         if (!p.owner_id) return true; // Legacy projects without owner are visible to all
         return accessibleProjectIds.has(p.id);
@@ -7618,14 +7708,15 @@ export default function TaskManagerApp() {
         const project = projects.find(p => p.id === t.projectId);
         if (!project) return false;
 
-        const isPersonal = project.description === 'personal' || (project.owner_id && project.name && project.name.startsWith('Task '));
-        if (isPersonal) {
-            if (memberId && project.owner_id === memberId) return true;
-            return projectAccess.some(a => a.project_id === project.id && a.member_id === memberId);
-        }
-
         if (globalDivision !== 'All') {
             if (project.division && project.division !== 'Task ABS' && project.division !== globalDivision) return false;
+        }
+
+        const isPersonal = project.description === 'personal' || (project.owner_id && project.name && project.name.startsWith('Task '));
+        if (isPersonal) {
+            if (isExecutive) return true;
+            if (memberId && project.owner_id === memberId) return true;
+            return projectAccess.some(a => a.project_id === project.id && a.member_id === memberId);
         }
         
         // Task di dalam workspace otomatis dapat dilihat oleh seluruh anggota workspace
@@ -7638,6 +7729,7 @@ export default function TaskManagerApp() {
 
     // Filter notes & MoM so only owner (pemilik) or shared users (dishare ke ybs) have access
     const filteredAccessibleNotes = useMemo(() => {
+        if (isExecutive) return notes;
         const matchedMember = members.find(m => 
             (session?.memberId && m.id === session.memberId) ||
             (currentPicId && m.id === currentPicId) ||
@@ -7700,7 +7792,7 @@ export default function TaskManagerApp() {
 
             return false;
         });
-    }, [notes, session, currentPicId, members]);
+    }, [notes, session, currentPicId, members, isExecutive]);
 
     // Filter schedules so:
     // - Super User has access to all schedules
@@ -7831,8 +7923,11 @@ export default function TaskManagerApp() {
             try {
                 const parsedSession = JSON.parse(storedSession);
                 setSession(parsedSession);
-                if (parsedSession && parsedSession.role !== 'Super User' && parsedSession.division) {
+                const isExec = parsedSession?.role === 'Super User' || parsedSession?.role === 'Direksi';
+                if (!isExec && parsedSession?.division) {
                     setGlobalDivision(parsedSession.division);
+                } else {
+                    setGlobalDivision('All');
                 }
             } catch (e) {
                 setSession(null);
@@ -7899,6 +7994,16 @@ export default function TaskManagerApp() {
                     return;
                 }
 
+            const currentUserId = session?.memberId || '';
+            let localPinnedIds = [];
+            try {
+                if (currentUserId) {
+                    const cached = localStorage.getItem(`task_abs_pinned_projects_${currentUserId}`);
+                    if (cached) localPinnedIds = JSON.parse(cached);
+                }
+            } catch (e) {}
+            const localPinnedSet = new Set(localPinnedIds);
+
             const mappedProjects = (projectsData || []).map((project, index) => {
                 let meta = {};
                 if (Array.isArray(project.folders)) {
@@ -7917,10 +8022,23 @@ export default function TaskManagerApp() {
                     ? project.folders.filter(f => typeof f === 'string' && !f.startsWith('__meta__:'))
                     : ['General'];
 
+                let pinnedBy = Array.isArray(project.pinned_by)
+                    ? project.pinned_by
+                    : (Array.isArray(meta.pinned_by) ? meta.pinned_by : []);
+
+                // Migration fallback: if meta.pinned_by not set yet but project.is_pinned is true in legacy db,
+                // only attribute the legacy pin to the project owner!
+                if (pinnedBy.length === 0 && project.is_pinned && project.owner_id) {
+                    pinnedBy = [project.owner_id];
+                }
+
+                const isPinnedForMe = (currentUserId && pinnedBy.includes(currentUserId)) || localPinnedSet.has(project.id);
+
                 return {
                     id: project.id,
                     name: project.name,
-                    isPinned: project.is_pinned,
+                    isPinned: Boolean(isPinnedForMe),
+                    pinned_by: pinnedBy,
                     owner_id: project.owner_id,
                     co_owners: coOwners,
                     description: description,
@@ -8211,8 +8329,11 @@ export default function TaskManagerApp() {
 
     if (!session) return <LoginScreen onLoginSuccess={(s) => {
         setSession(s);
-        if (s.role !== 'Super User' && s.division) {
+        const isExec = s?.role === 'Super User' || s?.role === 'Direksi';
+        if (!isExec && s?.division) {
             setGlobalDivision(s.division);
+        } else {
+            setGlobalDivision('All');
         }
     }} />;
 
@@ -8221,6 +8342,7 @@ export default function TaskManagerApp() {
         localStorage.removeItem(CURRENT_PIC_KEY);
         hasInitializedStaffPicRef.current = false;
         setPicFilter('all');
+        setGlobalDivision('All');
         setSession(null);
         setCurrentPicId('');
         setActiveProject('');
@@ -8359,16 +8481,74 @@ export default function TaskManagerApp() {
         const project = projects.find(p => p.id === id);
         if (!project) return;
 
-        const nextPinned = !project.isPinned;
-        const { error } = await supabase.from('projects').update({ is_pinned: nextPinned }).eq('id', id);
-
-        if (error) {
-            console.error('Supabase project pin error:', error);
-            alert(`Gagal update pin project: ${error.message}`);
+        const currentUserId = session?.memberId || currentPicId || myMemberId;
+        if (!currentUserId) {
+            alert('Silakan login terlebih dahulu untuk menyematkan proyek.');
             return;
         }
 
-        setProjects(prev => prev.map(p => p.id === id ? { ...p, isPinned: nextPinned } : p));
+        const nextPinned = !project.isPinned;
+        const currentPinnedBy = Array.isArray(project.pinned_by) ? project.pinned_by : [];
+        let nextPinnedBy;
+        if (nextPinned) {
+            nextPinnedBy = Array.from(new Set([...currentPinnedBy, currentUserId]));
+        } else {
+            nextPinnedBy = currentPinnedBy.filter(uid => uid !== currentUserId);
+        }
+
+        // 1. Update local React state immediately for current user
+        setProjects(prev => prev.map(p => p.id === id ? { ...p, isPinned: nextPinned, pinned_by: nextPinnedBy } : p));
+
+        // 2. Update localStorage for current user
+        try {
+            const storageKey = `task_abs_pinned_projects_${currentUserId}`;
+            const stored = localStorage.getItem(storageKey);
+            let userPinnedList = stored ? JSON.parse(stored) : [];
+            if (nextPinned) {
+                userPinnedList = Array.from(new Set([...userPinnedList, id]));
+            } else {
+                userPinnedList = userPinnedList.filter(pId => pId !== id);
+            }
+            localStorage.setItem(storageKey, JSON.stringify(userPinnedList));
+        } catch (err) {
+            console.warn('Could not save pinned project to localStorage:', err);
+        }
+
+        // 3. Persist to Supabase __meta__ in project.folders
+        try {
+            const cleanFolders = Array.isArray(project.folders)
+                ? project.folders.filter(f => typeof f === 'string' && !f.startsWith('__meta__:'))
+                : ['General'];
+
+            let existingMeta = {};
+            const foldersToSearch = project.rawFolders || project.folders || [];
+            if (Array.isArray(foldersToSearch)) {
+                const metaF = foldersToSearch.find(f => typeof f === 'string' && f.startsWith('__meta__:'));
+                if (metaF) {
+                    try { existingMeta = JSON.parse(metaF.replace('__meta__:', '')); } catch (e) {}
+                }
+            }
+
+            const meta = {
+                ...existingMeta,
+                co_owners: project.co_owners || existingMeta.co_owners || [],
+                description: project.description || existingMeta.description || '',
+                pinned_by: nextPinnedBy
+            };
+            const metaFolder = `__meta__:${JSON.stringify(meta)}`;
+            const nextFolders = [...cleanFolders, metaFolder];
+
+            try {
+                const { error: pinColError } = await supabase.from('projects').update({ pinned_by: nextPinnedBy, folders: nextFolders }).eq('id', id);
+                if (pinColError) {
+                    await supabase.from('projects').update({ folders: nextFolders }).eq('id', id);
+                }
+            } catch (e) {
+                await supabase.from('projects').update({ folders: nextFolders }).eq('id', id);
+            }
+        } catch (dbErr) {
+            console.warn('Could not persist pinned_by to supabase:', dbErr);
+        }
     };
 
     const handleUpdateProjectColor = async (id, color, e) => {
@@ -9199,7 +9379,7 @@ export default function TaskManagerApp() {
     };
 
     const handleAddMember = async (memberData) => {
-        const { name, email, role, division, department } = memberData;
+        const { name, email, whatsapp_number, role, division, department } = memberData;
         if (!name || !name.trim()) return;
 
         const randomColor = '#' + Math.floor(Math.random() * 16777215).toString(16);
@@ -9207,6 +9387,7 @@ export default function TaskManagerApp() {
             id: crypto.randomUUID(),
             name: name.trim(),
             email: email ? email.trim() : null,
+            whatsapp_number: whatsapp_number ? whatsapp_number.trim() : null,
             division: division || 'Marcomm',
             department: department || null,
             role: role || 'Staff',
@@ -9223,11 +9404,19 @@ export default function TaskManagerApp() {
             role: newMember.role,
             color: newMember.color
         };
+        if (newMember.whatsapp_number) {
+            insertPayload.whatsapp_number = newMember.whatsapp_number;
+        }
         if (newMember.department) {
             insertPayload.department = newMember.department;
         }
 
         let { error } = await supabase.from('members').insert(insertPayload);
+        if (error && (error.code === '42703' || (error.message && error.message.includes('whatsapp_number')))) {
+            delete insertPayload.whatsapp_number;
+            const retry = await supabase.from('members').insert(insertPayload);
+            error = retry.error;
+        }
         if (error && error.message && error.message.includes('department')) {
             delete insertPayload.department;
             const retry = await supabase.from('members').insert(insertPayload);
@@ -9760,26 +9949,41 @@ export default function TaskManagerApp() {
                                             </span>
                                         )}
                                         {project.isPinned && (
-                                            <i className="fa-solid fa-thumbtack text-[10px] text-orange-500 shrink-0" title="Disematkan (Urgent)"></i>
+                                            <i className="fa-solid fa-thumbtack text-[10px] text-orange-500 shrink-0" title="Disematkan untuk Akun Anda"></i>
                                         )}
                                         {project.showInCalendar && (
                                             <i className="fa-solid fa-calendar-days text-[10px] text-pink-500 shrink-0" title="Tampil di Kalender"></i>
                                         )}
                                     </button>
 
-                                    {/* HANYA 1 TOMBOL: Project Settings */}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setProjectSettingsTarget(project);
-                                            setIsProjectSettingsOpen(true);
-                                        }}
-                                        className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-800 hover:bg-white/80 rounded-xl transition-all opacity-80 lg:opacity-0 lg:group-hover/proj:opacity-100 shrink-0 ml-0.5"
-                                        title="Pengaturan Proyek (Warna, Sharing, Pin, Kalender, Hapus)"
-                                        aria-label="Pengaturan Proyek"
-                                    >
-                                        <i className="fa-solid fa-gear text-xs"></i>
-                                    </button>
+                                    {/* Tombol Aksi Cepat: Pin & Pengaturan */}
+                                    <div className="flex items-center space-x-0.5 shrink-0 ml-0.5">
+                                        <button
+                                            type="button"
+                                            onClick={(e) => handleTogglePinProject(project.id, e)}
+                                            className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all ${
+                                                project.isPinned 
+                                                    ? 'text-orange-500 hover:text-orange-600 hover:bg-orange-50' 
+                                                    : 'text-slate-400 hover:text-slate-800 hover:bg-white/80 opacity-80 lg:opacity-0 lg:group-hover/proj:opacity-100'
+                                            }`}
+                                            title={project.isPinned ? "Lepas Sematan (Unpin untuk Anda)" : "Sematkan Proyek (Pin untuk Anda)"}
+                                            aria-label={project.isPinned ? "Lepas Sematan" : "Sematkan Proyek"}
+                                        >
+                                            <i className={`fa-solid fa-thumbtack text-xs ${project.isPinned ? '' : 'rotate-45'}`}></i>
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setProjectSettingsTarget(project);
+                                                setIsProjectSettingsOpen(true);
+                                            }}
+                                            className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-800 hover:bg-white/80 rounded-xl transition-all opacity-80 lg:opacity-0 lg:group-hover/proj:opacity-100"
+                                            title="Pengaturan Proyek (Warna, Sharing, Pin, Kalender, Hapus)"
+                                            aria-label="Pengaturan Proyek"
+                                        >
+                                            <i className="fa-solid fa-gear text-xs"></i>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {activeProject === project.id && (view === 'table' || view === 'kanban' || view === 'timeline' || view === 'calendar') && (
@@ -9892,6 +10096,25 @@ export default function TaskManagerApp() {
                             </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
+                            {/* Filter Divisi Global Khusus Direksi & Super User */}
+                            {isExecutive && (
+                                <div className="flex items-center gap-1.5 rounded-2xl border border-white/70 bg-white/65 px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur-sm">
+                                    <i className="fa-solid fa-layer-group text-slate-400 text-[11px]"></i>
+                                    <select
+                                        value={globalDivision}
+                                        onChange={(e) => setGlobalDivision(e.target.value)}
+                                        className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer pr-1"
+                                        title="Filter Divisi Global"
+                                    >
+                                        <option value="All">🌐 Semua Divisi</option>
+                                        {divisionsList.map((d, i) => {
+                                            const val = typeof d === 'string' ? d : d.name;
+                                            return <option key={i} value={val}>{val}</option>;
+                                        })}
+                                    </select>
+                                </div>
+                            )}
+
                             {/* Pusat Notifikasi dengan Label Titik Merah & Dropdown Interaktif */}
                             <NotificationCenter
                                 tasks={tasks}
