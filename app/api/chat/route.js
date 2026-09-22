@@ -11,7 +11,7 @@ import {
 } from '@/lib/chat-memory';
 import { generateAgentFile } from '@/lib/file-generator';
 
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 let bigqueryClient = null;
 
@@ -41,6 +41,35 @@ async function runBigQueryQuery(sql) {
     const [job] = await client.createQueryJob({ query: sql, useLegacySql: false });
     const [rows] = await job.getQueryResults();
     return rows;
+}
+
+function sanitizeBigQueryRows(rows) {
+    if (!Array.isArray(rows)) return [];
+    return rows.map((row) => {
+        const clean = {};
+        for (const [key, val] of Object.entries(row)) {
+            if (val === null || val === undefined) {
+                clean[key] = null;
+            } else if (typeof val === 'object') {
+                if ('value' in val) {
+                    clean[key] = String(val.value);
+                } else if (val instanceof Date) {
+                    clean[key] = val.toISOString();
+                } else {
+                    try {
+                        clean[key] = JSON.parse(JSON.stringify(val));
+                    } catch {
+                        clean[key] = String(val);
+                    }
+                }
+            } else if (typeof val === 'bigint') {
+                clean[key] = Number(val);
+            } else {
+                clean[key] = val;
+            }
+        }
+        return clean;
+    });
 }
 
 function loadBigQueryGuide() {
@@ -84,11 +113,14 @@ function systemPrompt({ memories, skills }) {
     return [
         'Anda asisten data ABS Group (Busana) yang terhubung ke Google BigQuery.',
         'Waktu user: WITA (GMT+8). Jika user tidak menyebut tanggal, pakai tanggal hari ini.',
+        'Jika user menyebut tanggal tanpa tahun (misal "3 September"), prioritaskan tahun berjalan saat ini (2026). Jika menyertakan perbandingan YoY dengan tahun sebelumnya (2025), sebutkan tahun secara eksplisit pada penjelasan.',
         '',
         '== CARA KERJA ==',
         '1. Gunakan tool run_bigquery_query untuk semua pertanyaan data. Jangan menebak angka.',
         '2. Baca panduan BigQuery di bawah SEBELUM menulis query.',
-        '3. Saat pertanyaan ambigu (brand vs outlet, kategori vs pareto), periksa lewat query kecil atau tanya user.',
+        '3. Efisiensi query: Gabungkan kebutuhan metrik (omzet, total transaksi, margin, target, MoM, YoY) dalam 1-2 query terencana (gunakan CTE / subquery / conditional aggregation) daripada menjalankan banyak query kecil secara terpisah.',
+        '4. Begitu data utama didapatkan, SEGERA susun dan tuliskan jawaban lengkap kepada user. Jangan menunda atau terus melakukan query tambahan yang tidak esensial.',
+        '5. Saat pertanyaan ambigu (brand vs outlet, kategori vs pareto), periksa lewat query kecil atau tanya user.',
         '',
         buildMemorySection(memories),
         '',
@@ -114,20 +146,24 @@ function systemPrompt({ memories, skills }) {
         '- Laporan penjualan lengkap dengan MoM, YoY, pencapaian target bila datanya ada; tutup dengan Action Plan.',
         '- Data apa adanya: jangan merevisi atau menafsirkan ulang angka dari database.',
         '',
-        '== FILE HASIL ==',
-        'Gunakan tool generate_file untuk SEMUA permintaan file (PPTX, Excel, CSV): user akan dapat tombol unduh langsung di chat.',
-        '- PPTX: isi payload.slides dengan struktur slide (title, subtitle, text, bullets, table). Ikuti standar ABS: tema Merah Muda #FF0088, 16:9, konten ringkas per slide.',
-        '- XLSX: isi payload.rows (baris pertama = header), atau payload.sheets untuk multi-sheet.',
-        '- CSV: isi payload.rows.',
-        'Setelah tool sukses, cukup tulis kalimat singkat: file sudah jadi + nama file. JANGAN gambar ulang seluruh isi file di chat.',
-        'Untuk data tabel biasa di chat tetap pakai Markdown table; tabel diakhiri [FILE_CSV] hanya jika user minta file CSV tanpa generate_file.',
+        '== ATURAN MEMBUAT FILE (PPTX / EXCEL / CSV) ==',
+        'Ketika user meminta file (misal: "buatkan dalam laporan ppt", "ekspor ke excel", "buatkan csv", "jadikan presentasi"):',
+        '1. Jika data yang dibutuhkan SUDAH ADA di riwayat percakapan sebelumnya, LANGSUNG panggil tool generate_file menggunakan data tersebut. JANGAN query ulang ke BigQuery.',
+        '2. Panggil tool generate_file dengan format yang sesuai:',
+        '   - PPTX: isi payload.slides (title, subtitle, text, bullets, table). Tema Merah Muda #FF0088, 16:9, ringkas, rapi, dan berbobot.',
+        '   - XLSX: isi payload.rows (baris pertama = header) atau payload.sheets untuk multi-sheet.',
+        '   - CSV: isi payload.rows (baris pertama = header).',
+        '3. SETELAH tool generate_file berhasil, LANGSUNG berikan respon singkat berisi link unduhan markdown: [Unduh <Nama File>](<downloadUrl>).',
+        '   Contoh respon: "File presentasi laporan penjualan sudah siap. Silakan unduh di sini: [Unduh laporan-penjualan.pptx](/api/chat/files?name=laporan-penjualan-xxxx.pptx)"',
+        '4. DILARANG membuat tabel teks panjang atau mengulang isi seluruh data di chat saat membuat file. Langsung berikan link unduhan agar user segera bisa mengunduhnya.',
+        '5. Untuk data tabel biasa di chat tetap pakai Markdown table; tabel diakhiri [FILE_CSV] hanya jika user minta file CSV tanpa generate_file.',
         '',
         (guide ? ('== PANDUAN BIGQUERY ABS GROUP (FONT OF TRUTH) ==\n\n' + guide) : ''),
     ].filter(Boolean).join('\n');
 }
 
 function validateSql(sql) {
-    const normalized = sql.trim().replace(/;+\s*$/, '');
+    let normalized = sql.trim().replace(/;+\s*$/, '');
     const forbidden = /\b(truncate|delete\s+from|update\s+\w+\s+set|merge\s+into|insert\s+into|create\s+or\s+replace|drop\s+table)\b/i;
     if (forbidden.test(normalized)) {
         return { ok: false, error: 'Proyek BigQuery ini tanpa billing: hanya SELECT dan LOAD yang diizinkan. Jalankan query baca saja.' };
@@ -140,11 +176,11 @@ function validateSql(sql) {
     const hasLimit = /\bLIMIT\s+\d+\b/i.test(normalized);
     const hasAggregate = /\b(SUM|COUNT|AVG|MIN|MAX)\s*\(/i.test(normalized) && /\bGROUP\s+BY\b/i.test(normalized);
     if (!hasLimit && !hasAggregate) {
-        return { ok: false, error: 'SELECT tanpa agregasi wajib memakai LIMIT (maks 1000). Tambahkan LIMIT lalu ulangi.' };
+        normalized = `${normalized}\nLIMIT 200`;
     }
     const limitMatch = normalized.match(/\bLIMIT\s+(\d+)\b/i);
     if (limitMatch && parseInt(limitMatch[1], 10) > 1000) {
-        return { ok: false, error: 'LIMIT melebihi 1000 baris. Kecilkan LIMIT-nya.' };
+        normalized = normalized.replace(/\bLIMIT\s+\d+\b/i, 'LIMIT 1000');
     }
     return { ok: true, sql: normalized };
 }
@@ -193,7 +229,7 @@ export async function POST(req) {
             model: customProvider.chat(modelName),
             system: systemPrompt({ memories, skills }),
             messages: modelMessages,
-            stopWhen: stepCountIs(10),
+            stopWhen: stepCountIs(25),
             tools: {
                 run_bigquery_query: tool({
                     description: 'Jalankan query SELECT SQL ke Google BigQuery ABS Group dan kembalikan hasilnya sebagai baris data.',
@@ -207,7 +243,8 @@ export async function POST(req) {
                         }
                         try {
                             const rows = await runBigQueryQuery(check.sql);
-                            return { ok: true, rowCount: rows.length, rows: rows.slice(0, 500) };
+                            const cleanRows = sanitizeBigQueryRows(rows.slice(0, 500));
+                            return { ok: true, rowCount: rows.length, rows: cleanRows };
                         } catch (err) {
                             return { ok: false, error: String(err.message || err).slice(0, 500) };
                         }
@@ -313,7 +350,7 @@ export async function POST(req) {
                                 sizeKb: Math.round(file.size / 1024),
                                 format: payload.format,
                                 title: payload.title || payload.fileName || file.fileName,
-                                note: 'File siap. Tampilkan kalimat singkat ke user bahwa file sudah jadi dan bisa diunduh, sertakan nama file.',
+                                note: `File "${file.fileName}" berhasil dibuat. LANGSUNG kirimkan link unduhan ini kepada user: [Unduh ${file.fileName}](${downloadUrl})`,
                             };
                         } catch (err) {
                             return { ok: false, error: String(err.message || err).slice(0, 300) };

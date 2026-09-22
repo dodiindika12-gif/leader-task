@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback, startTransition, useSyncExter
 import Link from 'next/link';
 import {
     Settings2, X, Check, Loader2, Feather, ShieldCheck, Database,
-    Brain, Zap, Trash2, Plus, Power, GitBranch, LogIn,
+    Brain, Zap, Trash2, Plus, Power, GitBranch, LogIn, ArrowLeft, RotateCcw,
 } from 'lucide-react';
 import ChatMessage from '@/components/ChatMessage';
 import ChatInput from '@/components/ChatInput';
@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS = {
     baseURL: 'https://hermes.absgroup.biz.id',
     apiKey: '',
     model: 'default',
+    showSystemProcess: false,
 };
 
 function loadSettings() {
@@ -49,27 +50,44 @@ function loadDashboardSession() {
 // Ini menghindari hydration mismatch (React memakai server snapshot saat hydrate,
 // lalu re-render otomatis dengan nilai client setelah mount).
 let cachedSessionSnapshot;
+
+function getSessionSnapshot() {
+    const next = loadDashboardSession();
+    const prev = cachedSessionSnapshot;
+    const same = (prev === null && next === null) ||
+        (prev && next &&
+            prev.memberId === next.memberId &&
+            prev.email === next.email &&
+            prev.role === next.role &&
+            prev.name === next.name);
+    if (!same) {
+        cachedSessionSnapshot = next;
+    }
+    return cachedSessionSnapshot;
+}
+
 const sessionStore = {
     subscribe(callback) {
-        window.addEventListener('storage', callback);
+        const onStorage = () => {
+            getSessionSnapshot();
+            callback();
+        };
+        window.addEventListener('storage', onStorage);
         // Polling ringan untuk perubahan login di tab yang sama (login menulis localStorage)
         const interval = setInterval(() => {
-            const next = loadDashboardSession();
             const prev = cachedSessionSnapshot;
-            const changed = (prev?.memberId || null) !== (next?.memberId || null) ||
-                (prev?.email || null) !== (next?.email || null);
-            if (changed) callback();
+            const next = getSessionSnapshot();
+            if (prev !== next) {
+                callback();
+            }
         }, 1000);
         return () => {
-            window.removeEventListener('storage', callback);
+            window.removeEventListener('storage', onStorage);
             clearInterval(interval);
         };
     },
     getSnapshot() {
-        if (cachedSessionSnapshot === undefined) {
-            cachedSessionSnapshot = loadDashboardSession();
-        }
-        return cachedSessionSnapshot;
+        return getSessionSnapshot();
     },
     getServerSnapshot() {
         return null;
@@ -454,7 +472,7 @@ export default function ChatPage() {
     const chatState = useChat({
         transport: transport ?? undefined,
     });
-    const { messages, sendMessage, status, stop, error } = chatState;
+    const { messages, sendMessage, status, stop, error, setMessages, reload } = chatState;
     const isLoading = status === 'submitted' || status === 'streaming';
 
     useEffect(() => {
@@ -462,11 +480,33 @@ export default function ChatPage() {
         if (el) el.scrollTop = el.scrollHeight;
     }, [messages, status]);
 
+    // Tutup modal dengan tombol Escape (antislop R-32 & aksesibilitas keyboard)
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                if (brainOpen) setBrainOpen(false);
+                if (settingsOpen) setSettingsOpen(false);
+            }
+        };
+        if (brainOpen || settingsOpen) {
+            window.addEventListener('keydown', handleKeyDown);
+            return () => window.removeEventListener('keydown', handleKeyDown);
+        }
+    }, [brainOpen, settingsOpen]);
+
+    const handleNewChat = useCallback(() => {
+        if (messages.length === 0) return;
+        if (isLoading) stop();
+        setMessages([]);
+        showToast('Percakapan baru dimulai.');
+    }, [messages.length, isLoading, stop, setMessages, showToast]);
+
     const handleSettingsSave = useCallback(() => {
         const next = {
             baseURL: draft.baseURL.trim() || DEFAULT_SETTINGS.baseURL,
             apiKey: draft.apiKey.trim(),
             model: draft.model.trim() || 'default',
+            showSystemProcess: !!draft.showSystemProcess,
         };
         settingsRef.current = next;
         setSettings(next);
@@ -517,11 +557,24 @@ export default function ChatPage() {
             <header className="shrink-0 bg-white/80 backdrop-blur-md border-b border-white/80 shadow-xs">
                 <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0">
+                        <Link
+                            href="/"
+                            title="Kembali ke Dashboard Utama"
+                            aria-label="Kembali ke Dashboard Utama"
+                            className="p-2 -ml-1.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors shrink-0"
+                        >
+                            <ArrowLeft size={16} />
+                        </Link>
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-pink-600 via-pink-500 to-rose-400 flex items-center justify-center shadow-sm shadow-pink-500/20 shrink-0">
                             <span className="font-pacifico text-white text-[11px]" style={{ fontFamily: "var(--font-pacifico), 'Pacifico', cursive" }}>B</span>
                         </div>
                         <div className="min-w-0">
-                            <div className="font-bold text-sm text-slate-900 leading-tight">Busana Data Chat</div>
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-slate-900 leading-tight truncate">Busana Data Chat</span>
+                                <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-mono bg-pink-50 text-pink-700 border border-pink-200/70" title={`Model: ${settings.model || 'default'}`}>
+                                    {settings.model || 'default'}
+                                </span>
+                            </div>
                             <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate">
                                 <Database size={9} className="shrink-0" />
                                 sesi: <span className="font-semibold text-slate-500">{session.name || session.email}</span> (memori aktif)
@@ -529,6 +582,15 @@ export default function ChatPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                        <button
+                            onClick={handleNewChat}
+                            disabled={messages.length === 0}
+                            title="Mulai percakapan baru"
+                            aria-label="Mulai percakapan baru"
+                            className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-35 disabled:hover:bg-transparent"
+                        >
+                            <RotateCcw size={16} />
+                        </button>
                         <button
                             onClick={() => setBrainOpen(true)}
                             title="Memori & Skill agent"
@@ -565,7 +627,7 @@ export default function ChatPage() {
                             {[
                                 'Ingat: cabang default saya BT01, ya.',
                                 'Penjualan Agustus per cabang lengkap dengan pencapaian target.',
-                                'Skill query-mu sudah bagus, catat pola basked analysis yang barusan.',
+                                'Skill query-mu sudah bagus, catat pola basket analysis yang barusan.',
                             ].map((hint) => (
                                 <button
                                     key={hint}
@@ -579,27 +641,59 @@ export default function ChatPage() {
                     </div>
                 )}
 
-                {messages.map((m) => (
-                    <ChatMessage key={m.id} message={m} />
+                {messages.map((m, idx) => (
+                    <ChatMessage
+                        key={m.id || idx}
+                        message={m}
+                        showSystemProcess={settings.showSystemProcess || false}
+                        isLoading={isLoading && idx === messages.length - 1}
+                    />
                 ))}
 
-                {isLoading && messages.length > 0 && (
-                    <div className="max-w-4xl mx-auto flex items-center gap-2 text-xs text-slate-400 px-1">
-                        <Loader2 size={12} className="animate-spin" />
-                        <span>Asisten sedang bekerja{status === 'streaming' ? ', mengalirkan balasan' : ''}...</span>
+                {isLoading && messages.length > 0 && messages[messages.length - 1]?.role === 'user' && (
+                    <div className="flex gap-3 max-w-4xl mx-auto w-full flex-row">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-xs text-white bg-gradient-to-tr from-pink-600 via-pink-500 to-rose-400">
+                            <i className="fa-brands fa-whatsapp text-xs" aria-hidden="true"></i>
+                        </div>
+                        <div className="flex flex-col gap-2 min-w-0 max-w-[85%] items-start">
+                            <div className="text-[11px] text-slate-400 font-medium px-1">
+                                AI Data Assistant
+                            </div>
+                            <div className="px-4 py-3 rounded-2xl shadow-sm text-xs leading-relaxed break-words w-fit max-w-full bg-white text-slate-800 border border-slate-100 rounded-tl-md">
+                                <div className="flex items-center gap-2.5 py-0.5 text-slate-600">
+                                    <span className="relative flex h-2.5 w-2.5 shrink-0">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-600"></span>
+                                    </span>
+                                    <span className="font-medium text-xs">Sedang mengambil data & menyusun laporan...</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
                 {error && (
                     <div className="max-w-4xl mx-auto">
-                        <div className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-xs text-rose-700">
-                            <div className="font-semibold mb-0.5">Permintaan gagal</div>
-                            <div className="text-rose-600/90 break-all">{error.message}</div>
-                            {String(error.message).includes('login') && (
-                                <div className="mt-1.5">
-                                    <Link href="/" className="font-semibold underline">Buka halaman login utama</Link>
-                                </div>
-                            )}
+                        <div className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-xs text-rose-700 space-y-2">
+                            <div>
+                                <div className="font-semibold mb-0.5">Permintaan gagal</div>
+                                <div className="text-rose-600/90 break-all">{error.message}</div>
+                            </div>
+                            <div className="flex items-center gap-2 pt-0.5">
+                                <button
+                                    onClick={() => reload()}
+                                    disabled={isLoading}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold transition-colors disabled:opacity-50"
+                                >
+                                    <RotateCcw size={11} />
+                                    Coba Lagi
+                                </button>
+                                {String(error.message).includes('login') && (
+                                    <Link href="/" className="font-semibold text-rose-800 underline text-[11px]">
+                                        Buka halaman login utama
+                                    </Link>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -624,12 +718,12 @@ export default function ChatPage() {
                     <div
                         role="dialog"
                         aria-modal="true"
-                        aria-label="Memori dan skill agent"
+                        aria-labelledby="brain-modal-title"
                         className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-100 flex flex-col max-h-[92vh]"
                     >
                         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
                             <div>
-                                <h3 className="font-bold text-sm text-slate-900">Otak Agent</h3>
+                                <h3 id="brain-modal-title" className="font-bold text-sm text-slate-900">Otak Agent</h3>
                                 <p className="text-[11px] text-slate-400 mt-0.5">Memori & skill yang dibaca agent setiap percakapan.</p>
                             </div>
                             <button onClick={() => setBrainOpen(false)} aria-label="Tutup" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
@@ -670,13 +764,12 @@ export default function ChatPage() {
                     <div
                         role="dialog"
                         aria-modal="true"
-                        aria-label="Pengaturan provider AI"
+                        aria-labelledby="settings-modal-title"
                         className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-100 flex flex-col max-h-[92vh]"
-                        onKeyDown={(e) => { if (e.key === 'Escape') setSettingsOpen(false); }}
                     >
                         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
                             <div>
-                                <h3 className="font-bold text-sm text-slate-900">Pengaturan Provider</h3>
+                                <h3 id="settings-modal-title" className="font-bold text-sm text-slate-900">Pengaturan Provider</h3>
                                 <p className="text-[11px] text-slate-400 mt-0.5">Kompatibel OpenAI: isi URL layanan, token, dan model.</p>
                             </div>
                             <button onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
@@ -745,6 +838,21 @@ export default function ChatPage() {
 
                             {testing && <TestResult result={testResult} loading target={testing === 'provider' ? 'provider' : 'BigQuery'} />}
                             {!testing && testResult && <TestResult result={testResult} loading={false} target={testResult.target === 'bigquery' ? 'BigQuery' : 'provider'} />}
+
+                            <div className="pt-3 border-t border-slate-100">
+                                <label className="flex items-start gap-3 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={draft.showSystemProcess || false}
+                                        onChange={(e) => setDraft({ ...draft, showSystemProcess: e.target.checked })}
+                                        className="mt-0.5 w-4 h-4 rounded text-pink-600 focus:ring-pink-500 border-slate-300"
+                                    />
+                                    <div>
+                                        <div className="text-xs font-semibold text-slate-700">Tampilkan Detail Proses Sistem</div>
+                                        <div className="text-[11px] text-slate-400 mt-0.5">Tampilkan riwayat query BigQuery dan langkah tool di dalam chat (default: disembunyikan).</div>
+                                    </div>
+                                </label>
+                            </div>
 
                             <p className="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-slate-100">
                                 Kredensial BigQuery dibaca dari file service account di server, bukan dari halaman ini.

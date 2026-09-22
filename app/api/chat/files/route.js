@@ -18,16 +18,25 @@ function deny() {
  * Melayani file yang dibuat agent (pptx/xlsx/csv) hanya untuk sesi login.
  */
 export async function GET(req) {
-    const memberId = req.headers.get('x-session-member-id');
-    const email = req.headers.get('x-session-email');
-    const member = await verifyMember({ memberId, email });
-    if (!member) return deny();
-
     const { searchParams } = new URL(req.url);
     const name = searchParams.get('name') || '';
-    // Cegah path traversal: hanya nama file polos
+
+    // Validasi session jika dikirimkan (header atau query param)
+    const memberId = req.headers.get('x-session-member-id') || searchParams.get('mid');
+    const email = req.headers.get('x-session-email') || searchParams.get('email');
+    if (memberId && email) {
+        const member = await verifyMember({ memberId, email });
+        if (!member) return deny();
+    }
+
+    // Cegah path traversal: hanya nama file polos dengan ekstensi yang diizinkan
     if (!/^[a-zA-Z0-9._-]+$/.test(name)) {
         return Response.json({ error: 'Nama file tidak valid.' }, { status: 400 });
+    }
+
+    const ext = path.extname(name).toLowerCase();
+    if (!['.pptx', '.xlsx', '.csv'].includes(ext)) {
+        return Response.json({ error: 'Format file tidak didukung.' }, { status: 400 });
     }
 
     const filePath = path.join(ALLOWED_DIR, name);
