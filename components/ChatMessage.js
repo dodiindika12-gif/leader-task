@@ -68,6 +68,79 @@ function FilePart({ part, isUser }) {
     );
 }
 
+/**
+ * Beberapa model menulis tabel dalam SATU baris:
+ * "| Tipe | Jumlah | |---|---| | BEAUTY | 17 |"
+ * Fungsi ini merekonstruksinya menjadi tabel Markdown multi-baris yang valid.
+ * Aman untuk teks biasa: hanya memproses jika ada sel pemisah "---".
+ */
+export function normalizeInlineTables(md) {
+    if (!md || !md.includes('|') || !/\|\s*:?-{2,}:?\s*\|/.test(md)) return md;
+
+    const lines = md.split('\n');
+    const sepIdx = lines.findIndex((l) => /\|\s*:?-{2,}:?\s*\|/.test(l));
+    if (sepIdx === -1) return md;
+
+    // Perluas region: baris di atas & bawah yang masih mengandung '|'
+    let start = sepIdx;
+    let end = sepIdx;
+    while (start > 0 && lines[start - 1].includes('|')) start -= 1;
+    while (end < lines.length - 1 && lines[end + 1].includes('|')) end += 1;
+
+    const regionLines = lines.slice(start, end + 1);
+    const prefixMatch = regionLines[0].match(/^([^|]*)\|/);
+    const prefix = prefixMatch ? prefixMatch[1] : '';
+
+    const joined = regionLines
+        .map((l, i) => (i === 0 && prefix ? l.slice(prefix.length) : l))
+        .join(' ');
+
+    const cells = joined
+        .replace(/^\s*\|/, '')
+        .replace(/\|\s*$/, '')
+        .split('|')
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0);
+
+    if (cells.length < 4) return md;
+
+    // Pisahkan: header sel -> run pemisah (---) -> sisa isi
+    let sepStart = -1;
+    let sepEnd = -1;
+    for (let i = 0; i < cells.length; i += 1) {
+        if (/^:?-{2,}:?$/.test(cells[i])) {
+            if (sepStart === -1) sepStart = i;
+            sepEnd = i;
+        } else if (sepStart !== -1) {
+            break;
+        }
+    }
+    if (sepStart <= 0) return md;
+
+    const header = cells.slice(0, sepStart);
+    const body = cells.slice(sepEnd + 1);
+    const width = header.length;
+    if (width < 1 || body.length === 0) return md;
+
+    const rows = [];
+    for (let i = 0; i < body.length; i += width) {
+        rows.push(body.slice(i, i + width));
+    }
+
+    const table = [
+        `| ${header.join(' | ')} |`,
+        `| ${header.map(() => '---').join(' | ')} |`,
+        ...rows.map((r) => `| ${Array.from({ length: width }, (_, c) => r[c] ?? '').join(' | ')} |`),
+    ];
+
+    return [
+        ...lines.slice(0, start),
+        prefix + table[0],
+        ...table.slice(1),
+        ...lines.slice(end + 1),
+    ].join('\n');
+}
+
 function ToolPart({ part }) {
     const isResult = part.state === 'output-available';
     const input = part.input || {};
@@ -192,16 +265,17 @@ export default function ChatMessage({ message }) {
 
     parts.forEach((part, idx) => {
         if (part.type === 'text') {
-            const tableStart = part.text.lastIndexOf('|');
+            const normalizedText = isUser ? part.text : normalizeInlineTables(part.text);
+            const tableStart = normalizedText.lastIndexOf('|');
             if (tableStart !== -1 && !isUser) {
                 // Simpan blok tabel markdown terakhir untuk tombol CSV
-                const lines = part.text.split('\n');
+                const lines = normalizedText.split('\n');
                 const tableLines = lines.filter((l) => l.trim().startsWith('|'));
                 if (tableLines.length >= 3) {
                     lastTableMarkdown = tableLines.join('\n');
                 }
             }
-            const cleaned = part.text.replace(/\[FILE_CSV\]\s*\S*/g, '').trimEnd();
+            const cleaned = normalizedText.replace(/\[FILE_CSV\]\s*\S*/g, '').trimEnd();
             if (cleaned) {
                 const hasTable = !isUser && lastTableMarkdown && lastTableMarkdown.includes('\n');
                 rendered.push(
