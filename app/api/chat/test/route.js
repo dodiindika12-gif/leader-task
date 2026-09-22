@@ -41,9 +41,16 @@ async function testBigQuery() {
         }
 
         const { BigQuery } = await import('@google-cloud/bigquery');
-        const client = new BigQuery({ keyFilename: credentialPath });
+        const key = JSON.parse(fs.readFileSync(credentialPath, 'utf-8'));
+        const client = new BigQuery({
+            credentials: {
+                client_email: key.client_email,
+                private_key: key.private_key,
+            },
+            projectId: key.project_id,
+        });
 
-        const [project] = await client.getProjectId();
+        const project = key.project_id;
         const [datasets] = await client.getDatasets({ maxResults: 5 });
 
         return {
