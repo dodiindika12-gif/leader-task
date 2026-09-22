@@ -1,130 +1,349 @@
 'use client';
+
 import { useChat } from '@ai-sdk/react';
-import { useState, useEffect } from 'react';
-import { MessageSquare, Plus, Menu, Bot } from 'lucide-react';
+import { DefaultChatTransport } from 'ai';
+import { useState, useEffect, useRef, useCallback, startTransition } from 'react';
+import Link from 'next/link';
+import { Settings2, X, Check, Loader2, Feather, ShieldCheck, Database } from 'lucide-react';
 import ChatMessage from '@/components/ChatMessage';
 import ChatInput from '@/components/ChatInput';
 
+const SETTINGS_KEY = 'busana_chat_provider_settings_v1';
+
+const DEFAULT_SETTINGS = {
+    baseURL: 'https://hermes.absgroup.biz.id',
+    apiKey: '',
+    model: 'default',
+};
+
+function loadSettings() {
+    if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+    try {
+        const raw = localStorage.getItem(SETTINGS_KEY);
+        if (!raw) return DEFAULT_SETTINGS;
+        return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    } catch {
+        return DEFAULT_SETTINGS;
+    }
+}
+
+function TestResult({ result, loading, target }) {
+    if (loading) {
+        return (
+            <div className="mt-2 flex items-center gap-2 text-xs text-slate-500 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
+                <Loader2 size={12} className="animate-spin" />
+                Menguji koneksi {target}...
+            </div>
+        );
+    }
+    if (!result) return null;
+    return result.ok ? (
+        <div className="mt-2 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 space-y-0.5">
+            <div className="font-semibold flex items-center gap-1.5">
+                <Check size={12} /> Koneksi {target} berhasil ({result.latencyMs} ms)
+            </div>
+            {target === 'provider' && result.sampleReply && (
+                <div className="text-emerald-700/80">Balasan model: &quot;{result.sampleReply}&quot;</div>
+            )}
+            {target === 'BigQuery' && (
+                <div className="text-emerald-700/80">
+                    Proyek <span className="font-mono">{result.project}</span>, {result.datasetCount} dataset: {(result.datasets || []).join(', ') || '(kosong)'}
+                </div>
+            )}
+        </div>
+    ) : (
+        <div className="mt-2 px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700">
+            <div className="font-semibold">Koneksi {target} gagal</div>
+            <div className="break-all text-rose-600/90">{result.error}</div>
+        </div>
+    );
+}
+
 export default function ChatPage() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [draft, setDraft] = useState(DEFAULT_SETTINGS);
+    const [testing, setTesting] = useState(null);
+    const [testResult, setTestResult] = useState(null);
+    const scrollRef = useRef(null);
 
-  const [chatInput, setChatInput] = useState('');
-  
-  const chatState = useChat({
-    api: '/api/chat',
-    initialMessages: []
-  });
+    // Ref di sini hanya untuk dibaca oleh transport saat request berjalan (bukan saat render UI),
+    // sehingga perubahan settings tidak perlu membuat ulang transport.
+    const settingsRef = useRef(DEFAULT_SETTINGS);
 
-  const { messages, isLoading, setMessages } = chatState;
+    // Muat pengaturan tersimpan dari localStorage setelah mount.
+    // Effect sinkron dengan sistem eksternal (localStorage), pola resmi React.
+    useEffect(() => {
+        const saved = loadSettings();
+        settingsRef.current = saved;
+        startTransition(() => {
+            setSettings(saved);
+            setDraft(saved);
+        });
+    }, []);
 
-  const handleInputChange = (e) => {
-    setChatInput(e.target.value);
-  };
+    // Transport dibuat sekali; header dibaca saat request lewat settingsRef (bukan saat render).
+    const [transport, setTransport] = useState(null);
+    const transportInitializedRef = useRef(false);
+    useEffect(() => {
+        if (transportInitializedRef.current) return;
+        transportInitializedRef.current = true;
+        setTransport(new DefaultChatTransport({
+            api: '/api/chat',
+            headers: () => ({
+                'x-endpoint-url': settingsRef.current.baseURL,
+                'x-api-key': settingsRef.current.apiKey,
+                'x-model-name': settingsRef.current.model,
+            }),
+        }));
+    }, []);
 
-  const handleFormSubmit = (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!chatInput.trim() || isLoading) return;
+    const chatState = useChat({
+        transport: transport ?? undefined,
+    });
+    const { messages, sendMessage, status, stop, error } = chatState;
+    const isLoading = status === 'submitted' || status === 'streaming';
 
-    const message = { role: 'user', content: chatInput };
-    
-    if (typeof chatState.append === 'function') {
-      chatState.append(message);
-    } else if (typeof chatState.sendMessage === 'function') {
-      chatState.sendMessage(message);
-    } else if (typeof chatState.appendMessage === 'function') {
-      chatState.appendMessage(message);
-    } else if (typeof chatState.setMessages === 'function') {
-      chatState.setMessages([...messages, { id: Date.now().toString(), ...message }]);
-      if (typeof chatState.reload === 'function') chatState.reload();
-      if (typeof chatState.regenerate === 'function') chatState.regenerate();
-    }
-    
-    setChatInput('');
-  };
+    // Auto scroll ke bawah
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+    }, [messages, status]);
 
-  // Automatically scroll to bottom of chat
-  useEffect(() => {
-    const chatContainer = document.getElementById('chat-container');
-    if (chatContainer) {
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
-  }, [messages]);
+    const handleSettingsSave = useCallback(() => {
+        const next = {
+            baseURL: draft.baseURL.trim() || DEFAULT_SETTINGS.baseURL,
+            apiKey: draft.apiKey.trim(),
+            model: draft.model.trim() || 'default',
+        };
+        settingsRef.current = next;
+        setSettings(next);
+        try {
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+        } catch {}
+        setSettingsOpen(false);
+        setTestResult(null);
+    }, [draft]);
 
-  const visibleMessages = messages.filter(m => m.role !== 'system');
+    const runTest = async (target) => {
+        setTesting(target);
+        setTestResult(null);
+        try {
+            const res = await fetch('/api/chat/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    target,
+                    apiKey: draft.apiKey.trim(),
+                    baseURL: draft.baseURL.trim(),
+                    model: draft.model.trim(),
+                }),
+            });
+            const data = await res.json();
+            setTestResult(data);
+        } catch (err) {
+            setTestResult({ ok: false, error: err.message });
+        } finally {
+            setTesting(null);
+        }
+    };
 
-  return (
-    <div className="flex h-screen bg-[#F9FAFB] text-gray-800 font-sans">
-      {/* Sidebar */}
-      <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 overflow-hidden bg-white shadow-[1px_0_15px_rgba(0,0,0,0.03)] z-20 flex flex-col`}>
-        <div className="p-4 border-b flex justify-between items-center bg-gray-50/50">
-          <h2 className="font-semibold text-lg flex items-center gap-2 text-gray-700">
-            <MessageSquare size={20} className="text-blue-500" /> AI Chat
-          </h2>
-        </div>
-        <div className="p-4 flex-grow overflow-y-auto">
-           {/* Chat history list would go here */}
-           <button onClick={() => setMessages([])} className="w-full flex items-center gap-2 p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors font-medium">
-              <Plus size={18}/> New Chat
-           </button>
-        </div>
-      </div>
+    const openSettings = () => {
+        setDraft(settings);
+        setTestResult(null);
+        setSettingsOpen(true);
+    };
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        {/* Header */}
-        <header className="h-16 flex items-center justify-between px-6 bg-white/70 backdrop-blur-xl border-b z-10 absolute top-0 w-full shadow-sm">
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-600">
-            <Menu size={20} />
-          </button>
-          <div className="flex items-center gap-4">
-             <div className="text-sm text-gray-500 font-medium px-3 py-1 bg-gray-100 rounded-full border">
-                Model: <span className="text-gray-700">Hermes 3</span>
-             </div>
-          </div>
-        </header>
-
-        {/* Chat Area */}
-        <div id="chat-container" className="flex-1 overflow-y-auto pt-20 p-4 md:p-8 space-y-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50/40 via-[#F9FAFB] to-[#F9FAFB]">
-           {visibleMessages.map(m => (
-             <ChatMessage key={m.id} message={m} />
-           ))}
-           {visibleMessages.length === 0 && (
-             <div className="flex flex-col items-center justify-center h-full text-center text-gray-400 gap-4 animate-in fade-in duration-500">
-               <div className="p-6 bg-white rounded-3xl shadow-sm border border-gray-100/50">
-                 <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 rounded-2xl shadow-lg shadow-blue-500/20 text-white mb-4">
-                    <MessageSquare size={36} />
-                 </div>
-                 <h2 className="text-2xl font-medium text-gray-700">How can I help you today?</h2>
-                 <p className="mt-2 text-sm max-w-sm text-gray-500">I am powered by Hermes 3. Send a message to start our conversation!</p>
-               </div>
-             </div>
-           )}
-           {chatState.error && (
-             <div className="flex justify-center my-4 animate-in fade-in zoom-in duration-300">
-               <div className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-sm border border-red-100 shadow-sm font-medium">
-                 {chatState.error.message || 'An error occurred. Please check your API settings.'}
-               </div>
-             </div>
-           )}
-           {isLoading && (
-              <div className="flex gap-4 max-w-4xl mx-auto w-full">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm bg-gradient-to-br from-indigo-500 to-purple-500 text-white">
-                  <Bot size={16} />
+    return (
+        <div className="h-screen flex flex-col bg-[linear-gradient(135deg,#ede9fe_0%,#e0f2fe_35%,#fce7f3_65%,#dbeafe_100%)] text-slate-900">
+            {/* Header */}
+            <header className="shrink-0 bg-white/80 backdrop-blur-md border-b border-white/80 shadow-xs">
+                <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-pink-600 via-pink-500 to-rose-400 flex items-center justify-center shadow-sm shadow-pink-500/20 shrink-0">
+                            <span className="font-pacifico text-white text-[11px]" style={{ fontFamily: "var(--font-pacifico), 'Pacifico', cursive" }}>B</span>
+                        </div>
+                        <div className="min-w-0">
+                            <div className="font-bold text-sm text-slate-900 leading-tight">Busana Data Chat</div>
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate">
+                                <Database size={9} className="shrink-0" />
+                                Ujicoba, terhubung ke BigQuery. Belum terikat dengan aplikasi.
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <span className={`hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            settings.apiKey
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                            {settings.apiKey ? `Model: ${settings.model}` : 'Provider belum diatur'}
+                        </span>
+                        <button
+                            onClick={openSettings}
+                            title="Pengaturan provider"
+                            aria-label="Pengaturan provider"
+                            className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                        >
+                            <Settings2 size={16} />
+                        </button>
+                    </div>
                 </div>
-                <div className="px-5 py-3.5 rounded-2xl shadow-sm bg-white text-gray-800 border border-gray-100 rounded-tl-none flex items-center gap-2">
-                   <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce"></div>
-                   <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-                   <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
-                </div>
-              </div>
-           )}
-        </div>
+            </header>
 
-        {/* Input Area */}
-        <div className="p-4 bg-white/70 backdrop-blur-xl border-t pb-8">
-          <ChatInput input={chatInput} handleInputChange={handleInputChange} handleSubmit={handleFormSubmit} isLoading={isLoading} />
+            {/* Messages */}
+            <main ref={scrollRef} className="flex-1 overflow-y-auto py-6 px-2 space-y-5">
+                {messages.length === 0 && !isLoading && (
+                    <div className="max-w-md mx-auto text-center pt-16 sm:pt-24 px-4">
+                        <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-center mx-auto mb-4">
+                            <Feather size={20} className="text-pink-600" />
+                        </div>
+                        <h2 className="font-bold text-slate-900">Tanya data lewat percakapan</h2>
+                        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                            Asisten menjalankan SQL ke BigQuery dan merangkum hasilnya.
+                            Lampirkan gambar atau file bila relevan, lalu minta hasil sebagai tabel untuk diunduh sebagai CSV.
+                        </p>
+                        <div className="mt-5 space-y-2 text-left">
+                            {[
+                                'Dataset apa saja yang ada di proyek ini?',
+                                'Tampilkan 10 baris terakhir dari tabel penjualan.',
+                                'Ringkas tabel di bawah dan siapkan file CSV-nya.',
+                            ].map((hint) => (
+                                <button
+                                    key={hint}
+                                    onClick={() => sendMessage({ text: hint })}
+                                    className="w-full text-left px-3.5 py-2.5 rounded-xl bg-white/80 border border-slate-200 hover:border-pink-300 hover:bg-white transition-colors text-xs text-slate-600"
+                                >
+                                    {hint}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {messages.map((m) => (
+                    <ChatMessage key={m.id} message={m} />
+                ))}
+
+                {isLoading && messages.length > 0 && (
+                    <div className="max-w-4xl mx-auto flex items-center gap-2 text-xs text-slate-400 px-1">
+                        <Loader2 size={12} className="animate-spin" />
+                        <span>Asisten sedang bekerja{status === 'streaming' ? ', mengalirkan balasan' : ''}...</span>
+                    </div>
+                )}
+
+                {error && (
+                    <div className="max-w-4xl mx-auto">
+                        <div className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-xs text-rose-700">
+                            <div className="font-semibold mb-0.5">Permintaan gagal</div>
+                            <div className="text-rose-600/90 break-all">{error.message}</div>
+                            <div className="mt-1.5 text-rose-500/80">Periksa pengaturan provider (URL, token, model) lalu ulangi.</div>
+                        </div>
+                    </div>
+                )}
+            </main>
+
+            {/* Composer */}
+            <footer className="shrink-0 pb-4 pt-1 bg-gradient-to-t from-white/70 to-transparent">
+                <ChatInput sendMessage={sendMessage} isLoading={isLoading} stop={stop} />
+            </footer>
+
+            {/* Settings Modal */}
+            {settingsOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs" onClick={() => setSettingsOpen(false)}></div>
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Pengaturan provider AI"
+                        className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-100 flex flex-col max-h-[92vh]"
+                        onKeyDown={(e) => { if (e.key === 'Escape') setSettingsOpen(false); }}
+                    >
+                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+                            <div>
+                                <h3 className="font-bold text-sm text-slate-900">Pengaturan Provider</h3>
+                                <p className="text-[11px] text-slate-400 mt-0.5">Kompatibel OpenAI: isi URL layanan, token, dan model.</p>
+                            </div>
+                            <button onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <div className="p-5 space-y-4 overflow-y-auto">
+                            <div>
+                                <label htmlFor="cfg-url" className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">URL Endpoint</label>
+                                <input
+                                    id="cfg-url"
+                                    type="url"
+                                    value={draft.baseURL}
+                                    onChange={(e) => setDraft({ ...draft, baseURL: e.target.value })}
+                                    placeholder="https://hermes.absgroup.biz.id"
+                                    className="w-full text-sm px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500/15 focus:border-pink-400 outline-none transition font-mono text-[12px]"
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="cfg-key" className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Token API</label>
+                                <input
+                                    id="cfg-key"
+                                    type="password"
+                                    value={draft.apiKey}
+                                    onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
+                                    placeholder="sk-... atau token layanan"
+                                    autoComplete="off"
+                                    className="w-full text-sm px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500/15 focus:border-pink-400 outline-none transition font-mono text-[12px]"
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="cfg-model" className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Nama Model</label>
+                                <input
+                                    id="cfg-model"
+                                    type="text"
+                                    value={draft.model}
+                                    onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+                                    placeholder="default, gpt-4o-mini, qwen2.5:7b, ..."
+                                    className="w-full text-sm px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500/15 focus:border-pink-400 outline-none transition font-mono text-[12px]"
+                                />
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => runTest('provider')}
+                                    disabled={testing === 'provider'}
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-950 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                                >
+                                    {testing === 'provider' ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
+                                    Test Provider
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => runTest('bigquery')}
+                                    disabled={testing === 'bigquery'}
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                                >
+                                    {testing === 'bigquery' ? <Loader2 size={12} className="animate-spin" /> : <Database size={12} />}
+                                    Test BigQuery
+                                </button>
+                            </div>
+
+                            {testing && <TestResult result={testResult} loading target={testing === 'provider' ? 'provider' : 'BigQuery'} />}
+                            {!testing && testResult && <TestResult result={testResult} loading={false} target={testResult.target === 'bigquery' ? 'BigQuery' : 'provider'} />}
+
+                            <p className="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-slate-100">
+                                Kredensial BigQuery dibaca dari file service account di server, bukan dari halaman ini.
+                                Pengaturan provider disimpan hanya di perangkat ini.
+                            </p>
+                        </div>
+
+                        <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2 shrink-0">
+                            <button onClick={() => setSettingsOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition">Batal</button>
+                            <button onClick={handleSettingsSave} className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition">Simpan</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
-      </div>
-    </div>
-  );
+    );
 }
