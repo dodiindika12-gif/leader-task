@@ -622,21 +622,29 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
                     Struktur Format Pesan WhatsApp (07:00 WITA)
                   </h3>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    Setiap pagi pukul <strong>07:00 WITA</strong>, sistem mengirimkan pesan personalisasi 3-bagian:
+                    Setiap pagi pukul <strong>07:00 WITA</strong>, sistem mengirimkan pesan personalisasi ringkas & to the point:
                   </p>
 
                   <div className="space-y-3 text-xs text-slate-400">
                     <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[10px] shrink-0">👋</span>
+                      <div><strong>Sapaan Ramah:</strong> <em>"Selamat pagi [Nama]! Task [Tanggal] yang perlu diperhatikan:"</em></div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
                       <span className="w-5 h-5 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
-                      <div><strong>🔴 1. Task Overdue Saya:</strong> Daftar tugas pengerjaan pribadi yang telah melewati tanggal deadline (kritis).</div>
+                      <div><strong>🔴 1. Task Overdue Saya:</strong> Tugas pribadi yang terlewat (atau <code className="text-emerald-400">✅ Aman</code> jika tidak ada).</div>
                     </div>
                     <div className="flex items-start gap-2.5">
                       <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[10px] shrink-0">2</span>
-                      <div><strong>🟡 2. Task Hari Ini Saya:</strong> Daftar tugas pengerjaan pribadi dengan deadline tepat hari ini.</div>
+                      <div><strong>🟡 2. Task Hari Ini Saya:</strong> Tugas pribadi deadline hari ini (atau <code className="text-emerald-400">✅ Aman</code> jika tidak ada).</div>
                     </div>
                     <div className="flex items-start gap-2.5">
                       <span className="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold text-[10px] shrink-0">3</span>
-                      <div><strong>📡 3. Radar Deadline Bawahan:</strong> Khusus Leader (SPV, Manager, Direksi) untuk memantau tugas anggota tim yang Overdue dan tugas anggota tim yang jatuh tempo hari ini.</div>
+                      <div><strong>📡 3. Radar Tim / Bawahan:</strong> Khusus Leader untuk memantau tugas bawahan yang Overdue dan Hari Ini.</div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-[10px] shrink-0">🚀</span>
+                      <div><strong>Tagline Perusahaan:</strong> <em>"Bersinergi Meraih Kemenangan"</em></div>
                     </div>
                   </div>
                 </div>
@@ -669,38 +677,39 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
                     </div>
 
                     {/* Chat Bubble Incoming */}
-                    <div className="bg-[#202c33] text-slate-100 p-3.5 rounded-2xl rounded-tl-xs max-w-[95%] shadow-md text-xs space-y-2 border border-slate-700/50">
-                      <div className="text-emerald-400 font-semibold">
-                        🌅 <strong>BRIEFING TUGAS PAGI</strong>
-                      </div>
-                      <div className="text-[11px] text-slate-300">
-                        👤 Halo, <strong>Dodi</strong> (SPV - Marcomm)
+                    <div className="bg-[#202c33] text-slate-100 p-3.5 rounded-2xl rounded-tl-xs max-w-[95%] shadow-md text-xs space-y-2 border border-slate-700/50 font-mono">
+                      <div className="text-slate-100 text-[11px]">
+                        Selamat pagi <strong>*Dodi*</strong>! Task 22 Sep 2026 yang perlu diperhatikan:
                       </div>
 
-                      <div className="pt-1.5 border-t border-slate-700/60 font-mono text-[11px] leading-relaxed text-slate-200 space-y-2">
-                        <div>
-                          <div className="font-bold text-rose-400">🔴 1. TASK SAYA - OVERDUE</div>
-                          <div className="text-[10px] text-slate-400">✅ Tidak ada task Anda yang overdue.</div>
-                        </div>
-
-                        <div>
-                          <div className="font-bold text-amber-300">🟡 2. TASK SAYA - HARI INI</div>
-                          <div className="text-[10px] text-slate-400">☕ Tidak ada task Anda deadline hari ini.</div>
-                        </div>
-
-                        <div>
-                          <div className="font-bold text-sky-300">📡 3. RADAR DEADLINE BAWAHAN</div>
-                          <div className="text-[10px] text-rose-400 font-semibold">Overdue Tim (0):</div>
-                          <div className="text-[10px] text-slate-400 mb-1">✅ Seluruh tugas tim aman.</div>
-                          <div className="text-[10px] text-amber-300 font-semibold">Hari Ini Tim (2):</div>
-                          <div className="text-[10px] text-slate-300">• [Heru] <strong>SUBMIT LAP. TEMUAN BT02</strong></div>
-                          <div className="text-[10px] text-slate-300">• [Anne] <strong>Setting Promo JSM W4</strong></div>
-                        </div>
+                      <div className="text-slate-500 text-[10px]">--------------</div>
+                      <div>
+                        <div className="font-bold text-rose-400">🔴 *1. Task Overdue Saya*</div>
+                        <div className="text-slate-500 text-[10px]">--------------</div>
+                        <div className="text-[11px] text-emerald-400">✅ Aman</div>
                       </div>
 
-                      <div className="pt-1.5 text-[10px] text-slate-400 italic">
-                        Semangat berkarya & salam produktif! 🚀<br />
-                        <span className="text-slate-500 font-medium">Busana Leader Task Dashboard</span>
+                      <div className="text-slate-500 text-[10px]">--------------</div>
+                      <div>
+                        <div className="font-bold text-amber-300">🟡 *2. Task Hari Ini Saya*</div>
+                        <div className="text-slate-500 text-[10px]">--------------</div>
+                        <div className="text-[11px] text-emerald-400">✅ Aman</div>
+                      </div>
+
+                      <div className="text-slate-500 text-[10px]">--------------</div>
+                      <div>
+                        <div className="font-bold text-sky-300">📡 *3. Radar Tim / Bawahan*</div>
+                        <div className="text-slate-500 text-[10px]">--------------</div>
+                        <div className="text-[11px] text-slate-300">• Overdue: ✅ Aman</div>
+                        <div className="text-[11px] text-amber-300 font-semibold mt-1">🟡 *Hari Ini (2):*</div>
+                        <div className="text-[10px] text-slate-300">• [Anne] <strong>*Setting Promo JSM W4*</strong> (To Do)</div>
+                        <div className="text-[10px] text-slate-300">• [Heru] <strong>*SUBMIT LAP. TEMUAN BT02*</strong> (To Do)</div>
+                      </div>
+
+                      <div className="text-slate-500 text-[10px]">--------------</div>
+                      <div className="text-[10px] text-slate-300 italic">
+                        _Bersinergi Meraih Kemenangan_ 🚀<br />
+                        <span className="text-slate-400 font-medium">_Busana Leader Task_</span>
                       </div>
 
                       <div className="flex justify-end items-center gap-1 text-[9px] text-slate-400 pt-0.5">
