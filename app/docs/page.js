@@ -124,7 +124,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 // Jalankan otomatis via Systemd User Timer atau Crontab setiap 07:00 WITA
 // node --env-file=.env.local scripts/morning_dispatch.mjs`;
 
-  const sampleCurl = `curl -X GET "http://localhost:3001/api/tasks?range=today&format=whatsapp&picId=ALL&includeDone=0" \
+  const sampleCurl = `curl -X GET "http://localhost:3001/api/tasks?range=today&format=whatsapp&picId=ALL&includeDone=0" \\
   -H "Authorization: Bearer 76b0e06d00fbb9bb09b6120a1c1875e1f6611f49076a17e8bddc5366cff0fb78"`;
 
   return (
