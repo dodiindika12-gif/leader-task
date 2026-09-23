@@ -119,9 +119,23 @@ body {
   background: #ecfdf5;
 }
 
-/* Bubble user (invert): header & zebra gelap tipis */
+/* Bubble user (invert): teks wajib putih murni, header & zebra gelap tipis */
+.chat-bubble-own,
+.chat-bubble-own p,
+.chat-bubble-own span,
+.chat-bubble-own strong,
+.chat-bubble-own em,
+.chat-bubble-own li,
+.chat-bubble-own div,
+.chat-bubble-own code {
+  color: #ffffff !important;
+}
+.chat-bubble-own a {
+  color: #ffffff !important;
+  text-decoration: underline;
+}
 .chat-bubble-own table { border-color: rgba(255,255,255,0.25); }
-.chat-bubble-own thead th { background: rgba(255,255,255,0.15); color: #fff; border-bottom-color: rgba(255,255,255,0.25); }
-.chat-bubble-own tbody td { color: rgba(255,255,255,0.92); border-bottom-color: rgba(255,255,255,0.12); }
+.chat-bubble-own thead th { background: rgba(255,255,255,0.15); color: #fff !important; border-bottom-color: rgba(255,255,255,0.25); }
+.chat-bubble-own tbody td { color: rgba(255,255,255,0.95) !important; border-bottom-color: rgba(255,255,255,0.12); }
 .chat-bubble-own tbody tr:nth-child(even) td { background: rgba(255,255,255,0.06); }
 .chat-bubble-own tbody tr:hover td { background: rgba(255,255,255,0.12); }

@@ -5,7 +5,7 @@ import { DefaultChatTransport } from 'ai';
 import { useState, useEffect, useRef, useCallback, startTransition, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import {
-    Settings2, X, Check, Loader2, Feather, ShieldCheck, Database,
+    Settings2, Settings, X, Check, Loader2, Feather, ShieldCheck, Database,
     Brain, Zap, Trash2, Plus, Power, GitBranch, LogIn, ArrowLeft, RotateCcw,
 } from 'lucide-react';
 import ChatMessage from '@/components/ChatMessage';
@@ -569,12 +569,13 @@ export default function ChatPage() {
                         >
                             <ArrowLeft size={16} />
                         </Link>
-                        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-pink-600 via-pink-500 to-rose-400 flex items-center justify-center shadow-sm shadow-pink-500/20 shrink-0">
-                            <span className="font-pacifico text-white text-[11px]" style={{ fontFamily: "var(--font-pacifico), 'Pacifico', cursive" }}>B</span>
+                        <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 border border-pink-200 shadow-sm shadow-pink-500/20 bg-pink-100 flex items-center justify-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src="/bebie-avatar.jpg" alt="Bebie" className="w-full h-full object-cover" />
                         </div>
                         <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                                <span className="font-bold text-sm text-slate-900 leading-tight truncate">Busana Data Chat</span>
+                                <span className="font-bold text-sm text-slate-900 leading-tight truncate">Bebie - Beauty Bestie AI</span>
                                 <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-mono bg-pink-50 text-pink-700 border border-pink-200/70" title={`Model: ${settings.model || 'default'}`}>
                                     {settings.model || 'default'}
                                 </span>
@@ -619,13 +620,14 @@ export default function ChatPage() {
             <main ref={scrollRef} className="flex-1 overflow-y-auto py-6 px-2 space-y-5">
                 {messages.length === 0 && !isLoading && (
                     <div className="max-w-md mx-auto text-center pt-12 sm:pt-20 px-4">
-                        <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-center mx-auto mb-4">
-                            <Feather size={20} className="text-pink-600" />
+                        <div className="w-14 h-14 rounded-2xl overflow-hidden border border-pink-200 shadow-md shadow-pink-500/10 mx-auto mb-4 bg-pink-100 flex items-center justify-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src="/bebie-avatar.jpg" alt="Bebie" className="w-full h-full object-cover" />
                         </div>
-                        <h2 className="font-bold text-slate-900">Tanya data lewat percakapan</h2>
+                        <h2 className="font-bold text-slate-900">Halo! Tanya data ke Bebie</h2>
                         <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                            Asisten mengingat preferensi Anda (memori pribadi + global), menjalankan SQL BigQuery,
-                            dan menyempurnakan skill-nya sendiri dari setiap percakapan.
+                            Bebie (Beauty Bestie AI) siap menganalisis penjualan, target outlet, tren produk,
+                            dan menyajikan insight cantik langsung dari Google BigQuery.
                         </p>
                         <div className="mt-5 space-y-2 text-left">
                             {[
@@ -656,20 +658,30 @@ export default function ChatPage() {
 
                 {isLoading && messages.length > 0 && messages[messages.length - 1]?.role === 'user' && (
                     <div className="flex gap-3 max-w-4xl mx-auto w-full flex-row">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-xs text-white bg-gradient-to-tr from-pink-600 via-pink-500 to-rose-400">
-                            <i className="fa-brands fa-whatsapp text-xs" aria-hidden="true"></i>
+                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-xs border border-pink-200 bg-pink-100 flex items-center justify-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src="/bebie-avatar.jpg" alt="Bebie" className="w-full h-full object-cover" />
                         </div>
                         <div className="flex flex-col gap-2 min-w-0 max-w-[85%] items-start">
                             <div className="text-[11px] text-slate-400 font-medium px-1">
-                                AI Data Assistant
+                                Bebie - Beauty Bestie AI
                             </div>
-                            <div className="px-4 py-3 rounded-2xl shadow-sm text-xs leading-relaxed break-words w-fit max-w-full bg-white text-slate-800 border border-slate-100 rounded-tl-md">
-                                <div className="flex items-center gap-2.5 py-0.5 text-slate-600">
-                                    <span className="relative flex h-2.5 w-2.5 shrink-0">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-600"></span>
+                            <div className="w-full max-w-md rounded-2xl border border-pink-200/90 bg-gradient-to-br from-pink-50/70 via-white to-rose-50/40 p-3.5 shadow-sm space-y-2.5">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className="w-7 h-7 rounded-lg bg-pink-100 text-pink-600 flex items-center justify-center shrink-0">
+                                            <Settings size={15} className="animate-spin text-pink-600" />
+                                        </div>
+                                        <span className="text-xs font-semibold text-slate-800 truncate">
+                                            Sedang Pakai Sunscreen... Biar Data Tetap Glowing! 🧴✨
+                                        </span>
+                                    </div>
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-100 text-pink-700 animate-pulse shrink-0">
+                                        35%
                                     </span>
-                                    <span className="font-medium text-xs">Sedang mengambil data & menyusun laporan...</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-pink-100/80 rounded-full overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-pink-500 via-rose-400 to-pink-600 rounded-full animate-pulse w-2/5"></div>
                                 </div>
                             </div>
                         </div>

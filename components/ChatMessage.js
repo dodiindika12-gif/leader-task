@@ -1,8 +1,17 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { FileText, Download, Wrench, AlertCircle } from 'lucide-react';
+import { FileText, Download, Wrench, AlertCircle, Settings, ChevronDown, Sparkles } from 'lucide-react';
+
+const BEAUTY_QUOTES = [
+    { text: "Sedang Pakai Sunscreen... Biar Data Tetap Glowing! 🧴✨" },
+    { text: "Tunggu, Bebie Gambar Alis Dulu Yah! 💄" },
+    { text: "Lagi Touch Up Bedak Biar Laporan Gak Kusut... 🪞" },
+    { text: "Meramu Formula Data Sambil Oles Lip Tint... 💋" },
+    { text: "Menyemprotkan Setting Spray... Biar Data Tahan Seharian! 🌸" },
+];
 
 function CopyCsvButton({ csv, filename }) {
     const handleDownload = () => {
@@ -18,7 +27,7 @@ function CopyCsvButton({ csv, filename }) {
     };
 
     return (
-        <button onClick={handleDownload} className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold transition-colors">
+        <button onClick={handleDownload} className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold transition-colors cursor-pointer">
             <Download size={12} />
             Unduh {filename || 'hasil.csv'}
         </button>
@@ -87,27 +96,22 @@ export function normalizeInlineTables(md) {
 
     const SEP_CELL = /^:?-{2,}:?$/;
 
-    // Proses per baris: satu baris fisik bisa memuat beberapa tabel inline.
     for (const line of lines) {
-        // Baris tabel normal (dimulai & diakhiri pipe, tanpa sambungan "| |---|") diteruskan apa adanya
         if (!runMarker.test(line)) {
             out.push(line);
             continue;
         }
 
-        // Potong prefix teks sebelum pipe pertama
         const prefixMatch = line.match(/^([^|]*)\|/);
         const prefix = prefixMatch ? prefixMatch[1] : '';
         const rest = prefix ? line.slice(prefix.length) : line;
 
-        // Split sel: buang pipe tepi
         const cells = rest
             .replace(/^\s*\|/, '')
             .replace(/\|\s*$/, '')
             .split('|')
             .map((c) => c.trim());
 
-        // Cari run pemisah: >=2 sel "---" berurutan
         let sepStart = -1;
         let sepEnd = -1;
         for (let i = 0; i < cells.length; i += 1) {
@@ -123,7 +127,6 @@ export function normalizeInlineTables(md) {
             }
         }
 
-        // Tidak ada run pemisah valid → perbarui hanya jika ada pipe ganda "| |" (indikasi tabel rusak)
         if (sepStart === -1) {
             out.push(line);
             continue;
@@ -136,16 +139,12 @@ export function normalizeInlineTables(md) {
             continue;
         }
 
-        // Sisa sel setelah run pemisah. Sel kosong interior berasal dari sambungan
-        // "| |" antar baris yang dirapatkan model, bukan data; buang semua agar
-        // perataan baris (chunking) tidak bergeser.
         const body = cells.slice(sepEnd + 1).filter((c) => c !== '');
 
         const rows = [];
         for (let i = 0; i < body.length; i += width) {
             rows.push(body.slice(i, i + width));
         }
-        // Baris terakhir boleh pendek (tabel terpotong); isi dengan '' agar rapi
         if (rows.length > 0 && rows[rows.length - 1].length < width) {
             const last = rows[rows.length - 1];
             while (last.length < width) last.push('');
@@ -192,7 +191,7 @@ function ToolPart({ part }) {
     const input = part.input || part.args || {};
     const output = part.output || part.result || {};
 
-    // Hasil generate_file: tampilkan sebagai kartu unduhan, bukan detail tool
+    // Hasil generate_file: tampilkan sebagai kartu unduhan mandiri
     if (toolName === 'generate_file' && isResult && output?.ok && (output?.downloadUrl || output?.fileName)) {
         const downloadUrl = output.downloadUrl || `/api/chat/files?name=${encodeURIComponent(output.fileName)}`;
         const formatLabel = (output.format || output.fileName?.split('.').pop() || 'FILE').toUpperCase();
@@ -225,83 +224,242 @@ function ToolPart({ part }) {
         );
     }
 
+    return null;
+}
+
+/**
+ * Komponen tunggal penyatu seluruh proses query BigQuery, memory, dan refine_skill.
+ * Menampilkan ikon gear, kutipan lucu kecantikan ("Pakai Sunscreen...", "Gambar Alis..."),
+ * progress bar animasi, persentase loading, dan dropdown accordion untuk melihat detail query.
+ */
+function SystemProcessGroup({ parts = [], isLoading = false }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [quoteIndex, setQuoteIndex] = useState(0);
+
+    const totalCount = parts.length;
+    const completedParts = parts.filter(
+        (p) => p.state === 'output-available' || p.state === 'result' || !!p.output
+    );
+    const completedCount = completedParts.length;
+    const allDone = totalCount > 0 && completedCount === totalCount && !isLoading;
+
+    useEffect(() => {
+        if (!allDone) {
+            const timer = setInterval(() => {
+                setQuoteIndex((prev) => (prev + 1) % BEAUTY_QUOTES.length);
+            }, 2800);
+            return () => clearInterval(timer);
+        }
+    }, [allDone]);
+
+    let percentage = 100;
+    if (!allDone) {
+        if (totalCount === 0) {
+            percentage = 40;
+        } else {
+            const stepPct = Math.round((completedCount / totalCount) * 80);
+            percentage = Math.max(30, Math.min(95, stepPct + 15));
+        }
+    }
+
+    const currentQuote = allDone
+        ? "Touch Up Selesai! Data Cantik Siap Disajikan ✨💅"
+        : BEAUTY_QUOTES[quoteIndex]?.text || "Sedang Pakai Sunscreen... Biar Data Tetap Glowing! 🧴✨";
+
+    const totalRows = parts.reduce((acc, p) => {
+        const out = p.output || p.result || {};
+        return acc + (typeof out.rowCount === 'number' ? out.rowCount : 0);
+    }, 0);
+
+    const hasError = parts.some((p) => {
+        const out = p.output || p.result || {};
+        return out.ok === false || (p.state === 'error');
+    });
+
     return (
-        <details className="w-full text-[11px] rounded-xl border border-slate-200 bg-slate-50 overflow-hidden group">
-            <summary className="px-3 py-2 cursor-pointer select-none flex items-center gap-2 text-slate-600 hover:bg-slate-100 transition-colors list-none">
-                <Wrench size={12} className={isResult ? 'text-emerald-600' : 'animate-spin text-amber-500'} />
-                <span className="font-semibold">
-                    {toolName === 'generate_file'
-                        ? 'Membuat file'
-                        : toolName === 'remember'
-                            ? 'Menyimpan memori'
-                            : toolName === 'refine_skill'
-                                ? 'Menyempurnakan skill'
-                                : 'BigQuery'}{' '}
-                    {isResult ? 'selesai' : 'sedang berjalan'}
-                </span>
-                {isResult && typeof output.rowCount === 'number' && (
-                    <span className="ml-auto font-mono text-[10px] text-slate-400">{output.rowCount} baris</span>
-                )}
-                {isResult && output.ok === false && (
-                    <span className="ml-auto font-mono text-[10px] text-rose-500">gagal</span>
-                )}
-            </summary>
-            <div className="px-3 py-2 border-t border-slate-200 space-y-2">
-                {input.sql && (
-                    <pre className="p-2 rounded-lg bg-slate-950 text-emerald-200/90 font-mono text-[10px] overflow-x-auto whitespace-pre">{input.sql}</pre>
-                )}
-                {toolName === 'remember' && input.content && (
-                    <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-900 text-[11px]">
-                        <span className="font-semibold">{input.scope === 'global' ? 'Memori global:' : 'Memori pribadi:'}</span> {input.content}
+        <div className="w-full max-w-xl rounded-2xl border border-pink-200/90 bg-gradient-to-br from-pink-50/70 via-white to-rose-50/40 p-3.5 shadow-xs my-1.5 transition-all">
+            {/* Header: Gear icon, quote text, percentage */}
+            <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs transition-colors ${
+                        allDone
+                            ? 'bg-gradient-to-tr from-pink-500 to-rose-400 text-white'
+                            : 'bg-pink-100 text-pink-600'
+                    }`}>
+                        <Settings size={16} className={allDone ? '' : 'animate-spin'} />
                     </div>
-                )}
-                {toolName === 'refine_skill' && input.slug && (
-                    <div className="p-2 rounded-lg bg-amber-50 border border-amber-100 text-amber-900 text-[11px]">
-                        <span className="font-semibold">Skill {input.slug}:</span> {input.reason || 'perbaikan otomatis'}
+                    <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-800 leading-snug truncate" title={currentQuote}>
+                            {currentQuote}
+                        </div>
+                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                            {allDone ? (
+                                <>
+                                    <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                                        <Sparkles size={10} /> Selesai diproses
+                                    </span>
+                                    {totalCount > 0 && (
+                                        <>
+                                            <span>•</span>
+                                            <span>{totalCount} langkah query</span>
+                                        </>
+                                    )}
+                                    {totalRows > 0 && (
+                                        <>
+                                            <span>•</span>
+                                            <span className="font-mono text-slate-500 font-semibold">{totalRows} total baris</span>
+                                        </>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <span className="text-pink-600 font-medium">Bebie sedang memproses data</span>
+                                    <span>•</span>
+                                    <span>Langkah {Math.min(completedCount + 1, totalCount || 1)} dari {totalCount || 1}</span>
+                                </>
+                            )}
+                        </div>
                     </div>
-                )}
-                {toolName === 'generate_file' && input.format && (
-                    <div className="p-2 rounded-lg bg-slate-100 text-slate-600 text-[11px]">
-                        Format <span className="font-mono font-bold">{input.format}</span>
-                        {input.title ? `: ${input.title}` : ''}
-                    </div>
-                )}
-                {isResult && !output.ok && output.error && (
-                    <div className="flex items-start gap-1.5 text-rose-600 font-medium">
-                        <AlertCircle size={12} className="mt-0.5 shrink-0" />
-                        <span className="break-all">{output.error}</span>
-                    </div>
-                )}
-                {isResult && toolName !== 'generate_file' && output.note && (
-                    <div className="text-slate-500 text-[11px] leading-relaxed">{output.note}</div>
-                )}
-                {isResult && Array.isArray(output.rows) && output.rows.length > 0 && (
-                    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                        <table className="w-full text-left text-[10px]">
-                            <thead className="bg-slate-100">
-                                <tr>
-                                    {Object.keys(output.rows[0]).slice(0, 8).map((k) => (
-                                        <th key={k} className="px-2 py-1 font-semibold text-slate-600">{k}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {output.rows.slice(0, 10).map((r, ri) => (
-                                    <tr key={ri} className="border-t border-slate-100">
-                                        {Object.keys(output.rows[0]).slice(0, 8).map((k) => (
-                                            <td key={k} className="px-2 py-1 text-slate-700 font-mono">{formatCellValue(r[k])}</td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {output.rows.length > 10 && (
-                            <div className="px-2 py-1 text-[10px] text-slate-400 border-t border-slate-100">Menampilkan 10 dari {output.rowCount} baris.</div>
-                        )}
-                    </div>
-                )}
+                </div>
+
+                <div className="shrink-0 flex items-center gap-1.5">
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-tight shadow-2xs ${
+                        allDone
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-pink-100 text-pink-700 border border-pink-200 animate-pulse'
+                    }`}>
+                        {percentage}%
+                    </span>
+                </div>
             </div>
-        </details>
+
+            {/* Progress Bar */}
+            <div className="w-full h-1.5 bg-pink-100/80 rounded-full overflow-hidden mt-3 relative">
+                <div
+                    className={`h-full rounded-full transition-all duration-700 ease-out ${
+                        allDone
+                            ? 'bg-gradient-to-r from-pink-500 via-rose-400 to-emerald-500'
+                            : 'bg-gradient-to-r from-pink-500 via-rose-400 to-pink-600'
+                    }`}
+                    style={{ width: `${percentage}%` }}
+                />
+            </div>
+
+            {/* Expandable Accordion for individual query details */}
+            {totalCount > 0 && (
+                <div className="mt-2.5 pt-2 border-t border-pink-100/80">
+                    <button
+                        type="button"
+                        onClick={() => setIsOpen(!isOpen)}
+                        className="w-full flex items-center justify-between text-[11px] font-medium text-slate-500 hover:text-pink-600 transition-colors py-0.5 cursor-pointer"
+                    >
+                        <span className="flex items-center gap-1.5">
+                            <Wrench size={11} className="text-pink-500" />
+                            <span>Detail langkah sistem ({totalCount} proses)</span>
+                            {hasError && <span className="text-[10px] text-rose-500 font-semibold">(ada error)</span>}
+                        </span>
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                            {isOpen ? 'Sembunyikan' : 'Buka'}
+                            <ChevronDown size={12} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                        </span>
+                    </button>
+
+                    {isOpen && (
+                        <div className="mt-2 space-y-2 pt-1">
+                            {parts.map((part, pIdx) => {
+                                const tName = part.toolName || (part.type?.startsWith('tool-') ? part.type.replace(/^tool-/, '') : '');
+                                const isRes = part.state === 'output-available' || part.state === 'result' || !!part.output;
+                                const inp = part.input || part.args || {};
+                                const out = part.output || part.result || {};
+
+                                return (
+                                    <div key={pIdx} className="text-[11px] rounded-xl border border-slate-200 bg-white/95 p-2.5 space-y-1.5 shadow-2xs">
+                                        <div className="flex items-center justify-between text-slate-600 font-semibold">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="w-4 h-4 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center text-[9px] font-bold">
+                                                    {pIdx + 1}
+                                                </span>
+                                                <span>
+                                                    {tName === 'remember'
+                                                        ? 'Menyimpan memori'
+                                                        : tName === 'refine_skill'
+                                                            ? 'Menyempurnakan skill'
+                                                            : 'Query BigQuery'}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {isRes && typeof out.rowCount === 'number' && (
+                                                    <span className="font-mono text-[10px] text-slate-400">{out.rowCount} baris</span>
+                                                )}
+                                                {isRes && out.ok === false && (
+                                                    <span className="font-mono text-[10px] text-rose-500 font-bold">gagal</span>
+                                                )}
+                                                {!isRes && (
+                                                    <span className="font-mono text-[10px] text-amber-500 font-medium">sedang berjalan...</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {inp.sql && (
+                                            <pre className="p-2 rounded-lg bg-slate-950 text-emerald-300 font-mono text-[10px] overflow-x-auto whitespace-pre">
+                                                {inp.sql}
+                                            </pre>
+                                        )}
+
+                                        {tName === 'remember' && inp.content && (
+                                            <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-900 text-[10px]">
+                                                <span className="font-semibold">{inp.scope === 'global' ? 'Memori global:' : 'Memori pribadi:'}</span> {inp.content}
+                                            </div>
+                                        )}
+
+                                        {tName === 'refine_skill' && inp.slug && (
+                                            <div className="p-2 rounded-lg bg-amber-50 border border-amber-100 text-amber-900 text-[10px]">
+                                                <span className="font-semibold">Skill {inp.slug}:</span> {inp.reason || 'perbaikan otomatis'}
+                                            </div>
+                                        )}
+
+                                        {isRes && !out.ok && out.error && (
+                                            <div className="flex items-start gap-1.5 text-rose-600 font-medium text-[10px]">
+                                                <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                                                <span className="break-all">{out.error}</span>
+                                            </div>
+                                        )}
+
+                                        {isRes && Array.isArray(out.rows) && out.rows.length > 0 && (
+                                            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                                                <table className="w-full text-left text-[10px]">
+                                                    <thead className="bg-slate-100">
+                                                        <tr>
+                                                            {Object.keys(out.rows[0]).slice(0, 6).map((k) => (
+                                                                <th key={k} className="px-2 py-1 font-semibold text-slate-600">{k}</th>
+                                                            ))}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {out.rows.slice(0, 5).map((r, ri) => (
+                                                            <tr key={ri} className="border-t border-slate-100">
+                                                                {Object.keys(out.rows[0]).slice(0, 6).map((k) => (
+                                                                    <td key={k} className="px-2 py-1 text-slate-700 font-mono">{formatCellValue(r[k])}</td>
+                                                                ))}
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                                {out.rows.length > 5 && (
+                                                    <div className="px-2 py-1 text-[9px] text-slate-400 border-t border-slate-100">
+                                                        Menampilkan 5 dari {out.rowCount} baris.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -314,16 +472,31 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
         return name === 'generate_file' && (p.state === 'output-available' || p.state === 'result' || !!p.output);
     });
 
-    // Marker CSV dari sistem diterjemahkan jadi tombol unduh
+    // Kumpulkan seluruh proses sistem non-generate_file ke dalam 1 grup
+    const systemParts = parts.filter((part) => {
+        if (!part.type?.startsWith('tool-') && !part.toolName) return false;
+        const name = part.toolName || (part.type?.startsWith('tool-') ? part.type.replace(/^tool-/, '') : '');
+        return name !== 'generate_file';
+    });
+
+    let renderedSystemGroup = false;
+
     let lastTableMarkdown = '';
     const rendered = [];
 
     parts.forEach((part, idx) => {
         if (part.type === 'text') {
+            // Render grup proses sistem tepat sebelum teks jika ada proses sistem yang aktif
+            if (!renderedSystemGroup && systemParts.length > 0 && (showSystemProcess || isLoading)) {
+                rendered.push(
+                    <SystemProcessGroup key="system-process-group" parts={systemParts} isLoading={isLoading} />
+                );
+                renderedSystemGroup = true;
+            }
+
             const normalizedText = isUser ? part.text : autoLinkFiles(normalizeInlineTables(part.text));
             const tableStart = normalizedText.lastIndexOf('|');
             if (tableStart !== -1 && !isUser) {
-                // Simpan blok tabel markdown terakhir untuk tombol CSV
                 const lines = normalizedText.split('\n');
                 const tableLines = lines.filter((l) => l.trim().startsWith('|'));
                 if (tableLines.length >= 3) {
@@ -337,16 +510,49 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
                 const detectedFiles = [...new Set(fileMatches.map((m) => m[1]))];
 
                 rendered.push(
-                    <div key={`t-${idx}`} className={`px-4 py-3 rounded-2xl shadow-sm text-[15px] leading-relaxed break-words w-fit max-w-full
-                        ${isUser
-                            ? 'bg-pink-600 text-white rounded-tr-md'
-                            : 'bg-white text-slate-800 border border-slate-100 rounded-tl-md'
+                    <div
+                        key={`t-${idx}`}
+                        className={`px-4 py-3 rounded-2xl shadow-sm text-[15px] leading-relaxed break-words w-fit max-w-full ${
+                            isUser
+                                ? 'bg-pink-600 !text-white rounded-tr-md shadow-pink-600/20'
+                                : 'bg-white text-slate-800 border border-slate-100 rounded-tl-md'
                         }`}
+                        style={isUser ? { color: '#ffffff' } : undefined}
                     >
-                        <div className={`chat-bubble ${isUser ? 'chat-bubble-own ' : ''}prose prose-sm max-w-none prose-p:my-1 prose-pre:my-1.5 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1`}>
+                        <div
+                            className={`chat-bubble ${
+                                isUser ? 'chat-bubble-own !text-white prose-invert prose-p:!text-white prose-headings:!text-white prose-strong:!text-white prose-em:!text-white ' : ''
+                            }prose prose-sm max-w-none prose-p:my-1 prose-pre:my-1.5 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1`}
+                            style={isUser ? { color: '#ffffff' } : undefined}
+                        >
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
                                 components={{
+                                    p: ({ children }) => (
+                                        <p className={isUser ? '!text-white' : undefined} style={isUser ? { color: '#ffffff' } : undefined}>
+                                            {children}
+                                        </p>
+                                    ),
+                                    span: ({ children }) => (
+                                        <span className={isUser ? '!text-white' : undefined} style={isUser ? { color: '#ffffff' } : undefined}>
+                                            {children}
+                                        </span>
+                                    ),
+                                    strong: ({ children }) => (
+                                        <strong className={isUser ? '!text-white' : undefined} style={isUser ? { color: '#ffffff' } : undefined}>
+                                            {children}
+                                        </strong>
+                                    ),
+                                    em: ({ children }) => (
+                                        <em className={isUser ? '!text-white' : undefined} style={isUser ? { color: '#ffffff' } : undefined}>
+                                            {children}
+                                        </em>
+                                    ),
+                                    li: ({ children }) => (
+                                        <li className={isUser ? '!text-white' : undefined} style={isUser ? { color: '#ffffff' } : undefined}>
+                                            {children}
+                                        </li>
+                                    ),
                                     a: ({ href, children, ...props }) => {
                                         const isFileDownload = href && (href.startsWith('/api/chat/files') || /\.(pptx|xlsx|csv)($|\?)/i.test(href));
                                         if (isFileDownload) {
@@ -366,7 +572,14 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
                                             );
                                         }
                                         return (
-                                            <a href={href} target="_blank" rel="noopener noreferrer" className="text-pink-600 hover:underline font-medium" {...props}>
+                                            <a
+                                                href={href}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className={isUser ? '!text-white underline font-semibold' : 'text-pink-600 hover:underline font-medium'}
+                                                style={isUser ? { color: '#ffffff' } : undefined}
+                                                {...props}
+                                            >
                                                 {children}
                                             </a>
                                         );
@@ -420,38 +633,37 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
                     </div>
                 </div>
             );
-        } else if (part.type?.startsWith('tool-')) {
+        } else if (part.type?.startsWith('tool-') || part.toolName) {
             const toolName = part.toolName || (part.type?.startsWith('tool-') ? part.type.replace(/^tool-/, '') : '');
-            // Kartu unduhan file selalu ditampilkan
+            // Kartu unduhan file selalu ditampilkan tersendiri
             if (toolName === 'generate_file') {
                 rendered.push(
                     <div key={`tool-${idx}`} className="w-full">
                         <ToolPart part={part} />
                     </div>
                 );
-            } else if (showSystemProcess) {
-                // Detail proses query BigQuery, memory, refine_skill hanya tampil bila diizinkan
+            } else if (!renderedSystemGroup && (showSystemProcess || isLoading)) {
+                // Seluruh proses BigQuery/memory/skill dimasukkan ke dalam 1 bubble tunggal
                 rendered.push(
-                    <div key={`tool-${idx}`} className="w-full">
-                        <ToolPart part={part} />
-                    </div>
+                    <SystemProcessGroup key="system-process-group" parts={systemParts} isLoading={isLoading} />
                 );
+                renderedSystemGroup = true;
             }
         }
     });
 
+    // Jika ada system parts tapi belum dirender (misal tool selesai tanpa ada part teks)
+    if (!renderedSystemGroup && systemParts.length > 0 && (showSystemProcess || isLoading)) {
+        rendered.push(
+            <SystemProcessGroup key="system-process-group" parts={systemParts} isLoading={isLoading} />
+        );
+        renderedSystemGroup = true;
+    }
+
     if (rendered.length === 0) {
         if (!isUser && isLoading) {
             rendered.push(
-                <div key="loading" className="px-4 py-3 rounded-2xl shadow-sm text-xs leading-relaxed break-words w-fit max-w-full bg-white text-slate-800 border border-slate-100 rounded-tl-md">
-                    <div className="flex items-center gap-2.5 py-0.5 text-slate-600">
-                        <span className="relative flex h-2.5 w-2.5 shrink-0">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-600"></span>
-                        </span>
-                        <span className="font-medium text-xs">Sedang mengambil data & menyusun laporan...</span>
-                    </div>
-                </div>
+                <SystemProcessGroup key="loading-group" parts={[]} isLoading={true} />
             );
         } else if (!isUser && !isLoading) {
             rendered.push(
@@ -474,15 +686,24 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
 
     return (
         <div className={`flex gap-3 max-w-4xl mx-auto w-full ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-xs text-white
-                ${isUser ? 'bg-indigo-600' : 'bg-gradient-to-tr from-pink-600 via-pink-500 to-rose-400'}`}
-            >
-                {isUser ? <i className="fa-solid fa-user text-xs" aria-hidden="true"></i> : <i className="fa-brands fa-whatsapp text-xs" aria-hidden="true"></i>}
-            </div>
+            {isUser ? (
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-xs text-white bg-indigo-600">
+                    <i className="fa-solid fa-user text-xs" aria-hidden="true"></i>
+                </div>
+            ) : (
+                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-xs border border-pink-200 bg-pink-100 flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src="/bebie-avatar.jpg"
+                        alt="Bebie - Beauty Bestie AI"
+                        className="w-full h-full object-cover"
+                    />
+                </div>
+            )}
 
             <div className={`flex flex-col gap-2 min-w-0 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
                 <div className="text-[11px] text-slate-400 font-medium px-1">
-                    {isUser ? 'Anda' : 'AI Data Assistant'}
+                    {isUser ? 'Anda' : 'Bebie - Beauty Bestie AI'}
                 </div>
                 {rendered}
                 {isLoading && !isUser && (
@@ -491,10 +712,11 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-pink-600"></span>
                         </span>
-                        <span>Sedang mengalirkan balasan...</span>
+                        <span>Bebie sedang merapikan balasan...</span>
                     </div>
                 )}
             </div>
         </div>
     );
 }
+
