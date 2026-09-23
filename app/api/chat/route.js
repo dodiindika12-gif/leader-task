@@ -13,64 +13,7 @@ import { generateAgentFile } from '@/lib/file-generator';
 
 export const maxDuration = 180;
 
-let bigqueryClient = null;
-
-function getBigQueryClient() {
-    if (bigqueryClient) return bigqueryClient;
-
-    const credentialPath = process.env.BIGQUERY_SERVICE_ACCOUNT_PATH || '/home/dodi/Migrasi_Data/service-account.json';
-
-    if (!fs.existsSync(credentialPath)) {
-        throw new Error(`Service account BigQuery tidak ditemukan di: ${credentialPath}`);
-    }
-
-    const { BigQuery } = require('@google-cloud/bigquery');
-    const key = JSON.parse(fs.readFileSync(credentialPath, 'utf-8'));
-    bigqueryClient = new BigQuery({
-        credentials: {
-            client_email: key.client_email,
-            private_key: key.private_key,
-        },
-        projectId: key.project_id,
-    });
-    return bigqueryClient;
-}
-
-async function runBigQueryQuery(sql) {
-    const client = getBigQueryClient();
-    const [job] = await client.createQueryJob({ query: sql, useLegacySql: false });
-    const [rows] = await job.getQueryResults();
-    return rows;
-}
-
-function sanitizeBigQueryRows(rows) {
-    if (!Array.isArray(rows)) return [];
-    return rows.map((row) => {
-        const clean = {};
-        for (const [key, val] of Object.entries(row)) {
-            if (val === null || val === undefined) {
-                clean[key] = null;
-            } else if (typeof val === 'object') {
-                if ('value' in val) {
-                    clean[key] = String(val.value);
-                } else if (val instanceof Date) {
-                    clean[key] = val.toISOString();
-                } else {
-                    try {
-                        clean[key] = JSON.parse(JSON.stringify(val));
-                    } catch {
-                        clean[key] = String(val);
-                    }
-                }
-            } else if (typeof val === 'bigint') {
-                clean[key] = Number(val);
-            } else {
-                clean[key] = val;
-            }
-        }
-        return clean;
-    });
-}
+import { runBigQueryQuery, sanitizeBigQueryRows } from '@/lib/bigquery';
 
 function loadBigQueryGuide() {
     try {

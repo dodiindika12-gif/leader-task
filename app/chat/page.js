@@ -118,7 +118,8 @@ function TestResult({ result, loading, target }) {
             )}
             {target === 'BigQuery' && (
                 <div className="text-emerald-700/80">
-                    Proyek <span className="font-mono">{result.project}</span>, {result.datasetCount} dataset: {(result.datasets || []).join(', ') || '(kosong)'}
+                    Proyek <span className="font-mono font-medium">{result.project}</span>
+                    {result.source && <span className="text-[11px] text-emerald-600/90 ml-1">[{result.source}]</span>}, {result.datasetCount} dataset: {(result.datasets || []).join(', ') || '(kosong)'}
                 </div>
             )}
         </div>
@@ -523,7 +524,10 @@ export default function ChatPage() {
         try {
             const res = await fetch('/api/chat/test', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...sessionHeaders(),
+                },
                 body: JSON.stringify({
                     target,
                     apiKey: draft.apiKey.trim(),
@@ -855,8 +859,8 @@ export default function ChatPage() {
                             </div>
 
                             <p className="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-slate-100">
-                                Kredensial BigQuery dibaca dari file service account di server, bukan dari halaman ini.
-                                Pengaturan provider disimpan hanya di perangkat ini.
+                                Kredensial BigQuery dibaca dari environment variable server (<span className="font-mono text-slate-500">BIGQUERY_SERVICE_ACCOUNT_KEY</span>) atau file service account.
+                                Pengaturan provider di atas disimpan hanya di perangkat ini.
                             </p>
                         </div>
 

@@ -32,45 +32,22 @@ async function testProvider({ apiKey, baseURL, model }) {
     }
 }
 
-async function testBigQuery() {
-    const started = Date.now();
-    try {
-        const credentialPath = process.env.BIGQUERY_SERVICE_ACCOUNT_PATH || '/home/dodi/Migrasi_Data/service-account.json';
-        if (!fs.existsSync(credentialPath)) {
-            return { ok: false, latencyMs: Date.now() - started, error: `File service account tidak ditemukan: ${credentialPath}` };
-        }
-
-        const { BigQuery } = await import('@google-cloud/bigquery');
-        const key = JSON.parse(fs.readFileSync(credentialPath, 'utf-8'));
-        const client = new BigQuery({
-            credentials: {
-                client_email: key.client_email,
-                private_key: key.private_key,
-            },
-            projectId: key.project_id,
-        });
-
-        const project = key.project_id;
-        const [datasets] = await client.getDatasets({ maxResults: 5 });
-
-        return {
-            ok: true,
-            latencyMs: Date.now() - started,
-            project: project,
-            datasetCount: datasets.length,
-            datasets: datasets.slice(0, 5).map((d) => d.id),
-        };
-    } catch (err) {
-        return {
-            ok: false,
-            latencyMs: Date.now() - started,
-            error: String(err?.message || err).slice(0, 300),
-        };
-    }
-}
+import { testBigQueryConnection } from '@/lib/bigquery';
+import { verifyMember } from '@/lib/chat-memory';
 
 export async function POST(req) {
     try {
+        // ===== Auth wajib: session dashboard =====
+        const memberId = req.headers.get('x-session-member-id');
+        const memberEmail = req.headers.get('x-session-email');
+        const member = await verifyMember({ memberId, email: memberEmail });
+        if (!member) {
+            return Response.json(
+                { ok: false, error: 'Akses ditolak: Anda harus login ke dashboard terlebih dahulu.' },
+                { status: 401 }
+            );
+        }
+
         const body = await req.json().catch(() => ({}));
         const apiKey = body.apiKey || req.headers.get('x-api-key') || process.env.HERMES_API_KEY;
         const baseURL = body.baseURL || req.headers.get('x-endpoint-url') || process.env.NEXT_PUBLIC_HERMES_URL || 'https://hermes.absgroup.biz.id';
@@ -78,7 +55,7 @@ export async function POST(req) {
         const target = body.target || 'provider';
 
         if (target === 'bigquery') {
-            const result = await testBigQuery();
+            const result = await testBigQueryConnection();
             return Response.json({ target, ...result });
         }
 
