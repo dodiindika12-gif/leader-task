@@ -946,9 +946,9 @@ export const getProjectMembers = (project, allMembers = [], projectAccess = [], 
         .filter(pa => pa.project_id === project.id)
         .map(pa => pa.member_id);
 
-    // Build the set of allowed IDs
+    const coOwners = Array.isArray(project.co_owners) ? project.co_owners : [];
     const allowedIds = new Set(
-        [ownerId, ...accessMemberIds, currentPicId]
+        [ownerId, ...accessMemberIds, ...coOwners, currentPicId]
             .filter(Boolean)
             .map(id => String(id).trim().toLowerCase())
     );
@@ -7721,41 +7721,74 @@ export default function TaskManagerApp() {
     const isSuperUser = isExecutive;
     const memberId = session?.memberId || myMemberId;
 
+    const normalizedMemberId = memberId ? String(memberId).trim().toLowerCase() : '';
     const accessibleProjectIds = isSuperUser ? null : new Set([
-        ...projects.filter(p => p.owner_id === memberId).map(p => p.id),
-        ...projectAccess.filter(a => a.member_id === memberId).map(a => a.project_id)
+        ...projects.filter(p => {
+            if (p.owner_id && String(p.owner_id).trim().toLowerCase() === normalizedMemberId) return true;
+            if (Array.isArray(p.co_owners) && p.co_owners.some(co => String(co).trim().toLowerCase() === normalizedMemberId)) return true;
+            return false;
+        }).map(p => p.id),
+        ...projectAccess.filter(a => String(a.member_id).trim().toLowerCase() === normalizedMemberId).map(a => a.project_id)
     ]);
 
     const filteredMembers = members.filter(m => globalDivision === 'All' || m.division === globalDivision);
     const filteredProjects = projects.filter(p => {
-        if (globalDivision !== 'All' && p.division && p.division !== 'Task ABS' && p.division !== globalDivision) return false;
-
         const isPersonal = isPersonalProject(p);
-        // Workspace pribadi mutlak hanya untuk pemiliknya (termasuk Direksi/Super User tidak bisa melihat)
         if (isPersonal) {
-            return canAccessPersonalProject(p, memberId);
+            return canAccessPersonalProject(p, memberId, projectAccess);
         }
 
-        if (isSuperUser) return true;
-        if (!p.owner_id) return true; // Legacy projects without owner are visible to all
-        return accessibleProjectIds.has(p.id);
+        // Cek apakah proyek ini milik saya atau secara eksplisit dishare ke saya
+        const isExplicitlyAccessible = accessibleProjectIds
+            ? accessibleProjectIds.has(p.id)
+            : (
+                (p.owner_id && String(p.owner_id).trim().toLowerCase() === normalizedMemberId) ||
+                (Array.isArray(p.co_owners) && p.co_owners.some(co => String(co).trim().toLowerCase() === normalizedMemberId)) ||
+                projectAccess.some(a => a.project_id === p.id && String(a.member_id).trim().toLowerCase() === normalizedMemberId)
+            );
+
+        if (isExplicitlyAccessible) {
+            // Workspace milik sendiri atau yang secara eksplisit dishare ke user ini SELALU ditampilkan
+            return true;
+        }
+
+        if (isSuperUser) {
+            if (globalDivision !== 'All' && p.division && p.division !== 'Task ABS' && p.division !== globalDivision) return false;
+            return true;
+        }
+
+        if (!p.owner_id) {
+            if (globalDivision !== 'All' && p.division && p.division !== 'Task ABS' && p.division !== globalDivision) return false;
+            return true;
+        }
+
+        return false;
     });
     const filteredTasks = tasks.filter(t => {
         const project = projects.find(p => p.id === t.projectId);
         if (!project) return false;
 
-        if (globalDivision !== 'All') {
-            if (project.division && project.division !== 'Task ABS' && project.division !== globalDivision) return false;
-        }
-
         const isPersonal = isPersonalProject(project);
         if (isPersonal) {
-            return canAccessPersonalProject(project, memberId);
+            return canAccessPersonalProject(project, memberId, projectAccess);
         }
         
         // Task di dalam workspace otomatis dapat dilihat oleh seluruh anggota workspace
         if (!isSuperUser && accessibleProjectIds) {
             if (project.owner_id && !accessibleProjectIds.has(t.projectId)) return false;
+        }
+
+        // Jika user memiliki akses langsung ke project (milik atau dishare), task selalu tampil
+        const isExplicitlyAccessible = accessibleProjectIds
+            ? accessibleProjectIds.has(project.id)
+            : (
+                (project.owner_id && String(project.owner_id).trim().toLowerCase() === normalizedMemberId) ||
+                (Array.isArray(project.co_owners) && project.co_owners.some(co => String(co).trim().toLowerCase() === normalizedMemberId)) ||
+                projectAccess.some(a => a.project_id === project.id && String(a.member_id).trim().toLowerCase() === normalizedMemberId)
+            );
+
+        if (!isExplicitlyAccessible && globalDivision !== 'All') {
+            if (project.division && project.division !== 'Task ABS' && project.division !== globalDivision) return false;
         }
 
         return true;
