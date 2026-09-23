@@ -33,7 +33,7 @@ async function testProvider({ apiKey, baseURL, model }) {
 }
 
 import { testBigQueryConnection } from '@/lib/bigquery';
-import { verifyMember } from '@/lib/chat-memory';
+import { verifyMember, getGlobalProviderSettings } from '@/lib/chat-memory';
 
 export async function POST(req) {
     try {
@@ -49,9 +49,13 @@ export async function POST(req) {
         }
 
         const body = await req.json().catch(() => ({}));
-        const apiKey = body.apiKey || req.headers.get('x-api-key') || process.env.HERMES_API_KEY;
-        const baseURL = body.baseURL || req.headers.get('x-endpoint-url') || process.env.NEXT_PUBLIC_HERMES_URL || 'https://hermes.absgroup.biz.id';
-        const model = body.model || req.headers.get('x-model-name') || 'default';
+        const globalCfg = await getGlobalProviderSettings().catch(() => ({}));
+        const rawKey = body.apiKey || req.headers.get('x-api-key');
+        const apiKey = (rawKey && !/^•+$/.test(rawKey.trim()))
+            ? rawKey.trim()
+            : (globalCfg.apiKey || process.env.HERMES_API_KEY);
+        const baseURL = body.baseURL || req.headers.get('x-endpoint-url') || globalCfg.baseURL || process.env.NEXT_PUBLIC_HERMES_URL || 'https://hermes.absgroup.biz.id';
+        const model = body.model || req.headers.get('x-model-name') || globalCfg.model || 'busana';
         const target = body.target || 'provider';
 
         if (target === 'bigquery') {

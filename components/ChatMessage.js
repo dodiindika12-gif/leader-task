@@ -163,7 +163,7 @@ export function normalizeInlineTables(md) {
 
 function autoLinkFiles(text) {
     if (!text || typeof text !== 'string') return text;
-    return text.replace(/(?:\[([^\]]+)\]\(([^)]+)\))|(?:\*\*)?([a-zA-Z0-9_-]+\.(?:pptx|xlsx|csv))(?:\*\*)?/gi, (full, label, url, bareFile) => {
+    return text.replace(/(?:\[([^\]]+)\]\(([^)]+)\))|(?:\*\*)?([a-zA-Z0-9_-]+\.(?:pptx|xlsx|csv|html))(?:\*\*)?/gi, (full, label, url, bareFile) => {
         if (label && url) return full;
         if (bareFile) {
             return `[Unduh ${bareFile}](/api/chat/files?name=${encodeURIComponent(bareFile)})`;
@@ -208,18 +208,31 @@ function ToolPart({ part }) {
                         <div className="text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                             <span className="font-bold text-pink-600 uppercase">{formatLabel}</span>
                             {output.sizeKb ? <span>• {output.sizeKb} KB</span> : null}
-                            <span className="text-emerald-600 font-medium">• Siap diunduh</span>
+                            <span className="text-emerald-600 font-medium">• Siap dibuka</span>
                         </div>
                     </div>
                 </div>
-                <a
-                    href={downloadUrl}
-                    download={output.fileName}
-                    className="flex items-center justify-center gap-2 w-full text-center py-2.5 px-4 rounded-xl bg-slate-950 hover:bg-pink-600 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
-                >
-                    <i className="fa-solid fa-download text-xs" aria-hidden="true"></i>
-                    <span>Unduh {output.fileName}</span>
-                </a>
+                <div className="flex items-center gap-2">
+                    {formatLabel === 'HTML' ? (
+                        <a
+                            href={downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 flex items-center justify-center gap-1.5 text-center py-2 px-3 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                        >
+                            <i className="fa-solid fa-arrow-up-right-from-square text-[11px]" aria-hidden="true"></i>
+                            <span>Buka Laporan</span>
+                        </a>
+                    ) : null}
+                    <a
+                        href={downloadUrl}
+                        download={output.fileName}
+                        className={`${formatLabel === 'HTML' ? 'flex-1 bg-slate-900 hover:bg-slate-800' : 'w-full bg-slate-950 hover:bg-pink-600'} flex items-center justify-center gap-1.5 text-center py-2 px-3 rounded-xl text-white text-xs font-bold shadow-xs transition-colors cursor-pointer`}
+                    >
+                        <i className="fa-solid fa-download text-[11px]" aria-hidden="true"></i>
+                        <span>Unduh {output.fileName}</span>
+                    </a>
+                </div>
             </div>
         );
     }
@@ -276,58 +289,115 @@ function SystemProcessGroup({ parts = [], isLoading = false }) {
         return out.ok === false || (p.state === 'error');
     });
 
+    if (allDone) {
+        return (
+            <div className="w-full max-w-2xl rounded-xl border border-pink-100 bg-pink-50/60 p-2.5 my-1 transition-all">
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-6 h-6 rounded-lg bg-pink-100 text-pink-600 flex items-center justify-center shrink-0 shadow-2xs">
+                            <Sparkles size={12} />
+                        </span>
+                        <div className="text-[11px] text-slate-700 truncate">
+                            <span className="font-semibold text-slate-900">Data berhasil diproses</span>
+                            <span className="text-slate-400 mx-1.5">•</span>
+                            <span>{totalCount} proses</span>
+                            {totalRows > 0 && <span className="text-slate-400"> ({totalRows} baris)</span>}
+                            {hasError && <span className="text-rose-500 font-semibold ml-1">(ada kendala)</span>}
+                        </div>
+                    </div>
+                    {totalCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setIsOpen(!isOpen)}
+                            className="text-[10px] font-semibold text-pink-600 hover:text-pink-800 flex items-center gap-1 shrink-0 px-2 py-1 rounded-lg hover:bg-pink-100/70 transition-colors cursor-pointer"
+                        >
+                            <span>{isOpen ? 'Sembunyikan' : 'Lihat Detail'}</span>
+                            <ChevronDown size={11} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                    )}
+                </div>
+
+                {isOpen && (
+                    <div className="mt-2.5 pt-2 border-t border-pink-100/80 space-y-2">
+                        {parts.map((part, pIdx) => {
+                            const tName = part.toolName || (part.type?.startsWith('tool-') ? part.type.replace(/^tool-/, '') : '');
+                            const isRes = part.state === 'output-available' || part.state === 'result' || !!part.output;
+                            const inp = part.input || part.args || {};
+                            const out = part.output || part.result || {};
+
+                            return (
+                                <div key={pIdx} className="text-[11px] rounded-xl border border-slate-200 bg-white p-2.5 space-y-1.5 shadow-2xs">
+                                    <div className="flex items-center justify-between text-slate-600 font-semibold">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="w-4 h-4 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center text-[9px] font-bold">
+                                                {pIdx + 1}
+                                            </span>
+                                            <span>
+                                                {tName === 'remember'
+                                                    ? 'Menyimpan memori'
+                                                    : tName === 'refine_skill'
+                                                        ? 'Menyempurnakan skill'
+                                                        : 'Query BigQuery'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {isRes && typeof out.rowCount === 'number' && (
+                                                <span className="font-mono text-[10px] text-slate-400">{out.rowCount} baris</span>
+                                            )}
+                                            {isRes && out.ok === false && (
+                                                <span className="font-mono text-[10px] text-rose-500 font-bold">gagal</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {inp.sql && (
+                                        <pre className="p-2 rounded-lg bg-slate-950 text-emerald-300 font-mono text-[10px] overflow-x-auto whitespace-pre">
+                                            {inp.sql}
+                                        </pre>
+                                    )}
+
+                                    {tName === 'remember' && inp.content && (
+                                        <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-900 text-[10px]">
+                                            Fakta: &quot;{inp.content}&quot; ({inp.scope})
+                                        </div>
+                                    )}
+
+                                    {tName === 'refine_skill' && inp.reason && (
+                                        <div className="p-2 rounded-lg bg-amber-50 border border-amber-100 text-amber-900 text-[10px]">
+                                            Alasan pembaruan: {inp.reason}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="w-full max-w-xl rounded-2xl border border-pink-200/90 bg-gradient-to-br from-pink-50/70 via-white to-rose-50/40 p-3.5 shadow-xs my-1.5 transition-all">
             {/* Header: Gear icon, quote text, percentage */}
             <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs transition-colors ${
-                        allDone
-                            ? 'bg-gradient-to-tr from-pink-500 to-rose-400 text-white'
-                            : 'bg-pink-100 text-pink-600'
-                    }`}>
-                        <Settings size={16} className={allDone ? '' : 'animate-spin'} />
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs transition-colors bg-pink-100 text-pink-600">
+                        <Settings size={16} className="animate-spin" />
                     </div>
                     <div className="min-w-0">
                         <div className="text-xs font-bold text-slate-800 leading-snug truncate" title={currentQuote}>
                             {currentQuote}
                         </div>
                         <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                            {allDone ? (
-                                <>
-                                    <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                                        <Sparkles size={10} /> Selesai diproses
-                                    </span>
-                                    {totalCount > 0 && (
-                                        <>
-                                            <span>•</span>
-                                            <span>{totalCount} langkah query</span>
-                                        </>
-                                    )}
-                                    {totalRows > 0 && (
-                                        <>
-                                            <span>•</span>
-                                            <span className="font-mono text-slate-500 font-semibold">{totalRows} total baris</span>
-                                        </>
-                                    )}
-                                </>
-                            ) : (
-                                <>
-                                    <span className="text-pink-600 font-medium">Bebie sedang memproses data</span>
-                                    <span>•</span>
-                                    <span>Langkah {Math.min(completedCount + 1, totalCount || 1)} dari {totalCount || 1}</span>
-                                </>
-                            )}
+                            <span className="text-pink-600 font-medium">Bebie sedang memproses data</span>
+                            <span>•</span>
+                            <span>Langkah {Math.min(completedCount + 1, totalCount || 1)} dari {totalCount || 1}</span>
                         </div>
                     </div>
                 </div>
 
                 <div className="shrink-0 flex items-center gap-1.5">
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-tight shadow-2xs ${
-                        allDone
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-pink-100 text-pink-700 border border-pink-200 animate-pulse'
-                    }`}>
+                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold tracking-tight shadow-2xs bg-pink-100 text-pink-700 border border-pink-200 animate-pulse">
                         {percentage}%
                     </span>
                 </div>
@@ -336,11 +406,7 @@ function SystemProcessGroup({ parts = [], isLoading = false }) {
             {/* Progress Bar */}
             <div className="w-full h-1.5 bg-pink-100/80 rounded-full overflow-hidden mt-3 relative">
                 <div
-                    className={`h-full rounded-full transition-all duration-700 ease-out ${
-                        allDone
-                            ? 'bg-gradient-to-r from-pink-500 via-rose-400 to-emerald-500'
-                            : 'bg-gradient-to-r from-pink-500 via-rose-400 to-pink-600'
-                    }`}
+                    className="h-full rounded-full transition-all duration-700 ease-out bg-gradient-to-r from-pink-500 via-rose-400 to-pink-600"
                     style={{ width: `${percentage}%` }}
                 />
             </div>
@@ -512,10 +578,10 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
                 rendered.push(
                     <div
                         key={`t-${idx}`}
-                        className={`px-4 py-3 rounded-2xl shadow-sm text-[15px] leading-relaxed break-words w-fit max-w-full ${
+                        className={`px-4 py-3 rounded-2xl shadow-xs text-[14.5px] leading-relaxed break-words w-fit max-w-full ${
                             isUser
-                                ? 'bg-pink-600 !text-white rounded-tr-md shadow-pink-600/20'
-                                : 'bg-white text-slate-800 border border-slate-100 rounded-tl-md'
+                                ? 'bg-gradient-to-r from-pink-600 to-rose-600 !text-white rounded-tr-xs shadow-pink-600/15'
+                                : 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-xs shadow-xs'
                         }`}
                         style={isUser ? { color: '#ffffff' } : undefined}
                     >
@@ -553,8 +619,47 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
                                             {children}
                                         </li>
                                     ),
+                                    table: ({ children }) => (
+                                        <div className="my-2.5 overflow-x-auto rounded-xl border border-slate-200 shadow-2xs max-w-full">
+                                            <table className="min-w-full divide-y divide-slate-200 text-left text-xs not-prose">
+                                                {children}
+                                            </table>
+                                        </div>
+                                    ),
+                                    thead: ({ children }) => <thead className="bg-slate-50/90 text-slate-800 font-semibold">{children}</thead>,
+                                    tbody: ({ children }) => <tbody className="divide-y divide-slate-100 bg-white">{children}</tbody>,
+                                    tr: ({ children }) => <tr className="hover:bg-pink-50/40 transition-colors">{children}</tr>,
+                                    th: ({ children }) => <th className="px-3 py-2 text-slate-800 font-bold whitespace-nowrap">{children}</th>,
+                                    td: ({ children }) => <td className="px-3 py-2 text-slate-600 whitespace-nowrap text-xs">{children}</td>,
+                                    pre: ({ children, ...props }) => (
+                                        <pre className="p-3 my-2 rounded-xl bg-slate-900 text-slate-100 text-xs font-mono overflow-x-auto border border-slate-800" {...props}>
+                                            {children}
+                                        </pre>
+                                    ),
+                                    code: ({ node, className, children, ...props }) => {
+                                        const isCodeBlock = Boolean(className?.includes('language-') || (typeof children === 'string' && children.includes('\n')));
+                                        if (isCodeBlock) {
+                                            return (
+                                                <code className={className} {...props}>
+                                                    {children}
+                                                </code>
+                                            );
+                                        }
+                                        return (
+                                            <code
+                                                className={
+                                                    isUser
+                                                        ? 'bg-pink-700/60 px-1.5 py-0.5 rounded text-white font-mono text-[12px]'
+                                                        : 'bg-slate-100 text-pink-700 px-1.5 py-0.5 rounded border border-slate-200/80 font-mono text-[12px]'
+                                                }
+                                                {...props}
+                                            >
+                                                {children}
+                                            </code>
+                                        );
+                                    },
                                     a: ({ href, children, ...props }) => {
-                                        const isFileDownload = href && (href.startsWith('/api/chat/files') || /\.(pptx|xlsx|csv)($|\?)/i.test(href));
+                                        const isFileDownload = href && (href.startsWith('/api/chat/files') || /\.(pptx|xlsx|csv|html)($|\?)/i.test(href));
                                         if (isFileDownload) {
                                             const fn = href.includes('name=')
                                                 ? decodeURIComponent(href.split('name=')[1]?.split('&')[0] || '')
@@ -685,13 +790,13 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
     }
 
     return (
-        <div className={`flex gap-3 max-w-4xl mx-auto w-full ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`flex gap-2.5 sm:gap-3 max-w-3xl mx-auto w-full ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
             {isUser ? (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-xs text-white bg-indigo-600">
-                    <i className="fa-solid fa-user text-xs" aria-hidden="true"></i>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-2xs text-white bg-slate-800 text-[11px] mt-0.5" title="Anda">
+                    <i className="fa-solid fa-user" aria-hidden="true"></i>
                 </div>
             ) : (
-                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-xs border border-pink-200 bg-pink-100 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-xs border border-pink-200 bg-pink-100 flex items-center justify-center mt-0.5">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                         src="/bebie-avatar.jpg"
@@ -701,10 +806,12 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
                 </div>
             )}
 
-            <div className={`flex flex-col gap-2 min-w-0 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
-                <div className="text-[11px] text-slate-400 font-medium px-1">
-                    {isUser ? 'Anda' : 'Bebie - Beauty Bestie AI'}
-                </div>
+            <div className={`flex flex-col gap-1.5 min-w-0 max-w-[85%] sm:max-w-[78%] ${isUser ? 'items-end' : 'items-start'}`}>
+                {!isUser && (
+                    <div className="flex items-center gap-1.5 px-1 mb-0.5">
+                        <span className="font-bold text-xs text-slate-800">Bebie</span>
+                    </div>
+                )}
                 {rendered}
                 {isLoading && !isUser && (
                     <div className="flex items-center gap-2 text-[11px] text-slate-400 px-1 pt-0.5">

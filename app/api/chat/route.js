@@ -8,6 +8,7 @@ import {
     activeSkillsForPrompt,
     createMemory,
     proposeSkillUpdate,
+    getGlobalProviderSettings,
 } from '@/lib/chat-memory';
 import { generateAgentFile } from '@/lib/file-generator';
 
@@ -66,6 +67,8 @@ function systemPrompt({ memories, skills }) {
         '4. Begitu data utama didapatkan, SEGERA susun dan tuliskan jawaban lengkap kepada user. Jangan menunda atau terus melakukan query tambahan yang tidak esensial.',
         '5. Saat pertanyaan ambigu (brand vs outlet, kategori vs pareto), periksa lewat query kecil atau tanya user.',
         '',
+        'Bila user mengunggah gambar, foto struk, grafik, atau dokumen/tabel, baca dan analisis informasi visual atau data di dalamnya secara seksama untuk menjawab pertanyaan user.',
+        '',
         buildMemorySection(memories),
         '',
         buildSkillSection(skills),
@@ -90,15 +93,16 @@ function systemPrompt({ memories, skills }) {
         '- Laporan penjualan lengkap dengan MoM, YoY, pencapaian target bila datanya ada; tutup dengan Action Plan.',
         '- Data apa adanya: jangan merevisi atau menafsirkan ulang angka dari database.',
         '',
-        '== ATURAN MEMBUAT FILE (PPTX / EXCEL / CSV) ==',
-        'Ketika user meminta file (misal: "buatkan dalam laporan ppt", "ekspor ke excel", "buatkan csv", "jadikan presentasi"):',
+        '== ATURAN MEMBUAT FILE (PPTX / HTML / EXCEL / CSV) ==',
+        'Ketika user meminta file (misal: "buatkan dalam laporan ppt", "buatkan presentasi html", "ekspor ke excel", "buatkan csv", "jadikan presentasi"):',
         '1. Jika data yang dibutuhkan SUDAH ADA di riwayat percakapan sebelumnya, LANGSUNG panggil tool generate_file menggunakan data tersebut. JANGAN query ulang ke BigQuery.',
         '2. Panggil tool generate_file dengan format yang sesuai:',
-        '   - PPTX: isi payload.slides (title, subtitle, text, bullets, table). Tema Merah Muda #FF0088, 16:9, ringkas, rapi, dan berbobot.',
+        '   - PPTX: isi payload.slides (title, subtitle, text, bullets, table). Gaya Executive Board Deck (Deep Navy #0F172A & Rose #E11D48), 16:9, split layout (tabel di kiri, takeaways di kanan). DILARANG menggunakan karakter batang chart ASCII (████░░) di tabel!',
+        '   - HTML: isi payload.slides atau payload.rows. Menghasilkan laporan/presentasi web interaktif mandiri yang cantik, responsif, dan siap dibuka di browser atau dicetak PDF.',
         '   - XLSX: isi payload.rows (baris pertama = header) atau payload.sheets untuk multi-sheet.',
         '   - CSV: isi payload.rows (baris pertama = header).',
-        '3. SETELAH tool generate_file berhasil, LANGSUNG berikan respon singkat berisi link unduhan markdown: [Unduh <Nama File>](<downloadUrl>).',
-        '   Contoh respon: "File presentasi laporan penjualan sudah siap. Silakan unduh di sini: [Unduh laporan-penjualan.pptx](/api/chat/files?name=laporan-penjualan-xxxx.pptx)"',
+        '3. SETELAH tool generate_file berhasil, LANGSUNG berikan respon singkat berisi link: [Buka/Unduh <Nama File>](<downloadUrl>).',
+        '   Contoh respon: "File presentasi laporan sudah siap. Silakan buka atau unduh di sini: [Unduh laporan-penjualan.pptx](/api/chat/files?name=laporan-penjualan-xxxx.pptx)"',
         '4. DILARANG membuat tabel teks panjang atau mengulang isi seluruh data di chat saat membuat file. Langsung berikan link unduhan agar user segera bisa mengunduhnya.',
         '5. Untuk data tabel biasa di chat tetap pakai Markdown table; tabel diakhiri [FILE_CSV] hanya jika user minta file CSV tanpa generate_file.',
         '',
@@ -129,6 +133,69 @@ function validateSql(sql) {
     return { ok: true, sql: normalized };
 }
 
+async function extractTextFromFilePart(part) {
+    const filename = part.filename || 'file';
+    const mediaType = (part.mediaType || '').toLowerCase();
+    const url = part.url || '';
+
+    let buffer = null;
+    if (url.startsWith('data:')) {
+        const base64Index = url.indexOf(';base64,');
+        if (base64Index !== -1) {
+            const base64Data = url.slice(base64Index + 8);
+            buffer = Buffer.from(base64Data, 'base64');
+        }
+    }
+
+    if (!buffer) {
+        return `[Lampiran file "${filename}" (${mediaType})]`;
+    }
+
+    const ext = filename.split('.').pop()?.toLowerCase();
+
+    // 1. File Excel (.xlsx, .xls)
+    if (ext === 'xlsx' || ext === 'xls' || mediaType.includes('spreadsheet') || mediaType.includes('excel')) {
+        try {
+            const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(buffer);
+            const sheetsText = [];
+            workbook.eachSheet((worksheet) => {
+                const rows = [];
+                worksheet.eachRow({ includeEmpty: false }, (row) => {
+                    const values = Array.isArray(row.values) ? row.values.slice(1) : [];
+                    rows.push(values.map((v) => (v === null || v === undefined ? '' : String(v))).join(' | '));
+                });
+                if (rows.length > 0) {
+                    const preview = rows.slice(0, 150).join('\n');
+                    const truncated = rows.length > 150 ? `\n... (${rows.length - 150} baris lainnya dipotong)` : '';
+                    sheetsText.push(`### Sheet: ${worksheet.name}\n${preview}${truncated}`);
+                }
+            });
+            return `[Konten File Excel "${filename}"]:\n\n${sheetsText.join('\n\n') || '(Sheet kosong)'}`;
+        } catch (e) {
+            return `[Lampiran File Excel "${filename}": gagal mengekstrak data (${e.message})]`;
+        }
+    }
+
+    // 2. Teks / CSV / JSON / Markdown / SQL / Dokumen Kode
+    const isText =
+        mediaType.startsWith('text/') ||
+        mediaType.includes('json') ||
+        mediaType.includes('csv') ||
+        ['csv', 'txt', 'json', 'sql', 'md', 'xml', 'yaml', 'yml', 'log', 'tsv'].includes(ext);
+
+    if (isText) {
+        let text = buffer.toString('utf-8');
+        if (text.length > 15000) {
+            text = text.slice(0, 15000) + '\n\n... [isi file terpotong karena terlalu panjang (maks 15.000 karakter)]';
+        }
+        return `[Konten File "${filename}"]:\n\`\`\`\n${text}\n\`\`\``;
+    }
+
+    return `[Lampiran file: "${filename}" (${mediaType || 'binary'}), ukuran ${(buffer.length / 1024).toFixed(1)} KB]`;
+}
+
 export async function POST(req) {
     try {
         const body = await req.json();
@@ -145,13 +212,17 @@ export async function POST(req) {
             );
         }
 
-        const apiKey = req.headers.get('x-api-key') || process.env.HERMES_API_KEY;
-        const baseURL = req.headers.get('x-endpoint-url') || process.env.NEXT_PUBLIC_HERMES_URL || 'https://hermes.absgroup.biz.id';
-        const modelName = req.headers.get('x-model-name') || 'default';
+        const globalCfg = await getGlobalProviderSettings().catch(() => ({}));
+        const rawApiKey = req.headers.get('x-api-key');
+        const apiKey = (rawApiKey && !/^•+$/.test(rawApiKey.trim()))
+            ? rawApiKey.trim()
+            : (globalCfg.apiKey || process.env.HERMES_API_KEY);
+        const baseURL = req.headers.get('x-endpoint-url') || globalCfg.baseURL || process.env.NEXT_PUBLIC_HERMES_URL || 'https://hermes.absgroup.biz.id';
+        const modelName = req.headers.get('x-model-name') || globalCfg.model || 'busana';
 
         if (!apiKey) {
             return Response.json(
-                { error: 'API Key belum diisi. Buka pengaturan chat untuk mengisinya.' },
+                { error: 'API Key provider belum diatur oleh Direksi/Super User.' },
                 { status: 400 }
             );
         }
@@ -167,7 +238,59 @@ export async function POST(req) {
             baseURL,
         });
 
-        const modelMessages = await convertToModelMessages(messages);
+        // ===== Sanitasi dan pemrosesan pesan (gambar vision vs dokumen teks/Excel) =====
+        const processedMessages = await Promise.all(
+            (messages || []).map(async (msg) => {
+                if (!msg || !Array.isArray(msg.parts)) return msg;
+
+                const newParts = [];
+                for (const part of msg.parts) {
+                    // Mencegah crash jika part kosong atau tidak memiliki properti type
+                    if (!part || !part.type) continue;
+
+                    if (part.type === 'file') {
+                        const isImage =
+                            part.mediaType?.startsWith('image/') ||
+                            /\.(png|jpe?g|webp|gif|svg)$/i.test(part.filename || '');
+
+                        if (isImage) {
+                            newParts.push({
+                                ...part,
+                                mediaType: part.mediaType || 'image/jpeg',
+                            });
+                        } else {
+                            // Format non-gambar (CSV, Excel, TXT, JSON):
+                            // Ekstrak teks agar AI dapat membaca dan menganalisis isinya
+                            try {
+                                const extractedText = await extractTextFromFilePart(part);
+                                newParts.push({
+                                    type: 'text',
+                                    text: extractedText,
+                                });
+                            } catch (err) {
+                                newParts.push({
+                                    type: 'text',
+                                    text: `[Lampiran file "${part.filename || 'dokumen'}": gagal membaca konten (${err.message})]`,
+                                });
+                            }
+                        }
+                    } else {
+                        newParts.push(part);
+                    }
+                }
+
+                if (newParts.length === 0) {
+                    newParts.push({ type: 'text', text: msg.content || '' });
+                }
+
+                return {
+                    ...msg,
+                    parts: newParts,
+                };
+            })
+        );
+
+        const modelMessages = await convertToModelMessages(processedMessages);
 
         const result = streamText({
             model: customProvider.chat(modelName),
@@ -262,21 +385,21 @@ export async function POST(req) {
                 }),
 
                 generate_file: tool({
-                    description: 'Buat file nyata (PPTX presentasi / XLSX Excel / CSV) yang bisa langsung diunduh user. Wajib dipakai saat user meminta file, laporan PowerPoint, atau rekap Excel.',
+                    description: 'Buat file nyata (PPTX presentasi / HTML web report / XLSX Excel / CSV) yang bisa langsung dibuka atau diunduh user. Wajib dipakai saat user meminta file presentasi, laporan web, atau rekap data.',
                     inputSchema: z.object({
-                        format: z.enum(['pptx', 'xlsx', 'csv']).describe('Jenis file yang diminta user.'),
+                        format: z.enum(['pptx', 'html', 'xlsx', 'csv']).describe('Jenis file yang diminta user: pptx (slide presentasi), html (laporan web interaktif), xlsx (excel), atau csv.'),
                         fileName: z.string().max(60).optional().describe('Nama file tanpa ekstensi, mis. laporan-penjualan-bt01-september.'),
                         title: z.string().max(120).optional().describe('Judul dokumen/laporan, dipakai sebagai judul utama.'),
-                        /* PPTX: sebuah slide = { title, subtitle?, text?, bullets?[], table?[[...]] } */
+                        /* PPTX / HTML: sebuah slide = { title, subtitle?, text?, bullets?[], table?[[...]] } */
                         slides: z.array(z.object({
                             title: z.string().max(120),
                             subtitle: z.string().max(200).optional(),
                             text: z.string().max(1200).optional(),
                             bullets: z.array(z.string().max(300)).max(10).optional(),
                             table: z.array(z.array(z.string()).max(12)).max(25).optional(),
-                        })).max(15).optional().describe('PPTX only: daftar slide. Slide 1 biasanya cover, terakhir closing.'),
-                        /* XLSX/CSV: baris pertama = header */
-                        rows: z.array(z.array(z.union([z.string(), z.number()]))).max(1000).optional().describe('XLSX/CSV only: data tabel, baris pertama adalah header.'),
+                        })).max(15).optional().describe('PPTX/HTML: daftar slide. Slide 1 biasanya cover, terakhir closing.'),
+                        /* XLSX/CSV/HTML: baris pertama = header */
+                        rows: z.array(z.array(z.union([z.string(), z.number()]))).max(1000).optional().describe('XLSX/CSV/HTML: data tabel, baris pertama adalah header.'),
                         sheets: z.array(z.object({
                             name: z.string().max(30),
                             title: z.string().max(120).optional(),

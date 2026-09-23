@@ -11,10 +11,40 @@ function formatBytes(bytes) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function getMimeType(file) {
+    if (file.type) return file.type;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const mimeMap = {
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        webp: 'image/webp',
+        gif: 'image/gif',
+        svg: 'image/svg+xml',
+        csv: 'text/csv',
+        txt: 'text/plain',
+        json: 'application/json',
+        pdf: 'application/pdf',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        xls: 'application/vnd.ms-excel',
+    };
+    return mimeMap[ext] || 'application/octet-stream';
+}
+
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
 export default function ChatInput({ sendMessage, isLoading, stop }) {
     const [input, setInput] = useState('');
     const [files, setFiles] = useState([]);
     const [fileError, setFileError] = useState('');
+    const [isConverting, setIsConverting] = useState(false);
     const fileInputRef = useRef(null);
     const imageInputRef = useRef(null);
     const textareaRef = useRef(null);
@@ -42,20 +72,42 @@ export default function ChatInput({ sendMessage, isLoading, stop }) {
         setFiles((prev) => prev.filter((_, i) => i !== index));
     };
 
-    const submit = (e) => {
+    const submit = async (e) => {
         e.preventDefault();
-        if (isLoading) return;
+        if (isLoading || isConverting) return;
         if (!input.trim() && files.length === 0) return;
 
-        sendMessage({
-            text: input.trim() || (files.length > 0 ? 'Tolong periksa lampiran ini.' : ''),
-            files,
-        });
+        setIsConverting(true);
+        try {
+            const currentText = input.trim();
+            const currentFiles = [...files];
 
-        setInput('');
-        setFiles([]);
-        setFileError('');
-        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+            setInput('');
+            setFiles([]);
+            setFileError('');
+            if (textareaRef.current) textareaRef.current.style.height = 'auto';
+
+            let fileParts = [];
+            if (currentFiles.length > 0) {
+                fileParts = await Promise.all(
+                    currentFiles.map(async (file) => ({
+                        type: 'file',
+                        filename: file.name,
+                        mediaType: getMimeType(file),
+                        url: await readFileAsDataUrl(file),
+                    }))
+                );
+            }
+
+            sendMessage({
+                text: currentText || (fileParts.length > 0 ? 'Tolong periksa lampiran ini.' : ''),
+                files: fileParts.length > 0 ? fileParts : undefined,
+            });
+        } catch (err) {
+            setFileError(`Gagal membaca lampiran: ${err.message || err}`);
+        } finally {
+            setIsConverting(false);
+        }
     };
 
     const onKeyDown = (e) => {
@@ -72,7 +124,7 @@ export default function ChatInput({ sendMessage, isLoading, stop }) {
     };
 
     const previews = files.map((f, i) => {
-        const isImage = f.type?.startsWith('image/');
+        const isImage = f.type?.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name);
         const url = URL.createObjectURL(f);
         return (
             <div key={`${f.name}-${i}`} className="relative group shrink-0">
@@ -103,7 +155,7 @@ export default function ChatInput({ sendMessage, isLoading, stop }) {
     const hasContent = input.trim().length > 0 || files.length > 0;
 
     return (
-        <div className="max-w-4xl mx-auto w-full px-2">
+        <div className="max-w-3xl mx-auto w-full px-2 sm:px-4">
             {files.length > 0 && (
                 <div className="flex gap-3 mb-5 px-1 flex-wrap">{previews}</div>
             )}

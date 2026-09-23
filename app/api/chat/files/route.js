@@ -35,7 +35,7 @@ export async function GET(req) {
     }
 
     const ext = path.extname(name).toLowerCase();
-    if (!['.pptx', '.xlsx', '.csv'].includes(ext)) {
+    if (!['.pptx', '.xlsx', '.csv', '.html'].includes(ext)) {
         return Response.json({ error: 'Format file tidak didukung.' }, { status: 400 });
     }
 
@@ -49,17 +49,18 @@ export async function GET(req) {
         if (!stat.isFile()) throw new Error('not a file');
         const data = await fs.readFile(filePath);
 
-        const ext = path.extname(name).toLowerCase();
         const mimes = {
             '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
             '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             '.csv': 'text/csv; charset=utf-8',
+            '.html': 'text/html; charset=utf-8',
         };
 
+        const isHtml = ext === '.html';
         const headers = {
             'Content-Type': mimes[ext] || 'application/octet-stream',
             'Content-Length': String(data.length),
-            'Content-Disposition': `attachment; filename="${name}"`,
+            'Content-Disposition': `${isHtml ? 'inline' : 'attachment'}; filename="${name}"`,
             'Cache-Control': 'private, max-age=300',
         };
         return new Response(data, { status: 200, headers });

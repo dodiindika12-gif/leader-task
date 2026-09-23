@@ -6,27 +6,71 @@ import { useState, useEffect, useRef, useCallback, startTransition, useSyncExter
 import Link from 'next/link';
 import {
     Settings2, Settings, X, Check, Loader2, Feather, ShieldCheck, Database,
-    Brain, Zap, Trash2, Plus, Power, GitBranch, LogIn, ArrowLeft, RotateCcw,
+    Brain, Zap, Trash2, Plus, Power, GitBranch, LogIn, ArrowLeft, RotateCcw, Lock,
+    History, TrendingUp, Store, Sparkles, Target, ArrowUpRight,
 } from 'lucide-react';
 import ChatMessage from '@/components/ChatMessage';
 import ChatInput from '@/components/ChatInput';
+import ChatHistoryDrawer from '@/components/ChatHistoryDrawer';
+
+const SUGGESTED_QUERIES = [
+    {
+        title: 'Pencapaian Omset',
+        desc: 'Berapa pencapaian penjualan bulan ini dibanding target per cabang?',
+        query: 'Berapa pencapaian omset bulan ini dibanding target per cabang?',
+        icon: TrendingUp,
+        iconBg: 'bg-rose-100 text-rose-600',
+    },
+    {
+        title: 'Peringkat Cabang',
+        desc: 'Cabang mana dengan performa penjualan tertinggi saat ini?',
+        query: 'Tampilkan ranking cabang berdasarkan penjualan bulan ini.',
+        icon: Store,
+        iconBg: 'bg-indigo-100 text-indigo-600',
+    },
+    {
+        title: 'Top Produk & Layanan',
+        desc: 'Apa 5 treatment dan produk terlaris di seluruh outlet bulan ini?',
+        query: 'Apa 5 treatment dan produk terlaris di seluruh outlet bulan ini?',
+        icon: Sparkles,
+        iconBg: 'bg-amber-100 text-amber-600',
+    },
+    {
+        title: 'Evaluasi Under-Target',
+        desc: 'Daftar outlet yang pencapaian targetnya masih di bawah 80%.',
+        query: 'Tampilkan cabang-cabang yang pencapaian targetnya masih di bawah 80%.',
+        icon: Target,
+        iconBg: 'bg-emerald-100 text-emerald-600',
+    },
+];
 
 const SETTINGS_KEY = 'busana_chat_provider_settings_v1';
 const SESSION_KEY = 'task_abs_session';
 
 const DEFAULT_SETTINGS = {
-    baseURL: 'https://hermes.absgroup.biz.id',
+    baseURL: 'https://9router.absgroup.biz.id/v1',
     apiKey: '',
-    model: 'default',
+    model: 'busana',
     showSystemProcess: false,
+    canEdit: false,
+    hasApiKey: false,
 };
+
+function isDireksiOrSuperuser(role) {
+    if (!role) return false;
+    const clean = String(role).toLowerCase().trim();
+    if (clean === 'super user' || clean === 'superuser' || clean === 'superadmin' || clean === 'admin') return true;
+    if (clean.includes('direksi') || clean.includes('director')) return true;
+    return false;
+}
 
 function loadSettings() {
     if (typeof window === 'undefined') return DEFAULT_SETTINGS;
     try {
         const raw = localStorage.getItem(SETTINGS_KEY);
         if (!raw) return DEFAULT_SETTINGS;
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+        const parsed = JSON.parse(raw);
+        return { ...DEFAULT_SETTINGS, showSystemProcess: !!parsed.showSystemProcess };
     } catch {
         return DEFAULT_SETTINGS;
     }
@@ -441,6 +485,46 @@ export default function ChatPage() {
         return s ? { 'x-session-member-id': s.memberId, 'x-session-email': s.email } : {};
     }, [session]);
 
+    const loadGlobalSettings = useCallback(async () => {
+        try {
+            const s = session || loadDashboardSession();
+            const headers = s?.memberId && s?.email ? {
+                'x-session-member-id': s.memberId,
+                'x-session-email': s.email,
+            } : {};
+            const res = await fetch('/api/chat/settings', { headers });
+            const data = await res.json();
+            if (data.ok) {
+                setSettings((prev) => {
+                    const next = {
+                        ...prev,
+                        baseURL: data.baseURL || prev.baseURL,
+                        apiKey: data.apiKey !== undefined ? data.apiKey : prev.apiKey,
+                        model: data.model || prev.model,
+                        canEdit: !!data.canEdit,
+                        hasApiKey: !!data.hasApiKey,
+                    };
+                    settingsRef.current = next;
+                    return next;
+                });
+                setDraft((prev) => ({
+                    ...prev,
+                    baseURL: data.baseURL || prev.baseURL,
+                    apiKey: data.apiKey !== undefined ? data.apiKey : prev.apiKey,
+                    model: data.model || prev.model,
+                    canEdit: !!data.canEdit,
+                    hasApiKey: !!data.hasApiKey,
+                }));
+            }
+        } catch (err) {
+            console.error('Gagal memuat pengaturan provider global:', err);
+        }
+    }, [session]);
+
+    useEffect(() => {
+        loadGlobalSettings();
+    }, [loadGlobalSettings]);
+
     // Transport dibuat sekali saat client siap; header session + provider dibaca saat request
     const sessionRef = useRef(null);
     useEffect(() => {
@@ -456,11 +540,10 @@ export default function ChatPage() {
             headers: () => {
                 const s = sessionRef.current || loadDashboardSession() || {};
                 const cfg = settingsRef.current || {};
-                const h = {
-                    'x-endpoint-url': cfg.baseURL,
-                    'x-api-key': cfg.apiKey,
-                    'x-model-name': cfg.model,
-                };
+                const h = {};
+                if (cfg.baseURL) h['x-endpoint-url'] = cfg.baseURL;
+                if (cfg.apiKey && !/^•+$/.test(cfg.apiKey)) h['x-api-key'] = cfg.apiKey;
+                if (cfg.model) h['x-model-name'] = cfg.model;
                 if (s.memberId && s.email) {
                     h['x-session-member-id'] = s.memberId;
                     h['x-session-email'] = s.email;
@@ -481,42 +564,224 @@ export default function ChatPage() {
         if (el) el.scrollTop = el.scrollHeight;
     }, [messages, status]);
 
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [threads, setThreads] = useState([]);
+    const [activeThreadId, setActiveThreadId] = useState(null);
+    const [threadsLoading, setThreadsLoading] = useState(false);
+    const [dbMissing, setDbMissing] = useState(false);
+    const prevStatusRef = useRef(status);
+    const LOCAL_THREADS_KEY = 'busana_chat_local_threads_v1';
+
+    const loadLocalThreads = useCallback(() => {
+        if (typeof window === 'undefined') return [];
+        try {
+            const raw = localStorage.getItem(LOCAL_THREADS_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            const now = Date.now();
+            const maxAge = 30 * 24 * 60 * 60 * 1000;
+            return (parsed || []).filter((t) => {
+                const time = new Date(t.updated_at || t.created_at).getTime();
+                return now - time <= maxAge;
+            });
+        } catch {
+            return [];
+        }
+    }, []);
+
+    const saveLocalThreads = useCallback((items) => {
+        if (typeof window === 'undefined') return;
+        try {
+            localStorage.setItem(LOCAL_THREADS_KEY, JSON.stringify(items));
+        } catch {}
+    }, []);
+
+    const loadThreads = useCallback(async () => {
+        setThreadsLoading(true);
+        try {
+            const headers = sessionHeaders();
+            const res = await fetch('/api/chat/threads', { headers });
+            const data = await res.json();
+            if (data.ok) {
+                setThreads(data.threads || []);
+                setDbMissing(false);
+            } else if (data.code === 'TABLE_NOT_FOUND') {
+                setDbMissing(true);
+                setThreads(loadLocalThreads());
+            } else {
+                setThreads(loadLocalThreads());
+            }
+        } catch {
+            setThreads(loadLocalThreads());
+        } finally {
+            setThreadsLoading(false);
+        }
+    }, [sessionHeaders, loadLocalThreads]);
+
+    useEffect(() => {
+        loadThreads();
+    }, [loadThreads]);
+
+    // Auto-save percakapan saat asisten selesai memberikan balasan
+    useEffect(() => {
+        const prev = prevStatusRef.current;
+        prevStatusRef.current = status;
+
+        if ((prev === 'streaming' || prev === 'submitted') && status === 'ready' && messages.length > 0) {
+            const firstUser = messages.find((m) => m.role === 'user');
+            const firstText = firstUser?.parts?.find((p) => p.type === 'text')?.text || firstUser?.content || 'Percakapan Baru';
+            const title = firstText.trim().slice(0, 45);
+
+            const payload = {
+                id: activeThreadId || undefined,
+                title,
+                messages,
+            };
+
+            fetch('/api/chat/threads', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...sessionHeaders(),
+                },
+                body: JSON.stringify(payload),
+            })
+                .then((res) => res.json())
+                .then((data) => {
+                    if (data.ok && data.thread) {
+                        if (!activeThreadId) {
+                            setActiveThreadId(data.thread.id);
+                        }
+                        setThreads((prevList) => {
+                            const filtered = prevList.filter((t) => t.id !== data.thread.id);
+                            return [data.thread, ...filtered];
+                        });
+                    } else if (data.code === 'TABLE_NOT_FOUND') {
+                        setDbMissing(true);
+                        const currentId = activeThreadId || `local-${Date.now()}`;
+                        if (!activeThreadId) setActiveThreadId(currentId);
+                        const localItem = {
+                            id: currentId,
+                            title,
+                            messages,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                        };
+                        const local = loadLocalThreads().filter((t) => t.id !== currentId);
+                        const updated = [localItem, ...local];
+                        saveLocalThreads(updated);
+                        setThreads(updated.map(({ id, title, created_at, updated_at }) => ({ id, title, created_at, updated_at })));
+                    }
+                })
+                .catch(() => {});
+        }
+    }, [status, messages, activeThreadId, sessionHeaders, loadLocalThreads, saveLocalThreads]);
+
+    const handleSelectThread = useCallback(async (threadId) => {
+        if (isLoading) stop();
+        try {
+            const res = await fetch(`/api/chat/threads/${threadId}`, { headers: sessionHeaders() });
+            const data = await res.json();
+            if (data.ok && data.thread) {
+                setActiveThreadId(threadId);
+                setMessages(data.thread.messages || []);
+                showToast(`Percakapan "${data.thread.title}" dimuat.`);
+                return;
+            }
+        } catch {}
+
+        const local = loadLocalThreads();
+        const found = local.find((t) => t.id === threadId);
+        if (found) {
+            setActiveThreadId(threadId);
+            setMessages(found.messages || []);
+            showToast(`Percakapan "${found.title}" dimuat.`);
+        } else {
+            showToast('Gagal memuat percakapan.', 'error');
+        }
+    }, [isLoading, stop, sessionHeaders, setMessages, showToast, loadLocalThreads]);
+
+    const handleNewChat = useCallback(() => {
+        if (isLoading) stop();
+        setActiveThreadId(null);
+        setMessages([]);
+        showToast('Percakapan baru dimulai.');
+    }, [isLoading, stop, setMessages, showToast]);
+
+    const handleDeleteThread = useCallback(async (threadId) => {
+        try {
+            await fetch(`/api/chat/threads/${threadId}`, {
+                method: 'DELETE',
+                headers: sessionHeaders(),
+            });
+        } catch {}
+
+        const local = loadLocalThreads().filter((t) => t.id !== threadId);
+        saveLocalThreads(local);
+        setThreads((prev) => prev.filter((t) => t.id !== threadId));
+
+        if (activeThreadId === threadId) {
+            setActiveThreadId(null);
+            setMessages([]);
+        }
+        showToast('Percakapan telah dihapus.');
+    }, [sessionHeaders, loadLocalThreads, saveLocalThreads, activeThreadId, setMessages, showToast]);
+
     // Tutup modal dengan tombol Escape (antislop R-32 & aksesibilitas keyboard)
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === 'Escape') {
                 if (brainOpen) setBrainOpen(false);
                 if (settingsOpen) setSettingsOpen(false);
+                if (historyOpen) setHistoryOpen(false);
             }
         };
-        if (brainOpen || settingsOpen) {
+        if (brainOpen || settingsOpen || historyOpen) {
             window.addEventListener('keydown', handleKeyDown);
             return () => window.removeEventListener('keydown', handleKeyDown);
         }
-    }, [brainOpen, settingsOpen]);
+    }, [brainOpen, settingsOpen, historyOpen]);
 
-    const handleNewChat = useCallback(() => {
-        if (messages.length === 0) return;
-        if (isLoading) stop();
-        setMessages([]);
-        showToast('Percakapan baru dimulai.');
-    }, [messages.length, isLoading, stop, setMessages, showToast]);
+    const handleSettingsSave = useCallback(async () => {
+        const isExec = isDireksiOrSuperuser(session?.role) || !!settings.canEdit;
 
-    const handleSettingsSave = useCallback(() => {
-        const next = {
-            baseURL: draft.baseURL.trim() || DEFAULT_SETTINGS.baseURL,
-            apiKey: draft.apiKey.trim(),
-            model: draft.model.trim() || 'default',
-            showSystemProcess: !!draft.showSystemProcess,
-        };
-        settingsRef.current = next;
-        setSettings(next);
         try {
-            localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify({ showSystemProcess: !!draft.showSystemProcess }));
         } catch {}
+
+        if (isExec) {
+            try {
+                const res = await fetch('/api/chat/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...sessionHeaders(),
+                    },
+                    body: JSON.stringify({
+                        baseURL: draft.baseURL.trim(),
+                        apiKey: draft.apiKey.trim(),
+                        model: draft.model.trim(),
+                    }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.ok) {
+                    showToast(data.error || 'Gagal menyimpan pengaturan provider.');
+                    return;
+                }
+                showToast('Pengaturan provider global berhasil disimpan!');
+                await loadGlobalSettings();
+            } catch (err) {
+                showToast('Gagal menyimpan: ' + err.message);
+                return;
+            }
+        } else {
+            showToast('Preferensi tampilan berhasil disimpan.');
+        }
+
+        setSettings((prev) => ({ ...prev, showSystemProcess: !!draft.showSystemProcess }));
         setSettingsOpen(false);
         setTestResult(null);
-    }, [draft]);
+    }, [draft, session, settings.canEdit, sessionHeaders, showToast, loadGlobalSettings]);
 
     const runTest = async (target) => {
         setTesting(target);
@@ -548,6 +813,7 @@ export default function ChatPage() {
         setDraft(settings);
         setTestResult(null);
         setSettingsOpen(true);
+        loadGlobalSettings();
     };
 
     // sessionChecked selalu true; dipertahankan sebagai penjelas alur. Server render = null session → LoginRequired.
@@ -559,7 +825,7 @@ export default function ChatPage() {
         <div className="h-screen flex flex-col bg-[linear-gradient(135deg,#ede9fe_0%,#e0f2fe_35%,#fce7f3_65%,#dbeafe_100%)] text-slate-900">
             {/* Header */}
             <header className="shrink-0 bg-white/80 backdrop-blur-md border-b border-white/80 shadow-xs">
-                <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+                <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0">
                         <Link
                             href="/"
@@ -586,31 +852,45 @@ export default function ChatPage() {
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-0.5 p-1 rounded-xl bg-slate-100/70 border border-slate-200/60 shrink-0">
+                        <button
+                            onClick={() => {
+                                setHistoryOpen(true);
+                                loadThreads();
+                            }}
+                            title="Riwayat percakapan (retensi 30 hari)"
+                            aria-label="Riwayat percakapan"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-white transition-all relative"
+                        >
+                            <History size={15} />
+                            {threads.length > 0 && (
+                                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-pink-500 ring-2 ring-white"></span>
+                            )}
+                        </button>
                         <button
                             onClick={handleNewChat}
-                            disabled={messages.length === 0}
+                            disabled={messages.length === 0 && !activeThreadId}
                             title="Mulai percakapan baru"
                             aria-label="Mulai percakapan baru"
-                            className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-35 disabled:hover:bg-transparent"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-white transition-all disabled:opacity-35 disabled:hover:bg-transparent"
                         >
-                            <RotateCcw size={16} />
+                            <RotateCcw size={15} />
                         </button>
                         <button
                             onClick={() => setBrainOpen(true)}
                             title="Memori & Skill agent"
                             aria-label="Memori dan skill agent"
-                            className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors relative"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-white transition-all relative"
                         >
-                            <Brain size={16} />
+                            <Brain size={15} />
                         </button>
                         <button
                             onClick={openSettings}
                             title="Pengaturan provider"
                             aria-label="Pengaturan provider"
-                            className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-white transition-all"
                         >
-                            <Settings2 size={16} />
+                            <Settings2 size={15} />
                         </button>
                     </div>
                 </div>
@@ -619,30 +899,47 @@ export default function ChatPage() {
             {/* Messages */}
             <main ref={scrollRef} className="flex-1 overflow-y-auto py-6 px-2 space-y-5">
                 {messages.length === 0 && !isLoading && (
-                    <div className="max-w-md mx-auto text-center pt-12 sm:pt-20 px-4">
-                        <div className="w-14 h-14 rounded-2xl overflow-hidden border border-pink-200 shadow-md shadow-pink-500/10 mx-auto mb-4 bg-pink-100 flex items-center justify-center">
+                    <div className="max-w-2xl mx-auto text-center pt-8 sm:pt-14 px-4">
+                        <div className="relative w-16 h-16 rounded-2xl overflow-hidden border-2 border-white shadow-md shadow-pink-500/15 mx-auto mb-3.5 bg-gradient-to-tr from-pink-200 to-rose-100 p-0.5">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src="/bebie-avatar.jpg" alt="Bebie" className="w-full h-full object-cover" />
+                            <img src="/bebie-avatar.jpg" alt="Bebie" className="w-full h-full object-cover rounded-[14px]" />
+                            <span className="absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white" title="Online"></span>
                         </div>
-                        <h2 className="font-bold text-slate-900">Halo! Tanya data ke Bebie</h2>
-                        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                            Bebie (Beauty Bestie AI) siap menganalisis penjualan, target outlet, tren produk,
-                            dan menyajikan insight cantik langsung dari Google BigQuery.
+
+                        <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
+                            Halo{session?.name ? `, ${session.name.split(' ')[0]}` : ''}! Ada data yang ingin dibedah?
+                        </h2>
+                        <p className="text-xs sm:text-[13px] text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+                            Bebie siap menganalisis penjualan outlet, pencapaian target, dan performa produk ABS Group langsung dari BigQuery.
                         </p>
-                        <div className="mt-5 space-y-2 text-left">
-                            {[
-                                'Ingat: cabang default saya BT01, ya.',
-                                'Penjualan Agustus per cabang lengkap dengan pencapaian target.',
-                                'Skill query-mu sudah bagus, catat pola basket analysis yang barusan.',
-                            ].map((hint) => (
-                                <button
-                                    key={hint}
-                                    onClick={() => sendMessage({ text: hint })}
-                                    className="w-full text-left px-3.5 py-2.5 rounded-xl bg-white/80 border border-slate-200 hover:border-pink-300 hover:bg-white transition-colors text-xs text-slate-600"
-                                >
-                                    {hint}
-                                </button>
-                            ))}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 mt-6 text-left">
+                            {SUGGESTED_QUERIES.map((item) => {
+                                const IconComponent = item.icon;
+                                return (
+                                    <button
+                                        key={item.title}
+                                        type="button"
+                                        onClick={() => sendMessage({ text: item.query })}
+                                        className="group relative flex items-start gap-3 p-3.5 rounded-2xl bg-white/80 hover:bg-white border border-slate-200/90 hover:border-pink-300 shadow-2xs hover:shadow-md hover:-translate-y-0.5 transition-all text-left cursor-pointer"
+                                    >
+                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${item.iconBg}`}>
+                                            <IconComponent size={18} />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center justify-between gap-1">
+                                                <span className="font-semibold text-xs text-slate-800 group-hover:text-pink-600 transition-colors">
+                                                    {item.title}
+                                                </span>
+                                                <ArrowUpRight size={13} className="text-slate-300 group-hover:text-pink-500 transition-colors shrink-0" />
+                                            </div>
+                                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">
+                                                {item.desc}
+                                            </p>
+                                        </div>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 )}
@@ -657,16 +954,16 @@ export default function ChatPage() {
                 ))}
 
                 {isLoading && messages.length > 0 && messages[messages.length - 1]?.role === 'user' && (
-                    <div className="flex gap-3 max-w-4xl mx-auto w-full flex-row">
-                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-xs border border-pink-200 bg-pink-100 flex items-center justify-center">
+                    <div className="flex gap-2.5 sm:gap-3 max-w-3xl mx-auto w-full flex-row">
+                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-xs border border-pink-200 bg-pink-100 flex items-center justify-center mt-0.5">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src="/bebie-avatar.jpg" alt="Bebie" className="w-full h-full object-cover" />
                         </div>
-                        <div className="flex flex-col gap-2 min-w-0 max-w-[85%] items-start">
-                            <div className="text-[11px] text-slate-400 font-medium px-1">
-                                Bebie - Beauty Bestie AI
+                        <div className="flex flex-col gap-1.5 min-w-0 max-w-[85%] sm:max-w-[78%] items-start">
+                            <div className="flex items-center gap-1.5 px-1 mb-0.5">
+                                <span className="font-bold text-xs text-slate-800">Bebie</span>
                             </div>
-                            <div className="w-full max-w-md rounded-2xl border border-pink-200/90 bg-gradient-to-br from-pink-50/70 via-white to-rose-50/40 p-3.5 shadow-sm space-y-2.5">
+                            <div className="w-full max-w-md rounded-2xl border border-pink-200/90 bg-gradient-to-br from-pink-50/70 via-white to-rose-50/40 p-3.5 shadow-xs space-y-2.5">
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2 min-w-0">
                                         <div className="w-7 h-7 rounded-lg bg-pink-100 text-pink-600 flex items-center justify-center shrink-0">
@@ -689,7 +986,7 @@ export default function ChatPage() {
                 )}
 
                 {error && (
-                    <div className="max-w-4xl mx-auto">
+                    <div className="max-w-3xl mx-auto">
                         <div className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-xs text-rose-700 space-y-2">
                             <div>
                                 <div className="font-semibold mb-0.5">Permintaan gagal</div>
@@ -774,115 +1071,197 @@ export default function ChatPage() {
             )}
 
             {/* Settings Modal */}
-            {settingsOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs" onClick={() => setSettingsOpen(false)}></div>
-                    <div
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="settings-modal-title"
-                        className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-100 flex flex-col max-h-[92vh]"
-                    >
-                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
-                            <div>
-                                <h3 id="settings-modal-title" className="font-bold text-sm text-slate-900">Pengaturan Provider</h3>
-                                <p className="text-[11px] text-slate-400 mt-0.5">Kompatibel OpenAI: isi URL layanan, token, dan model.</p>
-                            </div>
-                            <button onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
-                                <X size={16} />
-                            </button>
-                        </div>
-
-                        <div className="p-5 space-y-4 overflow-y-auto">
-                            <div>
-                                <label htmlFor="cfg-url" className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">URL Endpoint</label>
-                                <input
-                                    id="cfg-url"
-                                    type="url"
-                                    value={draft.baseURL}
-                                    onChange={(e) => setDraft({ ...draft, baseURL: e.target.value })}
-                                    placeholder="https://hermes.absgroup.biz.id"
-                                    className="w-full text-sm px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500/15 focus:border-pink-400 outline-none transition font-mono text-[12px]"
-                                />
-                            </div>
-
-                            <div>
-                                <label htmlFor="cfg-key" className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Token API</label>
-                                <input
-                                    id="cfg-key"
-                                    type="password"
-                                    value={draft.apiKey}
-                                    onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
-                                    placeholder="sk-... atau token layanan"
-                                    autoComplete="off"
-                                    className="w-full text-sm px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500/15 focus:border-pink-400 outline-none transition font-mono text-[12px]"
-                                />
-                            </div>
-
-                            <div>
-                                <label htmlFor="cfg-model" className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Nama Model</label>
-                                <input
-                                    id="cfg-model"
-                                    type="text"
-                                    value={draft.model}
-                                    onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-                                    placeholder="default, gpt-4o-mini, qwen2.5:7b, ..."
-                                    className="w-full text-sm px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500/15 focus:border-pink-400 outline-none transition font-mono text-[12px]"
-                                />
-                            </div>
-
-                            <div className="flex flex-wrap gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => runTest('provider')}
-                                    disabled={testing === 'provider'}
-                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-950 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-50 transition-colors"
-                                >
-                                    {testing === 'provider' ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
-                                    Test Provider
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => runTest('bigquery')}
-                                    disabled={testing === 'bigquery'}
-                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                                >
-                                    {testing === 'bigquery' ? <Loader2 size={12} className="animate-spin" /> : <Database size={12} />}
-                                    Test BigQuery
-                                </button>
-                            </div>
-
-                            {testing && <TestResult result={testResult} loading target={testing === 'provider' ? 'provider' : 'BigQuery'} />}
-                            {!testing && testResult && <TestResult result={testResult} loading={false} target={testResult.target === 'bigquery' ? 'BigQuery' : 'provider'} />}
-
-                            <div className="pt-3 border-t border-slate-100">
-                                <label className="flex items-start gap-3 cursor-pointer select-none">
-                                    <input
-                                        type="checkbox"
-                                        checked={draft.showSystemProcess || false}
-                                        onChange={(e) => setDraft({ ...draft, showSystemProcess: e.target.checked })}
-                                        className="mt-0.5 w-4 h-4 rounded text-pink-600 focus:ring-pink-500 border-slate-300"
-                                    />
-                                    <div>
-                                        <div className="text-xs font-semibold text-slate-700">Tampilkan Detail Proses Sistem</div>
-                                        <div className="text-[11px] text-slate-400 mt-0.5">Tampilkan riwayat query BigQuery dan langkah tool di dalam chat (default: disembunyikan).</div>
+            {settingsOpen && (() => {
+                const isExecutive = isDireksiOrSuperuser(session?.role) || !!settings.canEdit;
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs" onClick={() => setSettingsOpen(false)}></div>
+                        <div
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="settings-modal-title"
+                            className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-100 flex flex-col max-h-[92vh]"
+                        >
+                            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+                                <div className="min-w-0 pr-2">
+                                    <div className="flex items-center gap-2">
+                                        <h3 id="settings-modal-title" className="font-bold text-sm text-slate-900 truncate">Pengaturan Provider AI</h3>
+                                        {isExecutive ? (
+                                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-pink-100 text-pink-700 border border-pink-200 shrink-0">
+                                                Direksi / Super User (Bisa Edit)
+                                            </span>
+                                        ) : (
+                                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1 shrink-0">
+                                                <Lock size={10} /> Mode Baca (Global)
+                                            </span>
+                                        )}
                                     </div>
-                                </label>
+                                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                                        {isExecutive
+                                            ? 'Konfigurasi provider berlaku global untuk seluruh karyawan di sistem.'
+                                            : 'Konfigurasi provider berlaku global dan dikelola terpusat oleh Direksi.'}
+                                    </p>
+                                </div>
+                                <button onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0 cursor-pointer">
+                                    <X size={16} />
+                                </button>
                             </div>
 
-                            <p className="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-slate-100">
-                                Kredensial BigQuery dibaca dari environment variable server (<span className="font-mono text-slate-500">BIGQUERY_SERVICE_ACCOUNT_KEY</span>) atau file service account.
-                                Pengaturan provider di atas disimpan hanya di perangkat ini.
-                            </p>
-                        </div>
+                            <div className="p-5 space-y-4 overflow-y-auto">
+                                {!isExecutive && (
+                                    <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200/90 flex items-start gap-2.5">
+                                        <Lock size={16} className="text-amber-700 mt-0.5 shrink-0" />
+                                        <div className="text-[11px] text-amber-900 leading-relaxed">
+                                            <span className="font-bold">Pengaturan Berlaku Global:</span> URL endpoint, token API, dan model AI dikonfigurasi secara terpusat untuk semua pengguna sistem. Hanya level <strong>Direksi</strong> atau <strong>Super User</strong> yang memiliki hak akses untuk mengubahnya.
+                                        </div>
+                                    </div>
+                                )}
 
-                        <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2 shrink-0">
-                            <button onClick={() => setSettingsOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition">Batal</button>
-                            <button onClick={handleSettingsSave} className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition">Simpan</button>
+                                <div>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <label htmlFor="cfg-url" className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">URL Endpoint</label>
+                                        {!isExecutive && <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1"><Lock size={10} /> Terkunci</span>}
+                                    </div>
+                                    <input
+                                        id="cfg-url"
+                                        type="url"
+                                        disabled={!isExecutive}
+                                        value={draft.baseURL}
+                                        onChange={(e) => setDraft({ ...draft, baseURL: e.target.value })}
+                                        placeholder="https://9router.absgroup.biz.id/v1"
+                                        className="w-full text-sm px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500/15 focus:border-pink-400 outline-none transition font-mono text-[12px] disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200 disabled:cursor-not-allowed"
+                                    />
+                                </div>
+
+                                <div>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <label htmlFor="cfg-key" className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">Token API</label>
+                                        {!isExecutive && <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1"><Lock size={10} /> Terkunci</span>}
+                                    </div>
+                                    <input
+                                        id="cfg-key"
+                                        type="password"
+                                        disabled={!isExecutive}
+                                        value={draft.apiKey}
+                                        onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
+                                        placeholder={!isExecutive && draft.hasApiKey ? '•••••••••••••••••••••••• (Tersimpan global di server)' : 'sk-... atau token layanan'}
+                                        autoComplete="off"
+                                        className="w-full text-sm px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500/15 focus:border-pink-400 outline-none transition font-mono text-[12px] disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200 disabled:cursor-not-allowed"
+                                    />
+                                </div>
+
+                                <div>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <label htmlFor="cfg-model" className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">Nama Model</label>
+                                        {!isExecutive && <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1"><Lock size={10} /> Terkunci</span>}
+                                    </div>
+                                    <input
+                                        id="cfg-model"
+                                        type="text"
+                                        disabled={!isExecutive}
+                                        value={draft.model}
+                                        onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+                                        placeholder="busana"
+                                        className="w-full text-sm px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500/15 focus:border-pink-400 outline-none transition font-mono text-[12px] disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200 disabled:cursor-not-allowed"
+                                    />
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => runTest('provider')}
+                                        disabled={testing === 'provider'}
+                                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-950 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-50 transition-colors cursor-pointer"
+                                    >
+                                        {testing === 'provider' ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
+                                        Test Provider
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => runTest('bigquery')}
+                                        disabled={testing === 'bigquery'}
+                                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer"
+                                    >
+                                        {testing === 'bigquery' ? <Loader2 size={12} className="animate-spin" /> : <Database size={12} />}
+                                        Test BigQuery
+                                    </button>
+                                </div>
+
+                                {testing && <TestResult result={testResult} loading target={testing === 'provider' ? 'provider' : 'BigQuery'} />}
+                                {!testing && testResult && <TestResult result={testResult} loading={false} target={testResult.target === 'bigquery' ? 'BigQuery' : 'provider'} />}
+
+                                <div className="pt-3 border-t border-slate-100">
+                                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={draft.showSystemProcess || false}
+                                            onChange={(e) => setDraft({ ...draft, showSystemProcess: e.target.checked })}
+                                            className="mt-0.5 w-4 h-4 rounded text-pink-600 focus:ring-pink-500 border-slate-300"
+                                        />
+                                        <div>
+                                            <div className="text-xs font-semibold text-slate-700">Tampilkan Detail Proses Sistem</div>
+                                            <div className="text-[11px] text-slate-400 mt-0.5">Tampilkan riwayat query BigQuery dan langkah tool di dalam chat (default: disembunyikan).</div>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <p className="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-slate-100">
+                                    Pengaturan provider AI ini berlaku <strong className="text-slate-600 font-semibold">global untuk semua user</strong> dan tersimpan aman di database server. Kredensial BigQuery diproses di server via service account.
+                                </p>
+                            </div>
+
+                            <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between shrink-0">
+                                <div className="text-[11px]">
+                                    {isExecutive ? (
+                                        <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                                            <Check size={13} /> Hak akses edit Direksi aktif
+                                        </span>
+                                    ) : (
+                                        <span className="text-slate-400 flex items-center gap-1 font-medium">
+                                            <Lock size={12} /> Khusus Direksi / Super User
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setSettingsOpen(false)}
+                                        className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                                    >
+                                        {isExecutive ? 'Batal' : 'Tutup'}
+                                    </button>
+                                    {isExecutive ? (
+                                        <button
+                                            onClick={handleSettingsSave}
+                                            className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition cursor-pointer"
+                                        >
+                                            Simpan Global
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={handleSettingsSave}
+                                            className="px-4 py-2 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-sm transition cursor-pointer"
+                                        >
+                                            Simpan Tampilan
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
+
+            <ChatHistoryDrawer
+                isOpen={historyOpen}
+                onClose={() => setHistoryOpen(false)}
+                threads={threads}
+                activeThreadId={activeThreadId}
+                onSelectThread={handleSelectThread}
+                onNewChat={handleNewChat}
+                onDeleteThread={handleDeleteThread}
+                isLoading={threadsLoading}
+                dbMissing={dbMissing}
+            />
         </div>
     );
 }
