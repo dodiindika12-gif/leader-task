@@ -840,16 +840,9 @@ export default function ChatPage() {
                             <img src="/bebie-avatar.jpg" alt="Bebie" className="w-full h-full object-cover" />
                         </div>
                         <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                                <span className="font-bold text-sm text-slate-900 leading-tight truncate">Bebie - Beauty Bestie AI</span>
-                                <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-mono bg-pink-50 text-pink-700 border border-pink-200/70" title={`Model: ${settings.model || 'default'}`}>
-                                    {settings.model || 'default'}
-                                </span>
-                            </div>
-                            <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate">
-                                <Database size={9} className="shrink-0" />
-                                sesi: <span className="font-semibold text-slate-500">{session.name || session.email}</span> (memori aktif)
-                            </div>
+                            <span className="font-bold text-sm text-slate-900 leading-tight truncate block">
+                                Bebie - Beauty Bestie AI
+                            </span>
                         </div>
                     </div>
                     <div className="flex items-center gap-0.5 p-1 rounded-xl bg-slate-100/70 border border-slate-200/60 shrink-0">
