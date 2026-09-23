@@ -11,6 +11,10 @@ export async function GET(req) {
             return Response.json({ error: 'Sesi tidak valid atau telah berakhir.' }, { status: 401 });
         }
 
+        if (member.role === 'Staff') {
+            return Response.json({ error: 'Akses Chat Bebie hanya untuk tingkatan Leader.' }, { status: 403 });
+        }
+
         const threads = await listUserThreads(member.id);
         return Response.json({ ok: true, threads });
     } catch (err) {
@@ -34,6 +38,10 @@ export async function POST(req) {
 
         if (!member) {
             return Response.json({ error: 'Sesi tidak valid.' }, { status: 401 });
+        }
+
+        if (member.role === 'Staff') {
+            return Response.json({ error: 'Akses Chat Bebie hanya untuk tingkatan Leader.' }, { status: 403 });
         }
 
         const body = await req.json();

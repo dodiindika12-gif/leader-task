@@ -52,20 +52,19 @@ function buildSkillSection(skills) {
     );
 }
 
-function systemPrompt({ memories, skills }) {
-    const guide = loadBigQueryGuide();
+function systemPrompt({ memories, skills, canUseBigQuery = true }) {
+    const guide = canUseBigQuery ? loadBigQueryGuide() : null;
     return [
-        'Nama Anda: Bebie (Beauty Bestie AI), asisten data kecantikan & operasional ABS Group (Busana) yang terhubung ke Google BigQuery.',
-        'Kepribadian: Ramah, cerdas, solutif, dan profesional dengan sentuhan hangat (beauty bestie). Selalu menyajikan analisis data dengan rapi, jelas, dan akurat.',
+        canUseBigQuery
+            ? 'Nama Anda: Bebie (Beauty Bestie AI), asisten data kecantikan & operasional ABS Group (Busana) yang terhubung ke Google BigQuery.'
+            : 'Nama Anda: Bebie (Beauty Bestie AI), asisten cerdas kecantikan, strategi operasional & produktivitas tim ABS Group (Busana).',
+        'Kepribadian: Ramah, cerdas, solutif, dan profesional dengan sentuhan hangat (beauty bestie). Selalu menyajikan analisis dan solusi dengan rapi, jelas, dan akurat.',
         'Waktu user: WITA (GMT+8). Jika user tidak menyebut tanggal, pakai tanggal hari ini.',
         'Jika user menyebut tanggal tanpa tahun (misal "3 September"), prioritaskan tahun berjalan saat ini (2026). Jika menyertakan perbandingan YoY dengan tahun sebelumnya (2025), sebutkan tahun secara eksplisit pada penjelasan.',
         '',
-        '== CARA KERJA ==',
-        '1. Gunakan tool run_bigquery_query untuk semua pertanyaan data. Jangan menebak angka.',
-        '2. Baca panduan BigQuery di bawah SEBELUM menulis query.',
-        '3. Efisiensi query: Gabungkan kebutuhan metrik (omzet, total transaksi, margin, target, MoM, YoY) dalam 1-2 query terencana (gunakan CTE / subquery / conditional aggregation) daripada menjalankan banyak query kecil secara terpisah.',
-        '4. Begitu data utama didapatkan, SEGERA susun dan tuliskan jawaban lengkap kepada user. Jangan menunda atau terus melakukan query tambahan yang tidak esensial.',
-        '5. Saat pertanyaan ambigu (brand vs outlet, kategori vs pareto), periksa lewat query kecil atau tanya user.',
+        canUseBigQuery
+            ? '== CARA KERJA & AKSES DATA BIGQUERY ==\n1. Gunakan tool run_bigquery_query untuk semua pertanyaan data. Jangan menebak angka.\n2. Baca panduan BigQuery di bawah SEBELUM menulis query.\n3. Efisiensi query: Gabungkan kebutuhan metrik (omzet, total transaksi, margin, target, MoM, YoY) dalam 1-2 query terencana (gunakan CTE / subquery / conditional aggregation) daripada banyak query kecil.\n4. Begitu data utama didapatkan, SEGERA susun dan tuliskan jawaban lengkap kepada user.\n5. Saat pertanyaan ambigu (brand vs outlet, kategori vs pareto), periksa lewat query kecil atau tanya user.'
+            : '== STATUS AKSES DATA BIGQUERY ==\nAkun user saat ini beroperasi dalam MODE ASISTEN UMUM (akses kueri langsung ke Google BigQuery belum diaktifkan oleh Direksi).\nJika user meminta data penjualan cabang, omzet realtime, atau data transaksi internal database, sampaikan secara sopan dan jelas bahwa akunnya belum diberikan hak akses BigQuery untuk Chat Bebie, dan sarankan untuk menghubungi Direksi jika memerlukan akses data tersebut.\nAnda tetap dapat membantu user secara optimal dalam menyusun strategi, membuat format laporan/presentasi, menganalisis file dokumen/gambar yang dilampirkan, serta merangkum teks.',
         '',
         'Bila user mengunggah gambar, foto struk, grafik, atau dokumen/tabel, baca dan analisis informasi visual atau data di dalamnya secara seksama untuk menjawab pertanyaan user.',
         '',
@@ -73,38 +72,31 @@ function systemPrompt({ memories, skills }) {
         '',
         buildSkillSection(skills),
         '',
-        '== ATURAN TOOL BigQuery ==',
-        '- SQL standar BigQuery (useLegacySql false). Nama tabel selalu fully-qualified dengan backtick.',
-        '- SELECT wajib memakai LIMIT (maks 1000 baris) kecuali agregasi yang sudah dikelompokkan.',
-        '- Kolom HPP di tabel transaksi adalah HPP PER UNIT: total modal selalu SUM(HPP * Qty).',
-        '- Proyek TANPA billing: jangan pernah menulis TRUNCATE/DELETE/UPDATE/MERGE/CREATE OR REPLACE.',
-        '- Jangan JOIN lintas dataset Laporan_Penjualan_detail dan Master_Data (beda region).',
-        '',
+        ...(canUseBigQuery ? [
+            '== ATURAN TOOL BigQuery ==',
+            '- SQL standar BigQuery (useLegacySql false). Nama tabel selalu fully-qualified dengan backtick.',
+            '- SELECT wajib memakai LIMIT (maks 1000 baris) kecuali agregasi yang sudah dikelompokkan.',
+            '- Kolom HPP di tabel transaksi adalah HPP PER UNIT: total modal selalu SUM(HPP * Qty).',
+            '- Proyek TANPA billing: jangan pernah menulis TRUNCATE/DELETE/UPDATE/MERGE/CREATE OR REPLACE.',
+            '- Jangan JOIN lintas dataset Laporan_Penjualan_detail dan Master_Data (beda region).',
+            '',
+        ] : []),
         '== TEKNIS relay ==',
         '- Anda punya tool untuk MENGAJAR DIRI SENDIRI (lihat bagian TEKNIS di akhir tool list).',
         '',
         '== FORMAT JAWABAN ==',
-        '- Bahasa Indonesia, ringkas, langsung ke data.',
+        '- Bahasa Indonesia, ringkas, langsung ke inti.',
         '- Hasil tabel pakai Markdown. Rupiah penuh jangan disingkat.',
         '- FORMAT TABEL WAJIB: header, lalu baris baru, lalu |---|---|, lalu baris baru, lalu isi. Satu baris tabel = satu baris baris teks. JANGAN menyambung semua sel dalam satu baris fisik.',
-        '- Contoh BENAR:\n| Tipe | Jumlah |\n|---|---|\n| BEAUTY | 17 |',
-        '- Contoh SALAH: | Tipe | Jumlah | |---|---| | BEAUTY | 17 |',
         '- Tampilkan semua baris relevan, jangan terpotong, kecuali user minta ringkasan.',
-        '- Laporan penjualan lengkap dengan MoM, YoY, pencapaian target bila datanya ada; tutup dengan Action Plan.',
-        '- Data apa adanya: jangan merevisi atau menafsirkan ulang angka dari database.',
+        '- Data apa adanya: jangan merevisi atau menafsirkan ulang angka.',
         '',
         '== ATURAN MEMBUAT FILE (PPTX / HTML / EXCEL / CSV) ==',
         'Ketika user meminta file (misal: "buatkan dalam laporan ppt", "buatkan presentasi html", "ekspor ke excel", "buatkan csv", "jadikan presentasi"):',
-        '1. Jika data yang dibutuhkan SUDAH ADA di riwayat percakapan sebelumnya, LANGSUNG panggil tool generate_file menggunakan data tersebut. JANGAN query ulang ke BigQuery.',
-        '2. Panggil tool generate_file dengan format yang sesuai:',
-        '   - PPTX: isi payload.slides (title, subtitle, text, bullets, table). Gaya Executive Board Deck (Deep Navy #0F172A & Rose #E11D48), 16:9, split layout (tabel di kiri, takeaways di kanan). DILARANG menggunakan karakter batang chart ASCII (████░░) di tabel!',
-        '   - HTML: isi payload.slides atau payload.rows. Menghasilkan laporan/presentasi web interaktif mandiri yang cantik, responsif, dan siap dibuka di browser atau dicetak PDF.',
-        '   - XLSX: isi payload.rows (baris pertama = header) atau payload.sheets untuk multi-sheet.',
-        '   - CSV: isi payload.rows (baris pertama = header).',
+        '1. Jika data yang dibutuhkan SUDAH ADA di riwayat percakapan sebelumnya, LANGSUNG panggil tool generate_file menggunakan data tersebut.',
+        '2. Panggil tool generate_file dengan format yang sesuai (pptx, html, xlsx, csv).',
         '3. SETELAH tool generate_file berhasil, LANGSUNG berikan respon singkat berisi link: [Buka/Unduh <Nama File>](<downloadUrl>).',
-        '   Contoh respon: "File presentasi laporan sudah siap. Silakan buka atau unduh di sini: [Unduh laporan-penjualan.pptx](/api/chat/files?name=laporan-penjualan-xxxx.pptx)"',
         '4. DILARANG membuat tabel teks panjang atau mengulang isi seluruh data di chat saat membuat file. Langsung berikan link unduhan agar user segera bisa mengunduhnya.',
-        '5. Untuk data tabel biasa di chat tetap pakai Markdown table; tabel diakhiri [FILE_CSV] hanya jika user minta file CSV tanpa generate_file.',
         '',
         (guide ? ('== PANDUAN BIGQUERY ABS GROUP (FONT OF TRUTH) ==\n\n' + guide) : ''),
     ].filter(Boolean).join('\n');
@@ -212,6 +204,17 @@ export async function POST(req) {
             );
         }
 
+        // ===== Otorisasi role: Khusus Leader (Bukan Staff) =====
+        if (member.role === 'Staff') {
+            return Response.json(
+                { error: 'Akses Chat Bebie hanya diperuntukkan bagi tingkatan Leader (Koordinator, SPV, Manager, Direksi).' },
+                { status: 403 }
+            );
+        }
+
+        const isExec = ['Super User', 'Direksi'].includes(member.role);
+        const canUseBigQuery = Boolean(member.can_access_bigquery || isExec);
+
         const globalCfg = await getGlobalProviderSettings().catch(() => ({}));
         const rawApiKey = req.headers.get('x-api-key');
         const apiKey = (rawApiKey && !/^•+$/.test(rawApiKey.trim()))
@@ -294,29 +297,31 @@ export async function POST(req) {
 
         const result = streamText({
             model: customProvider.chat(modelName),
-            system: systemPrompt({ memories, skills }),
+            system: systemPrompt({ memories, skills, canUseBigQuery }),
             messages: modelMessages,
             stopWhen: stepCountIs(25),
             tools: {
-                run_bigquery_query: tool({
-                    description: 'Jalankan query SELECT SQL ke Google BigQuery ABS Group dan kembalikan hasilnya sebagai baris data.',
-                    inputSchema: z.object({
-                        sql: z.string().describe('Query SQL BigQuery. SELECT harus memakai LIMIT kecuali agregasi, maksimal 1000 baris. Nama tabel fully-qualified dengan backtick.'),
+                ...(canUseBigQuery ? {
+                    run_bigquery_query: tool({
+                        description: 'Jalankan query SELECT SQL ke Google BigQuery ABS Group dan kembalikan hasilnya sebagai baris data.',
+                        inputSchema: z.object({
+                            sql: z.string().describe('Query SQL BigQuery. SELECT harus memakai LIMIT kecuali agregasi, maksimal 1000 baris. Nama tabel fully-qualified dengan backtick.'),
+                        }),
+                        execute: async ({ sql }) => {
+                            const check = validateSql(sql);
+                            if (!check.ok) {
+                                return { ok: false, error: check.error };
+                            }
+                            try {
+                                const rows = await runBigQueryQuery(check.sql);
+                                const cleanRows = sanitizeBigQueryRows(rows.slice(0, 500));
+                                return { ok: true, rowCount: rows.length, rows: cleanRows };
+                            } catch (err) {
+                                return { ok: false, error: String(err.message || err).slice(0, 500) };
+                            }
+                        },
                     }),
-                    execute: async ({ sql }) => {
-                        const check = validateSql(sql);
-                        if (!check.ok) {
-                            return { ok: false, error: check.error };
-                        }
-                        try {
-                            const rows = await runBigQueryQuery(check.sql);
-                            const cleanRows = sanitizeBigQueryRows(rows.slice(0, 500));
-                            return { ok: true, rowCount: rows.length, rows: cleanRows };
-                        } catch (err) {
-                            return { ok: false, error: String(err.message || err).slice(0, 500) };
-                        }
-                    },
-                }),
+                } : {}),
 
                 remember: tool({
                     description: 'Simpan fakta penting ke memori agar tidak perlu ditanya lagi di percakapan lain. Gunakan saat user menyampaikan preferensi, aturan, konteks tim, atau koreksi.',

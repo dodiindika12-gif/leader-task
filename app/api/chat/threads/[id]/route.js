@@ -12,6 +12,10 @@ export async function GET(req, { params }) {
             return Response.json({ error: 'Sesi tidak valid.' }, { status: 401 });
         }
 
+        if (member.role === 'Staff') {
+            return Response.json({ error: 'Akses Chat Bebie hanya untuk tingkatan Leader.' }, { status: 403 });
+        }
+
         const thread = await getUserThread(id, member.id);
         if (!thread) {
             return Response.json({ error: 'Percakapan tidak ditemukan atau sudah kadaluarsa (> 30 hari).' }, { status: 404 });
@@ -32,6 +36,10 @@ export async function DELETE(req, { params }) {
 
         if (!member) {
             return Response.json({ error: 'Sesi tidak valid.' }, { status: 401 });
+        }
+
+        if (member.role === 'Staff') {
+            return Response.json({ error: 'Akses Chat Bebie hanya untuk tingkatan Leader.' }, { status: 403 });
         }
 
         const deleted = await deleteUserThread(id, member.id);

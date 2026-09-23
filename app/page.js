@@ -13,6 +13,7 @@ import MemberMigrationModal from '../components/MemberMigrationModal';
 import WhatsAppSetupModal from '../components/WhatsAppSetupModal';
 import SidebarScheduleWidget from '../components/SidebarScheduleWidget';
 import TaskProofSection from '../components/TaskProofSection';
+import BebieChatView from '../components/BebieChatView';
 import { useNotifications } from '../lib/useNotifications';
 import { isPersonalProject, canAccessPersonalProject } from '../lib/personal';
 
@@ -161,7 +162,8 @@ const DEFAULT_ROLE_PERMISSIONS = {
         'workspace.create': true, 'workspace.share_dept': true,
         'organization.view_structure': true,
         'users.view_list': true,
-        'notes.create_notes': true
+        'notes.create_notes': true,
+        'chat.bebie': false
     },
     'Koordinator': {
         'task.create': true, 'task.edit_own': true, 'task.edit_dept': true, 'task.delete_own': true,
@@ -170,7 +172,8 @@ const DEFAULT_ROLE_PERMISSIONS = {
         'users.view_list': true, 'users.create_dept': true,
         'roles_auth.view_matrix': true,
         'notes.create_notes': true, 'notes.share_notes': true,
-        'reports.export_excel': true, 'reports.view_analytics': true
+        'reports.export_excel': true, 'reports.view_analytics': true,
+        'chat.bebie': true
     },
     'SPV': {
         'task.create': true, 'task.edit_own': true, 'task.edit_dept': true, 'task.edit_div': true, 'task.delete_own': true, 'task.delete_div': true,
@@ -179,7 +182,8 @@ const DEFAULT_ROLE_PERMISSIONS = {
         'users.view_list': true, 'users.create_dept': true, 'users.create_div': true, 'users.edit_div': true, 'users.toggle_status': true, 'users.reset_password': true,
         'roles_auth.view_matrix': true,
         'notes.create_notes': true, 'notes.share_notes': true,
-        'reports.export_excel': true, 'reports.view_analytics': true
+        'reports.export_excel': true, 'reports.view_analytics': true,
+        'chat.bebie': true
     },
     'Manager': {
         'task.create': true, 'task.edit_own': true, 'task.edit_dept': true, 'task.edit_div': true, 'task.delete_own': true, 'task.delete_div': true, 'task.view_all_div': true,
@@ -188,7 +192,8 @@ const DEFAULT_ROLE_PERMISSIONS = {
         'users.view_list': true, 'users.create_dept': true, 'users.create_div': true, 'users.edit_div': true, 'users.toggle_status': true, 'users.reset_password': true,
         'roles_auth.view_matrix': true,
         'notes.create_notes': true, 'notes.share_notes': true,
-        'reports.export_excel': true, 'reports.view_analytics': true
+        'reports.export_excel': true, 'reports.view_analytics': true,
+        'chat.bebie': true
     },
     'Direksi': {
         'task.create': true, 'task.edit_own': true, 'task.edit_dept': true, 'task.edit_div': true, 'task.edit_all': true, 'task.delete_own': true, 'task.delete_div': true, 'task.delete_all': true, 'task.view_all_div': true,
@@ -197,7 +202,8 @@ const DEFAULT_ROLE_PERMISSIONS = {
         'users.view_list': true, 'users.create_dept': true, 'users.create_div': true, 'users.edit_div': true, 'users.toggle_status': true, 'users.reset_password': true,
         'roles_auth.view_matrix': true, 'roles_auth.edit_matrix': true, 'roles_auth.manage_roles': true,
         'notes.create_notes': true, 'notes.share_notes': true,
-        'reports.export_excel': true, 'reports.view_analytics': true
+        'reports.export_excel': true, 'reports.view_analytics': true,
+        'chat.bebie': true
     },
     'Super User': {
         // Super User has full access to all permissions
@@ -2714,7 +2720,7 @@ const resolveDirectSupervisor = (member, { divisions = [], departments = [], all
 
 
 const EditMemberModal = ({ member, isOpen, onClose, onSave, rolesList, divisionsList, departments = [], isSuperAdmin, lockedDivision }) => {
-    const [form, setForm] = useState({ name: '', email: '', whatsapp_number: '', role: 'Staff', division: 'Marcomm', department: '', is_active: true });
+    const [form, setForm] = useState({ name: '', email: '', whatsapp_number: '', role: 'Staff', division: 'Marcomm', department: '', is_active: true, can_access_bigquery: false });
 
     useEffect(() => {
         if (member) {
@@ -2725,7 +2731,8 @@ const EditMemberModal = ({ member, isOpen, onClose, onSave, rolesList, divisions
                 role: member.role || member.position || (rolesList?.[0] || 'Staff'),
                 division: member.division || lockedDivision || (divisionsList?.[0] || 'Marcomm'),
                 department: member.department || '',
-                is_active: member.is_active !== false
+                is_active: member.is_active !== false,
+                can_access_bigquery: Boolean(member.can_access_bigquery)
             });
         }
     }, [member, lockedDivision, rolesList, divisionsList]);
@@ -2746,7 +2753,8 @@ const EditMemberModal = ({ member, isOpen, onClose, onSave, rolesList, divisions
             position: form.role,
             division: isSuperAdmin ? form.division : (lockedDivision || form.division),
             department: form.department || null,
-            is_active: form.is_active
+            is_active: form.is_active,
+            can_access_bigquery: form.can_access_bigquery
         });
         onClose();
     };
@@ -2862,7 +2870,7 @@ const EditMemberModal = ({ member, isOpen, onClose, onSave, rolesList, divisions
                         </div>
                     )}
 
-                    <div className="pt-2">
+                    <div className="pt-2 space-y-3">
                         <label className="flex items-center gap-2.5 cursor-pointer select-none">
                             <input
                                 type="checkbox"
@@ -2872,6 +2880,23 @@ const EditMemberModal = ({ member, isOpen, onClose, onSave, rolesList, divisions
                             />
                             <span className="text-sm font-medium text-slate-700">Status Akun Aktif</span>
                         </label>
+
+                        {isSuperAdmin && (
+                            <div className="p-3 bg-blue-50/80 rounded-2xl border border-blue-200/70">
+                                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.can_access_bigquery}
+                                        onChange={e => setForm({ ...form, can_access_bigquery: e.target.checked })}
+                                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                                    />
+                                    <div>
+                                        <span className="text-xs font-bold text-blue-950 block">Izin Akses Google BigQuery (Chat Bebie)</span>
+                                        <span className="text-[11px] text-blue-700/80">User ini dapat meminta Bebie menganalisis data penjualan dan omzet langsung dari BigQuery.</span>
+                                    </div>
+                                </label>
+                            </div>
+                        )}
                     </div>
                     <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-100">
                         <button
@@ -3635,6 +3660,7 @@ const OrgManagementView = ({
     roles = [],
     rolesList = [],
     isSuperAdmin,
+    onToggleBigQueryAccess,
     onAddMember,
     onUpdateMember,
     onDeleteMember,
@@ -4655,6 +4681,7 @@ const OrgManagementView = ({
                                         <th className="p-4">Jabatan</th>
                                         <th className="p-4">Divisi & Departemen</th>
                                         <th className="p-4">Atasan Langsung</th>
+                                        <th className="p-4 text-center">BigQuery (Bebie)</th>
                                         <th className="p-4 text-center">Status</th>
                                         {canEditMembers && <th className="p-4 w-36 text-right">Aksi</th>}
                                     </tr>
@@ -4745,6 +4772,32 @@ const OrgManagementView = ({
                                                         </div>
                                                     ) : (
                                                         <span className="text-xs text-slate-400 italic">-</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-4 text-center">
+                                                    {isSuperAdmin ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onToggleBigQueryAccess && onToggleBigQueryAccess(member.id, !member.can_access_bigquery)}
+                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                                                                member.can_access_bigquery
+                                                                    ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 shadow-2xs'
+                                                                    : 'bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100'
+                                                            }`}
+                                                            title="Klik untuk mengaktifkan / menonaktifkan izin BigQuery Chat Bebie"
+                                                        >
+                                                            <i className={`fa-solid ${member.can_access_bigquery ? 'fa-square-check text-blue-600' : 'fa-square text-slate-300'}`}></i>
+                                                            <span>{member.can_access_bigquery ? 'Aktif' : 'Non-aktif'}</span>
+                                                        </button>
+                                                    ) : (
+                                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold ${
+                                                            member.can_access_bigquery
+                                                                ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                                                                : 'bg-slate-50 text-slate-400 border border-slate-100'
+                                                        }`}>
+                                                            <i className={`fa-solid ${member.can_access_bigquery ? 'fa-check text-blue-600' : 'fa-minus text-slate-300'}`}></i>
+                                                            <span>{member.can_access_bigquery ? 'Aktif' : 'Non-aktif'}</span>
+                                                        </span>
                                                     )}
                                                 </td>
                                                 <td className="p-4 text-center">
@@ -5720,7 +5773,8 @@ const LoginScreen = ({ onLoginSuccess }) => {
                     role: 'Super User',
                     memberId: superId,
                     division: data?.division || 'Direksi',
-                    whatsapp_number: data?.whatsapp_number || null
+                    whatsapp_number: data?.whatsapp_number || null,
+                    can_access_bigquery: true
                 };
                 localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(sessionObj));
                 localStorage.setItem(CURRENT_PIC_KEY, superId);
@@ -5747,6 +5801,7 @@ const LoginScreen = ({ onLoginSuccess }) => {
                     memberId: data.id, 
                     division: data.division,
                     whatsapp_number: data.whatsapp_number || null,
+                    can_access_bigquery: Boolean(data.can_access_bigquery),
                     requiresPasswordChange
                 };
                 localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(sessionObj));
@@ -7125,10 +7180,42 @@ export default function TaskManagerApp() {
         setMembers(prev => prev.map(m => m.id === id ? { ...m, is_active: !currentStatus } : m));
     };
 
+    const handleToggleBigQueryAccess = async (id, newStatus) => {
+        // Optimistic UI state update
+        setMembers(prev => prev.map(m => m.id === id ? { ...m, can_access_bigquery: newStatus } : m));
+
+        let { error } = await supabase.from('members').update({ can_access_bigquery: newStatus }).eq('id', id);
+
+        if (error && (error.code === '42703' || (error.message && error.message.includes('can_access_bigquery')))) {
+            alert('Kolom can_access_bigquery belum dibuat di database Supabase. Jalankan skrip sql/add_chat_bebie_and_bigquery_permissions.sql di Supabase SQL Editor.');
+            setMembers(prev => prev.map(m => m.id === id ? { ...m, can_access_bigquery: !newStatus } : m));
+            return false;
+        }
+
+        if (error) {
+            alert('Gagal mengubah hak akses BigQuery: ' + error.message);
+            setMembers(prev => prev.map(m => m.id === id ? { ...m, can_access_bigquery: !newStatus } : m));
+            return false;
+        }
+
+        if (session?.memberId === id) {
+            const updatedSession = { ...session, can_access_bigquery: newStatus };
+            setSession(updatedSession);
+            localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(updatedSession));
+        }
+
+        return true;
+    };
+
     const handleUpdateMember = async (id, updatedData) => {
         let { error } = await supabase.from('members').update(updatedData).eq('id', id);
         if (error && (error.code === '42703' || (error.message && error.message.includes('whatsapp_number')))) {
             const { whatsapp_number, ...fallbackData } = updatedData;
+            const retry = await supabase.from('members').update(fallbackData).eq('id', id);
+            error = retry.error;
+        }
+        if (error && (error.code === '42703' || (error.message && error.message.includes('can_access_bigquery')))) {
+            const { can_access_bigquery, ...fallbackData } = updatedData;
             const retry = await supabase.from('members').update(fallbackData).eq('id', id);
             error = retry.error;
         }
@@ -7589,6 +7676,15 @@ export default function TaskManagerApp() {
     const currentUserLevel = useMemo(() => getRoleLevel(currentUserRole, roles), [currentUserRole, roles]);
     const isStaffUser = currentUserLevel <= 1;
     const myMemberId = loggedInUserObj?.id || session?.memberId || currentPicId || '';
+
+    // Otorisasi Chat Bebie khusus untuk level Leader (bukan untuk Staff)
+    const canAccessBebieChat = !isStaffUser && currentUserRole !== 'Staff' && (hasPermission(loggedInUserObj || session, 'chat.bebie', roles) || currentUserLevel >= 2);
+
+    useEffect(() => {
+        if (view === 'chat_bebie' && !canAccessBebieChat && session) {
+            setView('dashboard');
+        }
+    }, [view, canAccessBebieChat, session]);
 
     // Auto set default PIC filter ke diri sendiri khusus untuk role Staff
     const hasInitializedStaffPicRef = useRef(false);
@@ -9459,7 +9555,8 @@ export default function TaskManagerApp() {
             department: department || null,
             role: role || 'Staff',
             position: role || 'Staff',
-            color: randomColor
+            color: randomColor,
+            can_access_bigquery: Boolean(memberData.can_access_bigquery)
         };
 
         const insertPayload = {
@@ -9469,7 +9566,8 @@ export default function TaskManagerApp() {
             position: newMember.position,
             division: newMember.division,
             role: newMember.role,
-            color: newMember.color
+            color: newMember.color,
+            can_access_bigquery: newMember.can_access_bigquery
         };
         if (newMember.whatsapp_number) {
             insertPayload.whatsapp_number = newMember.whatsapp_number;
@@ -9479,6 +9577,11 @@ export default function TaskManagerApp() {
         }
 
         let { error } = await supabase.from('members').insert(insertPayload);
+        if (error && (error.code === '42703' || (error.message && error.message.includes('can_access_bigquery')))) {
+            delete insertPayload.can_access_bigquery;
+            const retry = await supabase.from('members').insert(insertPayload);
+            error = retry.error;
+        }
         if (error && (error.code === '42703' || (error.message && error.message.includes('whatsapp_number')))) {
             delete insertPayload.whatsapp_number;
             const retry = await supabase.from('members').insert(insertPayload);
@@ -9725,7 +9828,7 @@ export default function TaskManagerApp() {
 
     const handleSelectProject = (projectId) => {
         setActiveProject(projectId);
-        if (view === 'members' || view === 'settings' || view === 'dashboard' || view === 'notes' || view === 'schedule_meeting' || view === 'schedule_worksheet' || view === 'all_calendar') setView('table');
+        if (view === 'members' || view === 'settings' || view === 'dashboard' || view === 'notes' || view === 'schedule_meeting' || view === 'schedule_worksheet' || view === 'all_calendar' || view === 'chat_bebie') setView('table');
         closeMobileSidebar();
     };
 
@@ -9981,6 +10084,34 @@ export default function TaskManagerApp() {
                                 </span>
                             )}
                         </button>
+
+                        {/* Menu: Chat Bebie (Khusus Leader) */}
+                        {canAccessBebieChat && (
+                            <button
+                                onClick={() => {
+                                    setActiveProject('');
+                                    navigateView('chat_bebie');
+                                }}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl text-sm font-medium transition-all ${
+                                    view === 'chat_bebie'
+                                        ? 'bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-indigo-500/10 text-pink-700 font-semibold shadow-xs border border-pink-200/60'
+                                        : 'text-slate-600 hover:bg-white/55 hover:text-slate-900'
+                                }`}
+                            >
+                                <div className="flex items-center space-x-3 min-w-0">
+                                    <span className="w-7 h-7 rounded-xl flex items-center justify-center text-xs shrink-0 bg-gradient-to-tr from-pink-500 to-rose-400 text-white shadow-2xs">
+                                        <i className="fa-solid fa-wand-magic-sparkles"></i>
+                                    </span>
+                                    <div className="flex flex-col items-start leading-tight min-w-0">
+                                        <span className="truncate">Chat Bebie</span>
+                                        <span className="text-[10px] text-pink-600 font-medium">Beauty Bestie AI</span>
+                                    </div>
+                                </div>
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-pink-100 text-pink-700 uppercase tracking-wider">
+                                    AI
+                                </span>
+                            </button>
+                        )}
                     </nav>
 
                     <div className="px-4 mb-2 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider group">
@@ -10142,6 +10273,15 @@ export default function TaskManagerApp() {
                                         <i className="fa-regular fa-calendar-days text-pink-500"></i>
                                         <span className="font-medium text-gray-800">Semua Kalender</span>
                                     </>
+                                ) : view === 'chat_bebie' ? (
+                                    <>
+                                        <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-pink-100 text-pink-600">
+                                            <i className="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
+                                        </span>
+                                        <span className="font-semibold text-slate-800">Chat Bebie</span>
+                                        <span className="text-gray-300">/</span>
+                                        <span className="text-xs text-pink-600 font-medium">Beauty Bestie AI</span>
+                                    </>
                                 ) : (view === 'members' || view === 'settings') ? (
                                     <>
                                         <i className="fa-solid fa-sliders text-emerald-600"></i>
@@ -10236,7 +10376,18 @@ export default function TaskManagerApp() {
                         </div>
                     </header>
 
-                    <main className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-8 custom-scrollbar">
+                    <main className={`flex-1 ${view === 'chat_bebie' ? 'p-2 sm:p-4 lg:p-6 flex flex-col overflow-hidden min-h-0' : 'overflow-y-auto p-4 sm:p-5 lg:p-8 custom-scrollbar'}`}>
+                        {view === 'chat_bebie' && (
+                            <div className="w-full flex-1 min-h-0 flex flex-col animate-fade-in">
+                                <BebieChatView
+                                    session={session}
+                                    currentUser={loggedInUserObj || session}
+                                    isEmbedded={true}
+                                    onBack={() => navigateView('dashboard')}
+                                />
+                            </div>
+                        )}
+
                         {view === 'dashboard' && (
                             <MainDashboard
                                 tasks={filteredTasks}
@@ -10428,6 +10579,7 @@ export default function TaskManagerApp() {
                                 onAddMember={handleAddMember}
                                 onUpdateMember={handleUpdateMember}
                                 onDeleteMember={handleDeleteMember}
+                                onToggleBigQueryAccess={handleToggleBigQueryAccess}
                                 onMigrateMember={handleOpenMigrationModal}
                                 onToggleMemberStatus={handleToggleMemberStatus}
                                 onResetPassword={handleResetPassword}
