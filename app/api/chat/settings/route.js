@@ -7,6 +7,16 @@ import {
 
 export const maxDuration = 30;
 
+export const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-session-member-id, x-session-email, x-api-key, x-endpoint-url, x-model-name',
+};
+
+export async function OPTIONS() {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function GET(req) {
     try {
         const memberId = req.headers.get('x-session-member-id');
@@ -33,9 +43,9 @@ export async function GET(req) {
             userName: member?.name || null,
             updatedAt: globalCfg.updatedAt,
             updatedBy: globalCfg.updatedBy,
-        });
+        }, { headers: CORS_HEADERS });
     } catch (err) {
-        return Response.json({ ok: false, error: err.message }, { status: 500 });
+        return Response.json({ ok: false, error: err.message }, { status: 500, headers: CORS_HEADERS });
     }
 }
 
@@ -48,14 +58,14 @@ export async function POST(req) {
         if (!member) {
             return Response.json(
                 { ok: false, error: 'Akses ditolak: Anda harus login ke dashboard terlebih dahulu.' },
-                { status: 401 }
+                { status: 401, headers: CORS_HEADERS }
             );
         }
 
         if (!isDireksiOrSuperuser(member.role)) {
             return Response.json(
                 { ok: false, error: 'Akses ditolak: Hanya level Direksi atau Super User yang dapat mengubah pengaturan provider global.' },
-                { status: 403 }
+                { status: 403, headers: CORS_HEADERS }
             );
         }
 
@@ -74,8 +84,9 @@ export async function POST(req) {
             ok: true,
             message: 'Pengaturan provider global berhasil disimpan dan berlaku untuk semua pengguna.',
             settings: updated,
-        });
+        }, { headers: CORS_HEADERS });
     } catch (err) {
-        return Response.json({ ok: false, error: err.message }, { status: 500 });
+        return Response.json({ ok: false, error: err.message }, { status: 500, headers: CORS_HEADERS });
     }
 }
+

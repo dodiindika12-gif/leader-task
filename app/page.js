@@ -5884,7 +5884,7 @@ const LoginScreen = ({ onLoginSuccess }) => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-pink-50/80 via-slate-50 to-purple-50/60 flex items-center justify-center p-4">
+        <div className="app-container-root bg-gradient-to-br from-pink-50/80 via-slate-50 to-purple-50/60 flex items-center justify-center p-4">
             <div className="bg-white p-7 sm:p-8 rounded-3xl shadow-2xl max-w-sm w-full border border-pink-100/80">
                 <div className="text-center mb-6">
                     <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-pink-600 via-pink-500 to-rose-400 p-0.5 shadow-lg shadow-pink-500/25 mx-auto mb-3.5 flex items-center justify-center">
@@ -8542,7 +8542,7 @@ export default function TaskManagerApp() {
 
     if (!isMounted) {
         return (
-            <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-600 gap-4">
+            <div className="app-container-root w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-600 gap-4">
                 <div className="w-14 h-14 relative flex items-center justify-center">
                     <div className="absolute inset-0 rounded-2xl border-3 border-pink-500/20 border-t-pink-600 animate-spin"></div>
                     <img src="/Logo%20Beauty.png" alt="Busana" className="w-8 h-8 object-contain" />
@@ -9912,8 +9912,8 @@ export default function TaskManagerApp() {
     const currentUserName = loggedInUserObj?.name || session?.name || (session?.role === 'Super User' ? 'Dodi' : (session?.email ? session.email.split('@')[0] : 'Dodi'));
 
     return (
-        <div className="min-h-screen bg-[linear-gradient(135deg,#ede9fe_0%,#e0f2fe_35%,#fce7f3_65%,#dbeafe_100%)] p-0 lg:p-3 font-sans text-slate-900">
-            <div className="relative flex h-screen lg:h-[calc(100vh-1.5rem)] w-full max-w-[1720px] mx-auto overflow-hidden bg-white/60 border border-white/70 shadow-2xl backdrop-blur-xl lg:rounded-[32px]">
+        <div className="app-container-root bg-[linear-gradient(135deg,#ede9fe_0%,#e0f2fe_35%,#fce7f3_65%,#dbeafe_100%)] p-0 lg:p-3 font-sans text-slate-900 flex flex-col justify-center">
+            <div className="relative flex app-card-container w-full max-w-[1720px] mx-auto overflow-hidden bg-white/60 border border-white/70 shadow-2xl backdrop-blur-xl lg:rounded-[32px]">
                 {isSidebarOpen && (
                     <button
                         type="button"

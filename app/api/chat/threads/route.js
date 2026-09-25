@@ -1,6 +1,16 @@
 import { verifyMember } from '@/lib/chat-memory';
 import { listUserThreads, saveUserThread } from '@/lib/chat-threads';
 
+export const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-session-member-id, x-session-email, x-api-key, x-endpoint-url, x-model-name',
+};
+
+export async function OPTIONS() {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function GET(req) {
     try {
         const memberId = req.headers.get('x-session-member-id');
@@ -8,15 +18,15 @@ export async function GET(req) {
         const member = await verifyMember({ memberId, email });
 
         if (!member) {
-            return Response.json({ error: 'Sesi tidak valid atau telah berakhir.' }, { status: 401 });
+            return Response.json({ error: 'Sesi tidak valid atau telah berakhir.' }, { status: 401, headers: CORS_HEADERS });
         }
 
         if (member.role === 'Staff') {
-            return Response.json({ error: 'Akses Chat Bebie hanya untuk tingkatan Leader.' }, { status: 403 });
+            return Response.json({ error: 'Akses Chat Bebie hanya untuk tingkatan Leader.' }, { status: 403, headers: CORS_HEADERS });
         }
 
         const threads = await listUserThreads(member.id);
-        return Response.json({ ok: true, threads });
+        return Response.json({ ok: true, threads }, { headers: CORS_HEADERS });
     } catch (err) {
         if (err.code === 'TABLE_NOT_FOUND') {
             return Response.json({
@@ -24,9 +34,9 @@ export async function GET(req) {
                 code: 'TABLE_NOT_FOUND',
                 error: 'Tabel task_leader.chat_threads belum dibuat di database Supabase.',
                 threads: [],
-            }, { status: 200 }); // Return status 200 with code so frontend can fallback gracefully to local storage
+            }, { status: 200, headers: CORS_HEADERS }); // Return status 200 with code so frontend can fallback gracefully to local storage
         }
-        return Response.json({ ok: false, error: err.message }, { status: 500 });
+        return Response.json({ ok: false, error: err.message }, { status: 500, headers: CORS_HEADERS });
     }
 }
 
@@ -37,11 +47,11 @@ export async function POST(req) {
         const member = await verifyMember({ memberId, email });
 
         if (!member) {
-            return Response.json({ error: 'Sesi tidak valid.' }, { status: 401 });
+            return Response.json({ error: 'Sesi tidak valid.' }, { status: 401, headers: CORS_HEADERS });
         }
 
         if (member.role === 'Staff') {
-            return Response.json({ error: 'Akses Chat Bebie hanya untuk tingkatan Leader.' }, { status: 403 });
+            return Response.json({ error: 'Akses Chat Bebie hanya untuk tingkatan Leader.' }, { status: 403, headers: CORS_HEADERS });
         }
 
         const body = await req.json();
@@ -54,15 +64,16 @@ export async function POST(req) {
             messages,
         });
 
-        return Response.json({ ok: true, thread: saved });
+        return Response.json({ ok: true, thread: saved }, { headers: CORS_HEADERS });
     } catch (err) {
         if (err.code === 'TABLE_NOT_FOUND') {
             return Response.json({
                 ok: false,
                 code: 'TABLE_NOT_FOUND',
                 error: 'Tabel belum ada di Supabase, silakan jalankan sql/create_chat_threads.sql',
-            }, { status: 200 });
+            }, { status: 200, headers: CORS_HEADERS });
         }
-        return Response.json({ ok: false, error: err.message }, { status: 500 });
+        return Response.json({ ok: false, error: err.message }, { status: 500, headers: CORS_HEADERS });
     }
 }
+

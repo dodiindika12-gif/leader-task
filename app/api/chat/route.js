@@ -14,6 +14,16 @@ import { generateAgentFile } from '@/lib/file-generator';
 
 export const maxDuration = 180;
 
+export const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-session-member-id, x-session-email, x-api-key, x-endpoint-url, x-model-name',
+};
+
+export async function OPTIONS() {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
 import { runBigQueryQuery, sanitizeBigQueryRows } from '@/lib/bigquery';
 
 function loadBigQueryGuide() {
@@ -200,7 +210,7 @@ export async function POST(req) {
         if (!member) {
             return Response.json(
                 { error: 'Chat Data wajib memakai login dashboard utama. Buka halaman utama dan masuk dulu, lalu kembali ke sini.' },
-                { status: 401 }
+                { status: 401, headers: CORS_HEADERS }
             );
         }
 
@@ -208,7 +218,7 @@ export async function POST(req) {
         if (member.role === 'Staff') {
             return Response.json(
                 { error: 'Akses Chat Bebie hanya diperuntukkan bagi tingkatan Leader (Koordinator, SPV, Manager, Direksi).' },
-                { status: 403 }
+                { status: 403, headers: CORS_HEADERS }
             );
         }
 
@@ -226,7 +236,7 @@ export async function POST(req) {
         if (!apiKey) {
             return Response.json(
                 { error: 'API Key provider belum diatur oleh Direksi/Super User.' },
-                { status: 400 }
+                { status: 400, headers: CORS_HEADERS }
             );
         }
 
@@ -244,10 +254,14 @@ export async function POST(req) {
         // ===== Sanitasi dan pemrosesan pesan (gambar vision vs dokumen teks/Excel) =====
         const processedMessages = await Promise.all(
             (messages || []).map(async (msg) => {
-                if (!msg || !Array.isArray(msg.parts)) return msg;
+                if (!msg) return msg;
+
+                const inputParts = Array.isArray(msg.parts) && msg.parts.length > 0
+                    ? msg.parts
+                    : [{ type: 'text', text: msg.content || '' }];
 
                 const newParts = [];
-                for (const part of msg.parts) {
+                for (const part of inputParts) {
                     // Mencegah crash jika part kosong atau tidak memiliki properti type
                     if (!part || !part.type) continue;
 
@@ -433,13 +447,14 @@ export async function POST(req) {
         });
 
         return result.toUIMessageStreamResponse({
+            headers: CORS_HEADERS,
             onError: (err) => String(err?.message || err),
         });
     } catch (error) {
         console.error('Chat API Error:', error);
         return Response.json(
             { error: error.message || 'Terjadi kesalahan saat memproses chat.' },
-            { status: 500 }
+            { status: 500, headers: CORS_HEADERS }
         );
     }
 }
