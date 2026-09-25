@@ -1925,14 +1925,79 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                 </div>
             </div>
 
-            {todoProgress.total > 0 && (
-                <div className="mb-3 ml-6 flex items-center gap-2">
-                    <div className="relative flex items-center justify-center shrink-0">
-                        <ProgressRing percent={Math.round((todoProgress.done / todoProgress.total) * 100)} size={26} stroke={3} color="#059669" trackColor="#d1fae5" />
+            {todoProgress.total > 0 && (() => {
+                const todos = Array.isArray(task.todos) ? task.todos.filter(t => t && !t.isMetaTask && t.id !== '__meta_task_props__') : [];
+                const visibleCount = 4;
+                const visibleTodos = todos.slice(0, visibleCount);
+                const remaining = todos.length - visibleCount;
+                const percent = Math.round((todoProgress.done / todoProgress.total) * 100);
+                return (
+                    <div className="mb-2 ml-6 rounded-xl bg-slate-50/80 border border-slate-200/60 px-2.5 py-2 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1.5">
+                                <i className="fa-regular fa-square-check text-emerald-500"></i>
+                                Sub-kegiatan
+                            </span>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${percent === 100 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                                {todoProgress.done}/{todoProgress.total}
+                            </span>
+                        </div>
+                        <div className="w-full bg-slate-200/70 rounded-full h-1">
+                            <div
+                                className={`h-1 rounded-full transition-all ${percent === 100 ? 'bg-emerald-500' : percent > 0 ? 'bg-indigo-500' : 'bg-slate-300'}`}
+                                style={{ width: `${percent}%` }}
+                            />
+                        </div>
+                        <div className="space-y-0.5">
+                            {visibleTodos.map(todo => {
+                                const todoPic = todo.picId ? members.find(m => m.id === todo.picId) : null;
+                                const todoDl = todo.deadline;
+                                let todoOverdue = false;
+                                let todoToday = false;
+                                let todoDlLabel = '';
+                                if (todoDl) {
+                                    const dlDate = new Date(todoDl + 'T00:00:00');
+                                    const now = new Date(); now.setHours(0,0,0,0);
+                                    todoDlLabel = dlDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+                                    if (!todo.done) {
+                                        if (dlDate < now) todoOverdue = true;
+                                        else if (dlDate.getTime() === now.getTime()) todoToday = true;
+                                    }
+                                }
+                                return (
+                                    <div key={todo.id} className={`flex items-center gap-1.5 py-0.5 text-[11px] ${todo.done ? 'text-slate-400' : 'text-slate-700'}`}>
+                                        <i className={`${todo.done ? 'fa-solid fa-square-check text-emerald-500' : 'fa-regular fa-square text-slate-400'} text-[10px] shrink-0`}></i>
+                                        <span className={`flex-1 truncate leading-tight ${todo.done ? 'line-through' : ''}`}>{todo.title}</span>
+                                        {todoDl && (
+                                            <span className={`text-[9px] font-medium shrink-0 flex items-center gap-0.5 ${todoOverdue ? 'text-rose-600' : todoToday ? 'text-amber-600' : 'text-slate-400'}`} title={todoDl}>
+                                                <i className="fa-regular fa-calendar text-[8px]"></i>
+                                                {todoDlLabel}
+                                            </span>
+                                        )}
+                                        {todoPic && (
+                                            <span
+                                                className="w-4 h-4 rounded-full text-white flex items-center justify-center text-[8px] font-bold shrink-0"
+                                                style={{ backgroundColor: todoPic.color || '#6366f1' }}
+                                                title={todoPic.name}
+                                            >
+                                                {todoPic.name?.[0] || '?'}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            {remaining > 0 && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+                                    className="text-[10px] text-indigo-500 hover:text-indigo-700 font-medium pl-4 transition-colors"
+                                >
+                                    +{remaining} lainnya...
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <span className="text-[10px] text-gray-500"><i className="fa-regular fa-square-check mr-1"></i>{todoProgress.done}/{todoProgress.total} sub-kegiatan</span>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Memo Preview Snippet */}
             {hasMemo && (
@@ -8635,7 +8700,7 @@ export default function TaskManagerApp() {
 
         setProjects(prev => [...prev, newProject]);
         setActiveProject(newProject.id);
-        if (view === 'members' || view === 'settings' || view === 'dashboard' || view === 'notes' || view === 'calendar' || view === 'all_calendar' || view === 'schedule_meeting' || view === 'schedule_worksheet') setView('table');
+        if (view === 'members' || view === 'settings' || view === 'dashboard' || view === 'notes' || view === 'calendar' || view === 'all_calendar' || view === 'schedule_meeting' || view === 'schedule_worksheet') setView('kanban');
         setIsCreateModalOpen(false);
     };
 
@@ -9828,7 +9893,7 @@ export default function TaskManagerApp() {
 
     const handleSelectProject = (projectId) => {
         setActiveProject(projectId);
-        if (view === 'members' || view === 'settings' || view === 'dashboard' || view === 'notes' || view === 'schedule_meeting' || view === 'schedule_worksheet' || view === 'all_calendar' || view === 'chat_bebie') setView('table');
+        if (view === 'members' || view === 'settings' || view === 'dashboard' || view === 'notes' || view === 'schedule_meeting' || view === 'schedule_worksheet' || view === 'all_calendar' || view === 'chat_bebie') setView('kanban');
         closeMobileSidebar();
     };
 
@@ -10184,34 +10249,7 @@ export default function TaskManagerApp() {
                                     </div>
                                 </div>
 
-                                {activeProject === project.id && (view === 'table' || view === 'kanban' || view === 'timeline' || view === 'calendar') && (
-                                    <div className="ml-7 mt-1 space-y-1 border-l border-white/70 pl-2">
-                                        <button
-                                            onClick={() => navigateView('table')}
-                                            className={`w-full flex items-center space-x-2 px-2 py-1.5 rounded-xl text-xs font-medium transition-colors ${view === 'table' ? 'text-slate-950 bg-white/80 font-bold' : 'text-slate-500 hover:text-slate-800 hover:bg-white/55'}`}
-                                        >
-                                            <i className="fa-solid fa-list w-4"></i> Table
-                                        </button>
-                                        <button
-                                            onClick={() => navigateView('kanban')}
-                                            className={`w-full flex items-center space-x-2 px-2 py-1.5 rounded-xl text-xs font-medium transition-colors ${view === 'kanban' ? 'text-slate-950 bg-white/80 font-bold' : 'text-slate-500 hover:text-slate-800 hover:bg-white/55'}`}
-                                        >
-                                            <i className="fa-solid fa-table-columns w-4"></i> Board
-                                        </button>
-                                        <button
-                                            onClick={() => navigateView('timeline')}
-                                            className={`w-full flex items-center space-x-2 px-2 py-1.5 rounded-xl text-xs font-medium transition-colors ${view === 'timeline' ? 'text-slate-950 bg-white/80 font-bold' : 'text-slate-500 hover:text-slate-800 hover:bg-white/55'}`}
-                                        >
-                                            <i className="fa-solid fa-timeline w-4 text-indigo-500"></i> Timeline
-                                        </button>
-                                        <button
-                                            onClick={() => navigateView('calendar')}
-                                            className={`w-full flex items-center space-x-2 px-2 py-1.5 rounded-xl text-xs font-medium transition-colors ${view === 'calendar' ? 'text-slate-950 bg-white/80 font-bold' : 'text-slate-500 hover:text-slate-800 hover:bg-white/55'}`}
-                                        >
-                                            <i className="fa-regular fa-calendar w-4 text-pink-500"></i> Calendar
-                                        </button>
-                                    </div>
-                                )}
+
                             </div>
                         );
                     })}
@@ -10661,21 +10699,89 @@ export default function TaskManagerApp() {
                                     onReset={resetTaskControls}
                                     currentMemberId={myMemberId}
                                 />
-                                <KanbanView
-                                    tasks={currentTasks}
-                                    members={members}
-                                    projects={projects}
-                                    onAdd={handleAddTask}
-                                    onEdit={handleEditTask}
-                                    onDelete={handleDeleteTask}
-                                    onUpdatePriority={handleUpdatePriority}
-                                    onUpdateStatus={handleUpdateStatus}
-                                    onUpdateTask={handleSaveEditedTask}
-                                    projectAccess={projectAccess}
-                                    unreadTaskIds={notifications?.unreadTaskIds}
-                                />
+                                <div className="flex gap-4 h-full">
+                                    <div className="flex-1 min-w-0 overflow-x-auto">
+                                        <KanbanView
+                                            tasks={currentTasks}
+                                            members={members}
+                                            projects={projects}
+                                            onAdd={handleAddTask}
+                                            onEdit={handleEditTask}
+                                            onDelete={handleDeleteTask}
+                                            onUpdatePriority={handleUpdatePriority}
+                                            onUpdateStatus={handleUpdateStatus}
+                                            onUpdateTask={handleSaveEditedTask}
+                                            projectAccess={projectAccess}
+                                            unreadTaskIds={notifications?.unreadTaskIds}
+                                        />
+                                    </div>
+
+                                    {/* Folder / Section Panel – Right Side */}
+                                    {projectFoldersList.length > 1 && (
+                                        <div className="hidden lg:flex flex-col w-52 shrink-0 bg-white/60 backdrop-blur-sm rounded-2xl border border-slate-200/70 p-3 self-start sticky top-0">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                                    <i className="fa-solid fa-folder-tree text-indigo-400"></i>
+                                                    Sections
+                                                </h4>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <button
+                                                    onClick={() => setFolderFilter('all')}
+                                                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
+                                                        folderFilter === 'all'
+                                                            ? 'bg-indigo-600 text-white shadow-sm'
+                                                            : 'text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-xs'
+                                                    }`}
+                                                >
+                                                    <span className="flex items-center gap-2 truncate">
+                                                        <i className="fa-solid fa-layer-group text-[10px]"></i>
+                                                        Semua
+                                                    </span>
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                                                        folderFilter === 'all'
+                                                            ? 'bg-white/25 text-white'
+                                                            : 'bg-slate-100 text-slate-500'
+                                                    }`}>
+                                                        {projectTasks.length}
+                                                    </span>
+                                                </button>
+                                                {projectFoldersList.map(folder => {
+                                                    const count = projectTasks.filter(t => (t.folder || 'General') === folder).length;
+                                                    const isActive = folderFilter === folder;
+                                                    return (
+                                                        <button
+                                                            key={folder}
+                                                            onClick={() => setFolderFilter(isActive ? 'all' : folder)}
+                                                            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
+                                                                isActive
+                                                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                                                    : 'text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-xs'
+                                                            }`}
+                                                        >
+                                                            <span className="flex items-center gap-2 truncate">
+                                                                <i className={`fa-solid fa-folder text-[10px] ${isActive ? 'text-white' : 'text-slate-400'}`}></i>
+                                                                <span className="truncate">{folder}</span>
+                                                            </span>
+                                                            {count > 0 && (
+                                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                                                                    isActive
+                                                                        ? 'bg-white/25 text-white'
+                                                                        : 'bg-slate-100 text-slate-500'
+                                                                }`}>
+                                                                    {count}
+                                                                </span>
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
+
 
                         {view === 'table' && (
                             <div className="w-full animate-fade-in">
