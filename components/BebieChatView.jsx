@@ -877,10 +877,11 @@ function MemoryPanel({ sessionMember, sessionHeaders, onToast }) {
     const loadMemories = useCallback(async () => {
         try {
             setLoading(true);
-            const res = await fetch('/api/chat/memories', { headers: sessionHeaders });
+            const res = await fetch('/api/chat/memory', { headers: sessionHeaders });
             if (res.ok) {
                 const data = await res.json();
-                if (data.ok) setMemories(data.memories || []);
+                const list = Array.isArray(data) ? data : (data.memories || []);
+                setMemories(list);
             }
         } catch (err) {
             console.warn('Gagal load memori:', err);
@@ -893,10 +894,11 @@ function MemoryPanel({ sessionMember, sessionHeaders, onToast }) {
         let isMounted = true;
         const initMemories = async () => {
             try {
-                const res = await fetch('/api/chat/memories', { headers: sessionHeaders });
+                const res = await fetch('/api/chat/memory', { headers: sessionHeaders });
                 if (res.ok && isMounted) {
                     const data = await res.json();
-                    if (data.ok) setMemories(data.memories || []);
+                    const list = Array.isArray(data) ? data : (data.memories || []);
+                    setMemories(list);
                 }
             } catch (err) {
                 console.warn('Gagal load memori:', err);
@@ -912,18 +914,18 @@ function MemoryPanel({ sessionMember, sessionHeaders, onToast }) {
         e.preventDefault();
         if (!newContent.trim()) return;
         try {
-            const res = await fetch('/api/chat/memories', {
+            const res = await fetch('/api/chat/memory', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...sessionHeaders },
                 body: JSON.stringify({ content: newContent.trim(), scope: newScope }),
             });
-            const d = await res.json();
-            if (d.ok) {
+            const d = await res.json().catch(() => ({}));
+            if (res.ok && (d.ok || d.memory)) {
                 setNewContent('');
                 loadMemories();
                 onToast('Memori berhasil ditambahkan.');
             } else {
-                onToast('Gagal: ' + d.error);
+                onToast('Gagal: ' + (d.error || 'Gagal menambahkan memori'));
             }
         } catch (err) {
             onToast('Gagal: ' + err.message);
@@ -932,7 +934,7 @@ function MemoryPanel({ sessionMember, sessionHeaders, onToast }) {
 
     const handleDelete = async (id) => {
         try {
-            const res = await fetch(`/api/chat/memories/${id}`, {
+            const res = await fetch(`/api/chat/memory/${encodeURIComponent(id)}`, {
                 method: 'DELETE',
                 headers: sessionHeaders,
             });
@@ -1013,7 +1015,8 @@ function SkillPanel({ sessionHeaders, onToast }) {
             const res = await fetch('/api/chat/skills', { headers: sessionHeaders });
             if (res.ok) {
                 const data = await res.json();
-                if (data.ok) setSkills(data.skills || []);
+                const list = Array.isArray(data) ? data : (data.skills || []);
+                setSkills(list);
             }
         } catch (err) {
             console.warn('Gagal load skill:', err);
@@ -1029,7 +1032,8 @@ function SkillPanel({ sessionHeaders, onToast }) {
                 const res = await fetch('/api/chat/skills', { headers: sessionHeaders });
                 if (res.ok && isMounted) {
                     const data = await res.json();
-                    if (data.ok) setSkills(data.skills || []);
+                    const list = Array.isArray(data) ? data : (data.skills || []);
+                    setSkills(list);
                 }
             } catch (err) {
                 console.warn('Gagal load skill:', err);

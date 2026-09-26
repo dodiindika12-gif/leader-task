@@ -32,9 +32,9 @@ export async function GET(req) {
 
     try {
         const skills = await listSkills({ withPending: true });
-        return Response.json({ skills, canManageAll: isExecRole(member.role) });
+        return Response.json({ ok: true, skills, canManageAll: isExecRole(member.role) });
     } catch (err) {
-        return Response.json({ error: err.message }, { status: 500 });
+        return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
 }
 

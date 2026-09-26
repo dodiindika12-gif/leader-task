@@ -31,9 +31,9 @@ export async function GET(req) {
     const scope = searchParams.get('scope') || 'all';
     try {
         const memories = await listMemories({ scope, memberId: member.id });
-        return Response.json({ memories });
+        return Response.json({ ok: true, memories });
     } catch (err) {
-        return Response.json({ error: err.message }, { status: 500 });
+        return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
 }
 
@@ -63,9 +63,9 @@ export async function POST(req) {
             createdBy: member.id,
             confidence: Math.min(Math.max(parseInt(body.confidence, 10) || 5, 1), 10),
         });
-        return Response.json({ memory });
+        return Response.json({ ok: true, memory });
     } catch (err) {
-        return Response.json({ error: err.message }, { status: 500 });
+        return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
 }
 
@@ -94,9 +94,9 @@ export async function PATCH(req) {
             is_active: typeof body.is_active === 'boolean' ? body.is_active : undefined,
             content: typeof body.content === 'string' ? body.content : undefined,
         });
-        return Response.json({ memory: updated });
+        return Response.json({ ok: true, memory: updated });
     } catch (err) {
-        return Response.json({ error: err.message }, { status: 500 });
+        return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
 }
 
@@ -106,7 +106,15 @@ export async function DELETE(req) {
 
     try {
         const { searchParams } = new URL(req.url);
-        const id = searchParams.get('id');
+        let id = searchParams.get('id');
+        if (!id) {
+            try {
+                const body = await req.json();
+                id = body?.id;
+            } catch {
+                // req.json() may fail if no body sent
+            }
+        }
         if (!id) return Response.json({ error: 'id wajib.' }, { status: 400 });
 
         const { listMemories: lm } = await import('@/lib/chat-memory');
@@ -123,6 +131,6 @@ export async function DELETE(req) {
         await deleteMemory(id);
         return Response.json({ ok: true });
     } catch (err) {
-        return Response.json({ error: err.message }, { status: 500 });
+        return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
 }
