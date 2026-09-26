@@ -163,7 +163,7 @@ export function normalizeInlineTables(md) {
 
 function autoLinkFiles(text) {
     if (!text || typeof text !== 'string') return text;
-    return text.replace(/(?:\[([^\]]+)\]\(([^)]+)\))|(?:\*\*)?([a-zA-Z0-9_-]+\.(?:pptx|xlsx|csv|html))(?:\*\*)?/gi, (full, label, url, bareFile) => {
+    return text.replace(/(?:\[([^\]]+)\]\(([^)]+)\))|(?:\*\*)?([a-zA-Z0-9_-]+\.(?:pptx|xlsx|csv|html|pdf))(?:\*\*)?/gi, (full, label, url, bareFile) => {
         if (label && url) return full;
         if (bareFile) {
             return `[Unduh ${bareFile}](/api/chat/files?name=${encodeURIComponent(bareFile)})`;
@@ -213,7 +213,7 @@ function ToolPart({ part }) {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    {formatLabel === 'HTML' ? (
+                    {formatLabel === 'HTML' || formatLabel === 'PDF' ? (
                         <a
                             href={downloadUrl}
                             target="_blank"
@@ -221,13 +221,13 @@ function ToolPart({ part }) {
                             className="flex-1 flex items-center justify-center gap-1.5 text-center py-2 px-3 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
                         >
                             <i className="fa-solid fa-arrow-up-right-from-square text-[11px]" aria-hidden="true"></i>
-                            <span>Buka Laporan</span>
+                            <span>{formatLabel === 'PDF' ? 'Buka PDF' : 'Buka Laporan'}</span>
                         </a>
                     ) : null}
                     <a
                         href={downloadUrl}
                         download={output.fileName}
-                        className={`${formatLabel === 'HTML' ? 'flex-1 bg-slate-900 hover:bg-slate-800' : 'w-full bg-slate-950 hover:bg-pink-600'} flex items-center justify-center gap-1.5 text-center py-2 px-3 rounded-xl text-white text-xs font-bold shadow-xs transition-colors cursor-pointer`}
+                        className={`${(formatLabel === 'HTML' || formatLabel === 'PDF') ? 'flex-1 bg-slate-900 hover:bg-slate-800' : 'w-full bg-slate-950 hover:bg-pink-600'} flex items-center justify-center gap-1.5 text-center py-2 px-3 rounded-xl text-white text-xs font-bold shadow-xs transition-colors cursor-pointer`}
                     >
                         <i className="fa-solid fa-download text-[11px]" aria-hidden="true"></i>
                         <span>Unduh {output.fileName}</span>
@@ -659,7 +659,7 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
                                         );
                                     },
                                     a: ({ href, children, ...props }) => {
-                                        const isFileDownload = href && (href.startsWith('/api/chat/files') || /\.(pptx|xlsx|csv|html)($|\?)/i.test(href));
+                                        const isFileDownload = href && (href.startsWith('/api/chat/files') || /\.(pptx|xlsx|csv|html|pdf)($|\?)/i.test(href));
                                         if (isFileDownload) {
                                             const fn = href.includes('name=')
                                                 ? decodeURIComponent(href.split('name=')[1]?.split('&')[0] || '')
