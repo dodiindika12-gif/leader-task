@@ -8,6 +8,7 @@ import {
     Settings2, Settings, X, Check, Loader2, Feather, ShieldCheck, Database,
     Brain, Zap, Trash2, Plus, Power, GitBranch, LogIn, ArrowLeft, RotateCcw, Lock,
     History, TrendingUp, Store, Sparkles, Target, ArrowUpRight, AlertCircle,
+    CheckSquare, PlusCircle, Users, Tag,
 } from 'lucide-react';
 import ChatMessage from '@/components/ChatMessage';
 import ChatInput from '@/components/ChatInput';
@@ -15,63 +16,63 @@ import ChatHistoryDrawer from '@/components/ChatHistoryDrawer';
 
 const BIGQUERY_SUGGESTED_QUERIES = [
     {
+        title: 'Task Saya yang Berjalan',
+        desc: 'Lihat daftar tugas yang ditugaskan ke saya dan deadline terdekat.',
+        query: 'Bebie, tampilkan daftar task saya yang sedang berjalan dan urutkan berdasarkan deadline terdekat.',
+        icon: CheckSquare,
+        iconBg: 'bg-emerald-100 text-emerald-600',
+    },
+    {
+        title: 'Promo Aktif Hari Ini',
+        desc: 'Cek daftar promo diskon & hadiah yang sedang berjalan di outlet hari ini.',
+        query: 'Bebie, apa saja promo dan diskon yang sedang aktif berjalan di outlet hari ini?',
+        icon: Tag,
+        iconBg: 'bg-rose-100 text-rose-600',
+    },
+    {
         title: 'Pencapaian Omset',
         desc: 'Berapa pencapaian penjualan bulan ini dibanding target per cabang?',
         query: 'Berapa pencapaian omset bulan ini dibanding target per cabang?',
         icon: TrendingUp,
-        iconBg: 'bg-rose-100 text-rose-600',
+        iconBg: 'bg-indigo-100 text-indigo-600',
     },
     {
         title: 'Peringkat Cabang',
         desc: 'Cabang mana dengan performa penjualan tertinggi saat ini?',
         query: 'Tampilkan ranking cabang berdasarkan penjualan bulan ini.',
         icon: Store,
-        iconBg: 'bg-indigo-100 text-indigo-600',
-    },
-    {
-        title: 'Top Produk & Layanan',
-        desc: 'Apa 5 treatment dan produk terlaris di seluruh outlet bulan ini?',
-        query: 'Apa 5 treatment dan produk terlaris di seluruh outlet bulan ini?',
-        icon: Sparkles,
         iconBg: 'bg-amber-100 text-amber-600',
-    },
-    {
-        title: 'Evaluasi Under-Target',
-        desc: 'Daftar outlet yang pencapaian targetnya masih di bawah 80%.',
-        query: 'Tampilkan cabang-cabang yang pencapaian targetnya masih di bawah 80%.',
-        icon: Target,
-        iconBg: 'bg-emerald-100 text-emerald-600',
     },
 ];
 
 const GENERAL_SUGGESTED_QUERIES = [
     {
-        title: 'Format Presentasi Slide',
-        desc: 'Buatkan kerangka slide presentasi HTML atau PPTX yang profesional.',
-        query: 'Buatkan kerangka presentasi PPTX eksekutif 5 slide untuk evaluasi strategi operasional cabang.',
-        icon: Target,
-        iconBg: 'bg-indigo-100 text-indigo-600',
+        title: 'Task Saya yang Berjalan',
+        desc: 'Lihat daftar tugas yang ditugaskan ke saya dan deadline terdekat.',
+        query: 'Bebie, tampilkan daftar task saya yang sedang berjalan dan urutkan berdasarkan deadline terdekat.',
+        icon: CheckSquare,
+        iconBg: 'bg-emerald-100 text-emerald-600',
     },
     {
-        title: 'Rangkum Rapat & Notulensi',
-        desc: 'Bantu rapikan poin penting dan action items dari meeting tim.',
-        query: 'Bantu saya merapikan catatan rapat ini menjadi action plan dan daftar PIC yang terstruktur.',
-        icon: Sparkles,
+        title: 'Promo Aktif Hari Ini',
+        desc: 'Cek daftar promo diskon & hadiah yang sedang aktif di semua cabang outlet.',
+        query: 'Bebie, apa saja promo dan diskon yang sedang aktif berjalan di outlet hari ini?',
+        icon: Tag,
         iconBg: 'bg-rose-100 text-rose-600',
     },
     {
-        title: 'Ide Peningkatan Layanan',
-        desc: 'Brainstorming ide promosi dan peningkatan kepuasan customer.',
-        query: 'Berikan 5 ide strategi kreatif untuk meningkatkan repeat order treatment kecantikan di klinik.',
-        icon: TrendingUp,
-        iconBg: 'bg-amber-100 text-amber-600',
+        title: 'Buatkan Task Baru',
+        desc: 'Minta Bebie bantu buatkan task baru lengkap dengan konfirmasi PIC dan deadline.',
+        query: 'Bebie, bantu saya buatkan task baru untuk tim di project kami.',
+        icon: PlusCircle,
+        iconBg: 'bg-indigo-100 text-indigo-600',
     },
     {
-        title: 'SOP & Template Rekap',
-        desc: 'Susun draf format rekapitulasi kerja mingguan yang rapi.',
-        query: 'Buatkan template rekapitulasi kinerja mingguan tim dalam format tabel yang rapi.',
-        icon: Store,
-        iconBg: 'bg-emerald-100 text-emerald-600',
+        title: 'Pantau Task Tim',
+        desc: 'Cek progress pekerjaan tim saya di workspace dan project yang saya ikuti.',
+        query: 'Bagaimana status dan progres task tim saya di project yang saya ikuti saat ini?',
+        icon: Users,
+        iconBg: 'bg-amber-100 text-amber-600',
     },
 ];
 
@@ -560,8 +561,8 @@ export default function BebieChatView({
                         </h2>
                         <p className="text-xs sm:text-[13px] text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
                             {canUseBigQuery
-                                ? 'Bebie siap menganalisis data penjualan outlet, pencapaian target cabang, dan performa produk langsung dari Google BigQuery.'
-                                : 'Bebie siap membantu menyusun format laporan, presentasi PPTX/HTML eksekutif, strategi operasional, dan merapikan catatan kerja tim.'}
+                                ? 'Bebie siap membantu mengelola task tim, memantau tugas berjalan, membuat task baru, serta menganalisis performa cabang dari BigQuery.'
+                                : 'Bebie siap menjadi personal assistant kamu: membaca task pribadi & tim, bantu buat tugas baru, update status, dan menyusun laporan kerja.'}
                         </p>
 
                         {!canUseBigQuery && (

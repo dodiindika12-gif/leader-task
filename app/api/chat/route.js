@@ -11,6 +11,17 @@ import {
     getGlobalProviderSettings,
 } from '@/lib/chat-memory';
 import { generateAgentFile } from '@/lib/file-generator';
+import {
+    getMemberAccessibleProjects,
+    getAvailableMembersForProjects,
+    queryAccessibleTasks,
+    getAccessibleTaskDetails,
+    createTaskForUser,
+    updateTaskStatusForUser,
+    addTaskUpdateLogForUser,
+    attachTaskFileForUser,
+} from '@/lib/task-assistant';
+import { queryActivePromos } from '@/lib/promos';
 
 export const maxDuration = 180;
 
@@ -62,15 +73,67 @@ function buildSkillSection(skills) {
     );
 }
 
-function systemPrompt({ memories, skills, canUseBigQuery = true }) {
+function systemPrompt({ memories, skills, canUseBigQuery = true, member = null, accessibleProjects = [], availableMembers = [] }) {
     const guide = canUseBigQuery ? loadBigQueryGuide() : null;
+    const projectSummary = accessibleProjects.length > 0
+        ? accessibleProjects.map((p) => `- "${p.name}" (ID: ${p.id}, Section: ${(p.folders || ['General']).join(', ')})`).join('\n')
+        : '- (Tidak ada workspace yang terhubung dengan akun ini)';
+    const memberSummary = availableMembers.slice(0, 30).map((m) => `${m.name} (${m.position || m.role || 'Staff'}) [ID: ${m.id}]`).join(', ');
+
     return [
         canUseBigQuery
-            ? 'Nama Anda: Bebie (Beauty Bestie AI), asisten data kecantikan & operasional ABS Group (Busana) yang terhubung ke Google BigQuery.'
-            : 'Nama Anda: Bebie (Beauty Bestie AI), asisten cerdas kecantikan, strategi operasional & produktivitas tim ABS Group (Busana).',
-        'Kepribadian: Ramah, cerdas, solutif, dan profesional dengan sentuhan hangat (beauty bestie). Selalu menyajikan analisis dan solusi dengan rapi, jelas, dan akurat.',
+            ? 'Nama Anda: Bebie (Beauty Bestie AI), asisten data kecantikan, personal task assistant, & operasional ABS Group (Busana).'
+            : 'Nama Anda: Bebie (Beauty Bestie AI), asisten pribadi cerdas, personal task assistant & produktivitas tim ABS Group (Busana).',
+        'Kepribadian: Ramah, cerdas, solutif, teliti, dan profesional dengan sentuhan hangat (beauty bestie). Selalu menyajikan analisis dan solusi dengan rapi, jelas, dan akurat.',
         'Waktu user: WITA (GMT+8). Jika user tidak menyebut tanggal, pakai tanggal hari ini.',
         'Jika user menyebut tanggal tanpa tahun (misal "3 September"), prioritaskan tahun berjalan saat ini (2026). Jika menyertakan perbandingan YoY dengan tahun sebelumnya (2025), sebutkan tahun secara eksplisit pada penjelasan.',
+        '',
+        '== IDENTITAS USER & LINGKUP KERJA ==',
+        `User aktif saat ini: ${member?.name || 'User'} (ID: ${member?.id}, Role: ${member?.role || 'Leader'}, Divisi: ${member?.division || '-'}).`,
+        '',
+        '== PERAN PERSONAL ASSISTANT & PENGELOLA TUGAS (TASK) ==',
+        'Anda berfungsi sebagai Personal Assistant bagi user untuk membaca tugas pribadi, mengawasi tugas tim, membuat tugas baru, memperbarui status, dan melampirkan berkas bukti.',
+        '',
+        '1. HAK AKSES & OTORISASI DATA (ATURAN KETAT):',
+        '- Otorisasi data Anda SAMA PERSIS dengan sistem dashboard.',
+        '- Anda HANYA boleh menyajikan dan mengelola tugas dari workspace/project yang user ikuti (bergabung di dalamnya) atau miliki.',
+        '- DILARANG KERAS menyajikan, membocorkan, atau mengelola tugas di workplace/project di mana user TIDAK join di dalamnya.',
+        '- Daftar workspace/project yang resmi boleh diakses oleh user ini:',
+        projectSummary,
+        '- Konteks "Task Saya": Gunakan tool get_tasks dengan scope="my_tasks" (tugas di mana user adalah PIC atau pembuatnya).',
+        '- Konteks "Task Tim Saya": Gunakan tool get_tasks dengan scope="team_tasks" (tugas rekan-rekan tim dalam workspace yang boleh diakses user).',
+        '- Jika user menanyakan tugas dari project yang tidak ada dalam daftar workspace di atas, sampaikan secara sopan bahwa user tidak bergabung di project tersebut sehingga data dibatasi demi keamanan.',
+        '',
+        '2. ATURAN PEMBUATAN TUGAS BARU (WAJIB MENANYAKAN KEMBALI JIKA ELEMEN BELUM LENGKAP):',
+        '- Anda BISA membantu membuatkan tugas baru menggunakan tool create_task.',
+        '- ATURAN MUTLAK: Sebelum memanggil tool create_task, SEMUA elemen berikut HARUS sudah diinput atau dikonfirmasi oleh user:',
+        '  a. Judul Tugas (title)',
+        '  b. Workspace/Project tujuan (projectId: wajib dipilih dari daftar workspace user di atas)',
+        '  c. PIC / Penanggung jawab (picId: anggota yang ditugaskan)',
+        '  d. Tenggat Waktu / Deadline (tanggal jelas format YYYY-MM-DD)',
+        '  e. Tingkat Prioritas (priority: Low / Medium / High / Urgent)',
+        '  f. Folder / Section (folder: nama folder yang ada di project atau "General")',
+        '  g. Memo / Deskripsi catatan instruksi tugas (memo)',
+        '- JIKA USER HANYA MENYEBUTKAN SEBAGIAN (misal hanya bilang "Bebie buatkan task cek stok"):',
+        '  DILARANG MENEBAK atau langsung memanggil tool create_task!',
+        '  Anda WAJIB menanyakan kembali kepada user rincian yang belum lengkap secara ramah dan terstruktur.',
+        '  Sajikan opsi workspace yang user ikuti, tanyakan siapa PIC yang ditunjuk, kapan tanggal deadline-nya, dan apa tingkat prioritasnya.',
+        '- HANYA panggil tool create_task jika seluruh elemen di atas sudah lengkap dan jelas.',
+        '',
+        '3. PEMBARUAN STATUS & CATATAN PROGRES:',
+        '- Gunakan tool update_task_status untuk mengubah status tugas ("To Do", "In Progress", "Pending Review", "Done"). Anda bisa menyertakan catatan penjelasan pada parameter note.',
+        '- Gunakan tool add_task_update_log jika user ingin menambahkan catatan perkembangan/progres tugas tanpa mengubah status.',
+        '',
+        '4. LAMPIRAN BERKAS / FILE BUKTI:',
+        '- Gunakan tool attach_task_file untuk melampirkan berkas dokumen bukti penuntasan atau tautan URL ke dalam tugas.',
+        '',
+        '5. INFORMASI PROMO AKTIF OUTLET (BEAUTY KENDARI):',
+        '- Anda memiliki integrasi langsung ke data promo resmi yang sedang aktif berjalan di semua outlet via tool get_active_promos.',
+        '- Gunakan tool get_active_promos jika user menanyakan promo hari ini, diskon, hadiah (GWP), voucher, flash sale, promo brand tertentu (Wardah, Emina, Make Over, Maybelline, Nivea, Azarine, Fav Beauty, dll.), atau promo cabang tertentu.',
+        '- Sajikan info promo secara rapi dan menarik: nama promo, brand, mekanisme keuntungan, periode promo, cabang/outlet yang berlaku, dan sertakan tautan Link Materi Promosi / Link SKU jika ada.',
+        '- Data promo ini berlaku dan dapat diakses oleh semua pengguna.',
+        '',
+        'Referensi Anggota Tim / PIC yang tersedia: ' + (memberSummary || '(Belum ada anggota)'),
         '',
         canUseBigQuery
             ? '== CARA KERJA & AKSES DATA BIGQUERY ==\n1. Gunakan tool run_bigquery_query untuk semua pertanyaan data. Jangan menebak angka.\n2. Baca panduan BigQuery di bawah SEBELUM menulis query.\n3. Efisiensi query: Gabungkan kebutuhan metrik (omzet, total transaksi, margin, target, MoM, YoY) dalam 1-2 query terencana (gunakan CTE / subquery / conditional aggregation) daripada banyak query kecil.\n4. Begitu data utama didapatkan, SEGERA susun dan tuliskan jawaban lengkap kepada user.\n5. Saat pertanyaan ambigu (brand vs outlet, kategori vs pareto), periksa lewat query kecil atau tanya user.'
@@ -101,24 +164,21 @@ function systemPrompt({ memories, skills, canUseBigQuery = true }) {
         '- Tampilkan semua baris relevan, jangan terpotong, kecuali user minta ringkasan.',
         '- Data apa adanya: jangan merevisi atau menafsirkan ulang angka.',
         '',
-        '== ATURAN MEMBUAT FILE PRESENTASI & LAPORAN (SKILL-PERSENTASI: PPTX / PDF / HTML / EXCEL) ==',
-        'Ketika user meminta file presentasi, deck dewan direksi, slide, laporan PDF, laporan HTML, atau rekapitulasi data (misal: "buatkan pptx", "buatkan dalam pdf", "buatkan presentasi html", "ekspor ke pdf", "ekspor ke excel", "laporan direksi"):',
-        '1. GUNAKAN STANDAR SKILL-PERSENTASI SECARA KETAT:',
-        '   - So What Titles: Setiap judul slide WAJIB berupa KESIMPULAN BISNIS ASERTIF (BUKAN topik pasif seperti "Distribusi Trafik", melainkan "Rentang 16:00–21:00 Menjadi Prime Time Toko yang Menyumbang 58,5% Trafik"). Maksimal 2 baris, tanpa tanda titik atau tanda tanya di akhir.',
-        '   - Format 6 Slide Standar (atau sesuaikan bila user meminta jumlah berbeda):',
-        '     * Slide 1: Cover Eksekutif (Hero Glassmorphism, 4 chip highlight metrik utama: Total Omset, Transaksi, Basket Size, Margin).',
-        '     * Slide 2: Ringkasan Kinerja (Tabel metrik kunci -> panah logika kausal -> karakteristik lapangan + Bilah Proporsi Shift 100%).',
-        '     * Slide 3: Distribusi Trafik (Grafik batang jam-ke-jam 16 jam 07:00-22:00 dengan arsiran zona Prime Time 16:00-21:00 dan peak hour).',
-        '     * Slide 4: Analisis Margin & Anomali (Grafik deviasi batas nol zero-baseline: margin positif hijau vs defisit merah di bawah nol + investigasi akar masalah HPP > Harga Jual).',
-        '     * Slide 5: Rencana Aksi (Diagram Timeline Gantt Shift Toko & Alokasi Staf + Matriks 2 Kolom Isu vs Solusi konkret).',
-        '     * Slide 6: Penutup Eksekutif (Hero card, 3 prioritas eksekusi langsung, tanda tangan laporan manajemen).',
-        '   - Visualisasi Data SVG: Tentukan chartType ("hourly_traffic", "margin_zero_baseline", "segmented_bar", "gantt_shift") dan isi chartData/metrics/table dengan data angka konkret agar grafik SVG ter-render presisi.',
+        '== ATURAN MEMBUAT FILE PRESENTASI & LAPORAN (SKILL-PERSENTASI: PDF / PPTX / HTML / EXCEL) ==',
+        'Ketika user meminta file presentasi, deck dewan direksi, slide, laporan PDF, laporan HTML, atau rekapitulasi data (misal: "buatkan slide presentasi", "buatkan presentasi pakai skill-persentasi", "buatkan deck direksi", "ekspor ke pdf", "laporan direksi"):',
+        '1. PILIHAN FORMAT FILE PRESENTASI (PENTING):',
+        '   - DEFAULT & WAJIB UNTUK PRESENTASI: Gunakan format "pdf". Format PDF diproses melalui Headless Google Chrome sehingga mendukung 100% grafik SVG dinamis, efek Glassmorphism, kartu metrik KPI, dan gradasi Pastel Mesh standar direksi.',
+        '   - HANYA gunakan format "pptx" jika user secara eksplisit meminta file PowerPoint ("pptx" / "powerpoint").',
+        '2. DUA CARA MEMBUAT SLIDE BERKUALITAS TINGGI VIA TOOL generate_file:',
+        '   - CARA A (PALING DIANJURKAN - RAW HTML MODE): Buat file HTML5 lengkap mandiri (16:9, Glassmorphism CSS, inline SVG dengan koordinat presisi sesuai data, palet warna Busana) dan kirimkan ke parameter `rawHtml` di tool `generate_file` dengan format: "pdf" (atau "html"). Sistem akan langsung mengonversinya menjadi PDF via Chrome Headless.',
+        '   - CARA B (STRUCTURED SLIDES MODE): Panggil generate_file dengan array `slides: [...]` dan format: "pdf". Tentukan `chartType` ("hourly_traffic", "margin_zero_baseline", "bar_chart", "gantt_shift") dan isi `chartData: [...]` dengan data angka konkret agar grafik SVG ter-render presisi.',
+        '3. STANDAR PRESENTASI EKSEKUTIF WAJIB DIPATUHI:',
+        '   - So What Titles: Setiap judul slide WAJIB berupa KESIMPULAN BISNIS ASERTIF (BUKAN topik pasif seperti "Distribusi Trafik", melainkan kesimpulan aktif seperti "Rentang 16:00–21:00 Menjadi Prime Time Toko yang Menyumbang 58,5% Trafik"). Maksimal 2 baris, tanpa tanda titik atau tanda tanya di akhir.',
         '   - Tata Letak 2 Kolom Berimbang: Kiri data fakta/grafik, Kanan analisis bisnis & tindakan operasional konkret.',
         '   - Anti-AI Smell: Angka Rupiah ditulis penuh (Rp 1.952.426.393), hindari kata klise hampa ("sinergi", "era disrupsi"), gunakan terminologi bisnis nyata (omset, HPP, margin kotor, basket size, NoFaktur, SPG/BA).',
-        '2. Panggil tool generate_file dengan format yang sesuai: "pdf" (untuk file PDF slide 16:9), "pptx" (untuk presentasi PowerPoint), "html" (untuk presentasi web interaktif), "xlsx", atau "csv".',
-        '3. Jika data sudah ada di riwayat percakapan sebelumnya, LANGSUNG panggil tool generate_file tanpa mengulang query.',
-        '4. SETELAH tool generate_file berhasil, LANGSUNG berikan respon singkat berisi ringkasan eksekutif 2-3 kalimat dan link unduhan: [Buka/Unduh <Nama File>](<downloadUrl>).',
-        '5. DILARANG membuat tabel teks panjang atau mengulang isi seluruh data di chat saat membuat file. Langsung berikan link unduhan agar user segera bisa mengunduhnya.',
+        '4. Jika data sudah ada di riwayat percakapan sebelumnya, LANGSUNG panggil tool generate_file tanpa mengulang query.',
+        '5. SETELAH tool generate_file berhasil, LANGSUNG berikan respon singkat berisi ringkasan eksekutif 2-3 kalimat dan link unduhan: [Buka/Unduh <Nama File>](<downloadUrl>).',
+        '6. DILARANG membuat tabel teks panjang atau mengulang isi seluruh data di chat saat membuat file. Langsung berikan link unduhan agar user segera bisa mengunduhnya.',
         '',
         (guide ? ('== PANDUAN BIGQUERY ABS GROUP (FONT OF TRUTH) ==\n\n' + guide) : ''),
     ].filter(Boolean).join('\n');
@@ -252,11 +312,17 @@ export async function POST(req) {
             );
         }
 
-        // ===== Muat memori & skill aktif =====
-        const [memories, skills] = await Promise.all([
+        // ===== Muat memori, skill aktif, project akses, dan anggota tim =====
+        const [memories, skills, accessibleProjects] = await Promise.all([
             activeMemoriesForPrompt({ memberId: member.id }).catch(() => []),
             activeSkillsForPrompt().catch(() => []),
+            getMemberAccessibleProjects(member).catch((err) => {
+                console.error('Failed to get accessible projects for chat user:', err);
+                return [];
+            }),
         ]);
+
+        const availableMembers = await getAvailableMembersForProjects(accessibleProjects, member.division).catch(() => []);
 
         const customProvider = createOpenAI({
             apiKey,
@@ -323,9 +389,10 @@ export async function POST(req) {
 
         const result = streamText({
             model: customProvider.chat(modelName),
-            system: systemPrompt({ memories, skills, canUseBigQuery }),
+            system: systemPrompt({ memories, skills, canUseBigQuery, member, accessibleProjects, availableMembers }),
             messages: modelMessages,
             stopWhen: stepCountIs(25),
+            maxTokens: 8192,
             tools: {
                 ...(canUseBigQuery ? {
                     run_bigquery_query: tool({
@@ -348,6 +415,245 @@ export async function POST(req) {
                         },
                     }),
                 } : {}),
+
+                list_my_projects: tool({
+                    description: 'Daftar workspace/project yang diikuti oleh user saat ini dan dapat diakses.',
+                    inputSchema: z.object({}),
+                    execute: async () => {
+                        return {
+                            ok: true,
+                            total: accessibleProjects.length,
+                            projects: accessibleProjects.map((p) => ({
+                                id: p.id,
+                                name: p.name,
+                                division: p.division,
+                                folders: p.folders || ['General'],
+                                isPersonal: p.description === 'personal',
+                            })),
+                        };
+                    },
+                }),
+
+                list_project_members: tool({
+                    description: 'Daftar anggota tim / PIC yang tersedia untuk penugasan pada workspace user.',
+                    inputSchema: z.object({
+                        projectId: z.string().optional().describe('ID project spesifik (opsional)'),
+                    }),
+                    execute: async ({ projectId }) => {
+                        if (projectId && !accessibleProjects.some((p) => p.id === projectId)) {
+                            return { ok: false, error: 'Akses ditolak: Anda tidak tergabung dalam workspace ini.' };
+                        }
+                        return {
+                            ok: true,
+                            members: availableMembers.map((m) => ({
+                                id: m.id,
+                                name: m.name,
+                                position: m.position || '',
+                                division: m.division || '',
+                                role: m.role || 'Staff',
+                            })),
+                        };
+                    },
+                }),
+
+                get_tasks: tool({
+                    description: 'Cari atau baca daftar tugas dalam workspace yang diizinkan untuk user. Bisa untuk membaca "task saya", "task tim saya", atau filter berdasarkan status, deadline, prioritas, dan kata kunci.',
+                    inputSchema: z.object({
+                        scope: z.enum(['my_tasks', 'team_tasks', 'all_accessible']).default('all_accessible').describe('Cakupan tugas: "my_tasks" (tugas saya/PIC adalah user), "team_tasks" (tugas rekan tim dalam workspace), "all_accessible" (semua tugas dalam workspace yang diizinkan)'),
+                        projectId: z.string().optional().describe('Filter spesifik berdasarkan ID project/workspace'),
+                        status: z.enum(['all', 'active', 'To Do', 'In Progress', 'Pending Review', 'Done']).optional().describe('Filter status tugas ("active" = semua yang belum selesai)'),
+                        priority: z.enum(['all', 'Low', 'Medium', 'High', 'Urgent']).optional().describe('Filter prioritas tugas'),
+                        query: z.string().optional().describe('Pencarian kata kunci pada judul tugas atau memo'),
+                        picName: z.string().optional().describe('Filter berdasarkan nama PIC'),
+                        dateRange: z.enum(['today', 'tomorrow', 'this_week', 'overdue', 'all']).optional().describe('Filter rentang deadline: today, tomorrow, this_week, overdue, all'),
+                    }),
+                    execute: async (params) => {
+                        try {
+                            const tasks = await queryAccessibleTasks({
+                                member,
+                                accessibleProjects,
+                                ...params,
+                            });
+                            return {
+                                ok: true,
+                                count: tasks.length,
+                                tasks,
+                            };
+                        } catch (err) {
+                            return { ok: false, error: err.message };
+                        }
+                    },
+                }),
+
+                get_task_detail: tool({
+                    description: 'Lihat rincian lengkap satu tugas (termasuk subtask checklist, riwayat update log, dan berkas lampiran) berdasarkan ID tugas.',
+                    inputSchema: z.object({
+                        taskId: z.string().describe('ID tugas yang ingin dilihat rinciannya'),
+                    }),
+                    execute: async ({ taskId }) => {
+                        try {
+                            const task = await getAccessibleTaskDetails({
+                                member,
+                                accessibleProjects,
+                                taskId,
+                            });
+                            return {
+                                ok: true,
+                                task,
+                            };
+                        } catch (err) {
+                            return { ok: false, error: err.message };
+                        }
+                    },
+                }),
+
+                create_task: tool({
+                    description: 'Buat tugas baru ke dalam database sistem. PENTING: Hanya panggil tool ini jika seluruh elemen (judul, project, pic, deadline, prioritas) sudah lengkap dikonfirmasi oleh user.',
+                    inputSchema: z.object({
+                        title: z.string().min(1).describe('Judul tugas'),
+                        projectId: z.string().describe('ID project/workspace tujuan (harus dari daftar workspace yang user ikuti)'),
+                        picId: z.string().describe('ID member penanggung jawab tugas'),
+                        deadline: z.string().describe('Tenggat waktu dalam format YYYY-MM-DD'),
+                        priority: z.enum(['Low', 'Medium', 'High', 'Urgent']).describe('Tingkat prioritas'),
+                        folder: z.string().optional().default('General').describe('Folder atau section tugas di project'),
+                        memo: z.string().optional().describe('Deskripsi singkat atau memo instruksi tugas'),
+                        startDate: z.string().optional().describe('Tanggal mulai format YYYY-MM-DD'),
+                        todos: z.array(z.object({
+                            title: z.string(),
+                            done: z.boolean().optional().default(false),
+                        })).optional().describe('Daftar checklist subtask'),
+                    }),
+                    execute: async (taskInput) => {
+                        try {
+                            const created = await createTaskForUser({
+                                member,
+                                accessibleProjects,
+                                taskInput,
+                            });
+                            return {
+                                ok: true,
+                                message: `Tugas "${created.title}" berhasil dibuat di workspace "${created.projectName}".`,
+                                task: created,
+                            };
+                        } catch (err) {
+                            return { ok: false, error: err.message };
+                        }
+                    },
+                }),
+
+                update_task_status: tool({
+                    description: 'Ubah status tugas dan tambahkan catatan perubahan status ke riwayat log tugas.',
+                    inputSchema: z.object({
+                        taskId: z.string().describe('ID tugas yang ingin diubah'),
+                        status: z.enum(['To Do', 'In Progress', 'Pending Review', 'Done']).describe('Status baru tugas'),
+                        note: z.string().optional().describe('Catatan perkembangan atau alasan perubahan status'),
+                    }),
+                    execute: async ({ taskId, status, note }) => {
+                        try {
+                            const updated = await updateTaskStatusForUser({
+                                member,
+                                accessibleProjects,
+                                taskId,
+                                status,
+                                note,
+                            });
+                            return {
+                                ok: true,
+                                message: `Status tugas "${updated.title}" berhasil diubah menjadi "${updated.newStatus}".`,
+                                task: updated,
+                            };
+                        } catch (err) {
+                            return { ok: false, error: err.message };
+                        }
+                    },
+                }),
+
+                add_task_update_log: tool({
+                    description: 'Tambahkan catatan update progres pada tugas tanpa mengubah status.',
+                    inputSchema: z.object({
+                        taskId: z.string().describe('ID tugas'),
+                        content: z.string().describe('Catatan perkembangan / progres tugas'),
+                    }),
+                    execute: async ({ taskId, content }) => {
+                        try {
+                            const res = await addTaskUpdateLogForUser({
+                                member,
+                                accessibleProjects,
+                                taskId,
+                                content,
+                            });
+                            return {
+                                ok: true,
+                                message: `Catatan update berhasil ditambahkan pada tugas "${res.title}".`,
+                                log: res.addedLog,
+                            };
+                        } catch (err) {
+                            return { ok: false, error: err.message };
+                        }
+                    },
+                }),
+
+                attach_task_file: tool({
+                    description: 'Lampirkan file dokumen / bukti penuntasan ke tugas.',
+                    inputSchema: z.object({
+                        taskId: z.string().describe('ID tugas'),
+                        fileName: z.string().describe('Nama file dokumen/bukti'),
+                        fileUrl: z.string().describe('URL atau tautan file dokumen'),
+                        note: z.string().optional().describe('Keterangan lampiran berkas'),
+                    }),
+                    execute: async ({ taskId, fileName, fileUrl, note }) => {
+                        try {
+                            const res = await attachTaskFileForUser({
+                                member,
+                                accessibleProjects,
+                                taskId,
+                                fileName,
+                                fileUrl,
+                                note,
+                            });
+                            return {
+                                ok: true,
+                                message: `Berkas "${res.attachedFile.name}" berhasil dilampirkan ke tugas "${res.title}".`,
+                                attachedFile: res.attachedFile,
+                            };
+                        } catch (err) {
+                            return { ok: false, error: err.message };
+                        }
+                    },
+                }),
+
+                get_active_promos: tool({
+                    description: 'Dapatkan data promo yang sedang aktif berjalan hari ini di semua outlet Beauty Kendari. Mendukung filter berdasarkan brand, cabang outlet, jenis promo (diskon, gwp/hadiah, voucher, potongan_harga), flash sale, atau pencarian bebas.',
+                    inputSchema: z.object({
+                        brand: z.string().optional().describe('Filter nama brand (misal: "WARDAH", "EMINA", "MAYBELLINE", "NIVEA", "AZARINE", "IMPLORA")'),
+                        outlet: z.string().optional().describe('Filter cabang outlet (misal: "B2", "Beauty 2", "B11", "Online Store", atau "SEMUA")'),
+                        jenisPromo: z.string().optional().describe('Jenis promo: diskon, gwp (hadiah), voucher, potongan_harga, dll.'),
+                        search: z.string().optional().describe('Kata kunci pencarian bebas (nama promo, brand, produk, mekanisme)'),
+                        flashSaleOnly: z.boolean().optional().describe('Filter hanya promo flash sale aktif'),
+                        limit: z.number().optional().default(20).describe('Batas maksimal promo yang ditampilkan (default: 20)'),
+                    }),
+                    execute: async ({ brand, outlet, jenisPromo, search, flashSaleOnly, limit }) => {
+                        try {
+                            const res = await queryActivePromos({
+                                brand,
+                                outlet,
+                                jenisPromo,
+                                search,
+                                flashSaleOnly,
+                                limit: limit || 20,
+                            });
+                            return {
+                                ok: true,
+                                ...res,
+                            };
+                        } catch (err) {
+                            return {
+                                ok: false,
+                                error: err.message || 'Gagal memuat data promo aktif outlet.',
+                            };
+                        }
+                    },
+                }),
 
                 remember: tool({
                     description: 'Simpan fakta penting ke memori agar tidak perlu ditanya lagi di percakapan lain. Gunakan saat user menyampaikan preferensi, aturan, konteks tim, atau koreksi.',
@@ -418,17 +724,22 @@ export async function POST(req) {
                 generate_file: tool({
                     description: 'Buat file nyata (PDF slide 16:9 eksekutif / PPTX presentasi / HTML web report / XLSX Excel / CSV) yang bisa langsung dibuka atau diunduh user. Wajib dipakai saat user meminta presentasi, laporan eksekutif dewan direksi, slide deck, atau rekap data.',
                     inputSchema: z.object({
-                        format: z.enum(['pptx', 'pdf', 'html', 'xlsx', 'csv']).describe('Jenis file yang diminta user: pdf (slide PDF 16:9 eksekutif dewan direksi), pptx (slide PowerPoint), html (laporan web interaktif 16:9), xlsx (excel), atau csv.'),
+                        format: z.enum(['pdf', 'pptx', 'html', 'xlsx', 'csv']).describe('Jenis file: "pdf" (DEFAULT dan WAJIB untuk slide presentasi 16:9 eksekutif / skill-persentasi / laporan direksi karena mendukung penuh efek Glassmorphism dan grafik SVG presisi), "pptx" (hanya jika user eksplisit meminta PowerPoint), "html" (web report interaktif), "xlsx" (excel), atau "csv".'),
                         fileName: z.string().max(80).optional().describe('Nama file tanpa ekstensi, mis. evaluasi-trafik-jam-toko-bt26.'),
                         title: z.string().max(160).optional().describe('Judul utama dokumen/laporan, dipakai sebagai judul cover.'),
-                        /* PPTX / PDF / HTML: sebuah slide */
+                        /* Mode A: rawHtml standalone jika ingin kontrol visual penuh (16:9, Glassmorphism, SVG inline) */
+                        rawHtml: z.string().optional().describe('Kode HTML lengkap 16:9 standalone jika AI ingin membuat presentasi visual kustom penuh dengan Glassmorphism, CSS, dan SVG dinamis (identik dengan standar skill-persentasi). Sangat disarankan untuk deck visual berkualitas tinggi.'),
+                        /* Mode B: PPTX / PDF / HTML: daftar slide terstruktur */
                         slides: z.array(z.object({
                             title: z.string().max(160).describe('So What Title: Kesimpulan bisnis asertif (maks 2 baris, <= 80 karakter per baris, tanpa titik di akhir).'),
                             subtitle: z.string().max(250).optional().describe('Konteks tambahan, periode, atau cabang.'),
                             category: z.string().max(80).optional().describe('Kategori slide, mis. EXECUTIVE SUMMARY, DISTRIBUSI TRAFIK, ANALISIS MARGIN, ACTION PLAN.'),
                             layout: z.enum(['cover', 'split', 'full', 'timeline', 'closing']).optional().describe('Tata letak slide.'),
-                            chartType: z.enum(['hourly_traffic', 'margin_zero_baseline', 'segmented_bar', 'gantt_shift', 'none']).optional().describe('Jenis diagram SVG visual.'),
+                            chartType: z.enum(['hourly_traffic', 'margin_zero_baseline', 'segmented_bar', 'gantt_shift', 'bar_chart', 'column_chart', 'none']).optional().describe('Jenis diagram SVG visual.'),
                             chartData: z.any().optional().describe('Data untuk grafik SVG.'),
+                            chartTitle: z.string().max(120).optional().describe('Judul grafik SVG.'),
+                            chartBadge: z.string().max(80).optional().describe('Pill badge penjelas grafik.'),
+                            chartFootnote: z.string().max(150).optional().describe('Catatan kaki penjelas metrik grafik.'),
                             metrics: z.array(z.object({
                                 label: z.string(),
                                 value: z.string(),

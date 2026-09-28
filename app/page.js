@@ -989,7 +989,7 @@ export const getProjectMembers = (project, allMembers = [], projectAccess = [], 
     return allMembers.filter(m => m.is_active !== false || m.id === currentPicId);
 };
 
-const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onCreateFolder, isOpen, onClose, onSave, session = null, projectAccess = [] }) => {
+const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onCreateFolder, isOpen, onClose, onSave, onDuplicate, session = null, projectAccess = [] }) => {
     const loggedInMemberId = session?.memberId || '';
     const [editedTask, setEditedTask] = useState(task || {});
     const [todoDraft, setTodoDraft] = useState('');
@@ -1130,9 +1130,25 @@ const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onC
                             </span>
                         )}
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors">
-                        <i className="fa-solid fa-xmark"></i>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {onDuplicate && !task.isNew && (
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    const duplicated = await onDuplicate(editedTask);
+                                    if (duplicated) onClose();
+                                }}
+                                className="px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                                title="Duplikasi tugas ini beserta subtask-nya"
+                            >
+                                <i className="fa-regular fa-copy text-xs"></i>
+                                <span className="hidden sm:inline">Duplikat</span>
+                            </button>
+                        )}
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-700 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors" title="Tutup">
+                            <i className="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
@@ -1519,21 +1535,39 @@ const TaskEditModal = ({ task, projects, members, foldersList = ['General'], onC
                     />
                 </div>
 
-                <div className="p-5 border-t border-slate-100 bg-slate-50/70 flex justify-end space-x-3">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-colors">
-                        Batal
-                    </button>
-                    <button
-                        onClick={async () => {
-                            if (!editedTask.projectId) return;
-                            const saved = await onSave(editedTask);
-                            if (saved !== false) onClose();
-                        }}
-                        disabled={!editedTask.title?.trim() || !editedTask.projectId}
-                        className="px-5 py-2 text-sm font-medium text-white bg-slate-950 rounded-2xl hover:bg-slate-800 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Simpan Tugas
-                    </button>
+                <div className="p-5 border-t border-slate-100 bg-slate-50/70 flex justify-between items-center">
+                    <div>
+                        {onDuplicate && !editedTask.isNew && (
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    const duplicated = await onDuplicate(editedTask);
+                                    if (duplicated) onClose();
+                                }}
+                                className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-2xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                                title="Duplikasi tugas ini beserta subtask-nya"
+                            >
+                                <i className="fa-regular fa-copy text-xs"></i>
+                                <span>Duplikat Tugas</span>
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex space-x-3">
+                        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-colors">
+                            Batal
+                        </button>
+                        <button
+                            onClick={async () => {
+                                if (!editedTask.projectId) return;
+                                const saved = await onSave(editedTask);
+                                if (saved !== false) onClose();
+                            }}
+                            disabled={!editedTask.title?.trim() || !editedTask.projectId}
+                            className="px-5 py-2 text-sm font-medium text-white bg-slate-950 rounded-2xl hover:bg-slate-800 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Simpan Tugas
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1614,7 +1648,7 @@ const CustomDialog = ({ dialog, closeDialog }) => {
     );
 };
 
-const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePriority, onUpdateStatus, onUpdateTask, isListView = false, projectAccess = [], hasNotification = false }) => {
+const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onDuplicate, onUpdatePriority, onUpdateStatus, onUpdateTask, isListView = false, projectAccess = [], hasNotification = false }) => {
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editedTitle, setEditedTitle] = useState(task.title);
     const [isEditingDeadline, setIsEditingDeadline] = useState(false);
@@ -1844,9 +1878,12 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                         </button>
                     )}
                 </td>
-                <td className="p-3 text-right">
-                    <button onClick={() => onEdit(task)} className="text-gray-400 hover:text-purple-600 p-1 rounded hover:bg-gray-100 mr-1"><i className="fa-solid fa-pen-to-square text-xs"></i></button>
-                    <button onClick={() => onDelete(task.id)} className="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-gray-100"><i className="fa-regular fa-trash-can text-xs"></i></button>
+                <td className="p-3 text-right whitespace-nowrap">
+                    <button onClick={() => onEdit(task)} className="text-gray-400 hover:text-purple-600 p-1.5 rounded-lg hover:bg-gray-100 mr-1 transition-colors" title="Edit Tugas"><i className="fa-solid fa-pen-to-square text-xs"></i></button>
+                    {onDuplicate && (
+                        <button onClick={() => onDuplicate(task)} className="text-gray-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-indigo-50 mr-1 transition-colors" title="Duplikasi Tugas"><i className="fa-regular fa-copy text-xs"></i></button>
+                    )}
+                    <button onClick={() => onDelete(task.id)} className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="Hapus Tugas"><i className="fa-regular fa-trash-can text-xs"></i></button>
                 </td>
             </tr>
         );
@@ -1874,8 +1911,11 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
                         </span>
                     )}
                 </div>
-                <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => onDelete(task.id)} className="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-red-50"><i className="fa-regular fa-trash-can text-xs"></i></button>
+                <div className="flex space-x-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                    {onDuplicate && (
+                        <button onClick={(e) => { e.stopPropagation(); onDuplicate(task); }} className="text-gray-400 hover:text-indigo-600 p-1 rounded-lg hover:bg-indigo-50 transition-colors" title="Duplikasi Tugas"><i className="fa-regular fa-copy text-xs"></i></button>
+                    )}
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} className="text-gray-400 hover:text-red-500 p-1 rounded-lg hover:bg-red-50 transition-colors" title="Hapus Tugas"><i className="fa-regular fa-trash-can text-xs"></i></button>
                 </div>
             </div>
 
@@ -2134,7 +2174,7 @@ const TaskCard = ({ task, members, projects = [], onEdit, onDelete, onUpdatePrio
     );
 };
 
-const KanbanView = ({ tasks, members, projects, onAdd, onEdit, onDelete, onUpdatePriority, onUpdateStatus, onUpdateTask, projectAccess = [], unreadTaskIds = null }) => {
+const KanbanView = ({ tasks, members, projects, onAdd, onEdit, onDelete, onDuplicate, onUpdatePriority, onUpdateStatus, onUpdateTask, projectAccess = [], unreadTaskIds = null }) => {
     const handleDragOver = (e) => {
         e.preventDefault();
         e.currentTarget.classList.add('bg-gray-200', 'border-gray-400', 'border-dashed');
@@ -2184,6 +2224,7 @@ const KanbanView = ({ tasks, members, projects, onAdd, onEdit, onDelete, onUpdat
                                     projects={projects}
                                     onEdit={onEdit}
                                     onDelete={onDelete}
+                                    onDuplicate={onDuplicate}
                                     onUpdatePriority={onUpdatePriority}
                                     onUpdateStatus={onUpdateStatus}
                                     onUpdateTask={onUpdateTask}
@@ -2218,6 +2259,7 @@ const TableView = ({
     onAdd,
     onEdit,
     onDelete,
+    onDuplicate,
     onUpdatePriority,
     onUpdateStatus,
     onUpdateTask,
@@ -2464,6 +2506,7 @@ const TableView = ({
                                                     projects={projects}
                                                     onEdit={onEdit}
                                                     onDelete={onDelete}
+                                                    onDuplicate={onDuplicate}
                                                     onUpdatePriority={onUpdatePriority}
                                                     onUpdateStatus={onUpdateStatus}
                                                     onUpdateTask={onUpdateTask}
@@ -2559,6 +2602,7 @@ const TableView = ({
                                                             projects={projects}
                                                             onEdit={onEdit}
                                                             onDelete={onDelete}
+                                                            onDuplicate={onDuplicate}
                                                             onUpdatePriority={onUpdatePriority}
                                                             onUpdateStatus={onUpdateStatus}
                                                             onUpdateTask={onUpdateTask}
@@ -9198,6 +9242,115 @@ export default function TaskManagerApp() {
         return true;
     };
 
+    const handleDuplicateTask = async (taskToDuplicate) => {
+        if (!taskToDuplicate) return false;
+
+        const currentUserId = session?.memberId || currentPicId || '';
+        const now = new Date().toISOString();
+        const baseTitle = (taskToDuplicate.title || 'Tugas').trim();
+        const duplicatedTitle = `${baseTitle} (Salinan)`;
+
+        // Normalize todos for the duplicated task (all reset done to false)
+        const rawTodos = Array.isArray(taskToDuplicate.todos) ? taskToDuplicate.todos : [];
+        const duplicatedTodos = rawTodos
+            .filter(todo => (todo.title || '').trim() && !todo.isMetaTask)
+            .map(todo => ({
+                id: crypto.randomUUID(),
+                title: todo.title.trim(),
+                done: false,
+                picId: todo.picId || todo.pic_id || '',
+                deadline: todo.deadline || todo.due_date || ''
+            }));
+
+        const newTaskId = crypto.randomUUID();
+        const rawProjectId = taskToDuplicate.projectId || taskToDuplicate.project_id;
+        const dbProjectId = safeUUID(rawProjectId, null);
+        const rawPicId = taskToDuplicate.picId || taskToDuplicate.pic_id;
+        const dbPicId = safeUUID(rawPicId, null);
+        const normalizedMemo = typeof taskToDuplicate.memo === 'string' ? taskToDuplicate.memo.trim() : '';
+        const startDate = taskToDuplicate.startDate || taskToDuplicate.start_date || null;
+        const deadline = taskToDuplicate.deadline || null;
+        const folder = taskToDuplicate.folder || 'General';
+        const priority = taskToDuplicate.priority || 'Medium';
+        const status = taskToDuplicate.status || 'To Do';
+
+        const payload = {
+            id: newTaskId,
+            project_id: dbProjectId,
+            title: duplicatedTitle,
+            status,
+            priority,
+            folder,
+            memo: normalizedMemo,
+            update_logs: [],
+            proof_files: [],
+            start_date: startDate,
+            deadline,
+            pic_id: dbPicId,
+            todos: duplicatedTodos,
+            created_at: now,
+            updated_at: now
+        };
+
+        let { error } = await supabase.from('tasks').insert(payload);
+        if (error && error.message) {
+            let safePayload = { ...payload };
+            if (error.message.includes('folder')) delete safePayload.folder;
+            if (error.message.includes('start_date')) delete safePayload.start_date;
+            if (error.message.includes('memo')) delete safePayload.memo;
+            if (error.message.includes('update_logs')) delete safePayload.update_logs;
+            if (error.message.includes('proof_files')) delete safePayload.proof_files;
+            if (error.message.includes('memo') || error.message.includes('update_logs') || error.message.includes('proof_files')) {
+                safePayload.todos = [
+                    ...duplicatedTodos,
+                    {
+                        id: '__meta_task_props__',
+                        isMetaTask: true,
+                        author_id: currentUserId,
+                        memo: normalizedMemo,
+                        update_logs: [],
+                        proof_files: []
+                    }
+                ];
+            }
+            const retry = await supabase.from('tasks').insert(safePayload);
+            error = retry.error;
+        }
+
+        if (error) {
+            console.error('Supabase task duplicate error:', error);
+            alert(`Gagal menduplikasi tugas: ${error.message}`);
+            return false;
+        }
+
+        const newTask = {
+            id: newTaskId,
+            projectId: rawProjectId,
+            title: duplicatedTitle,
+            status,
+            priority,
+            folder,
+            memo: normalizedMemo,
+            updateLogs: [],
+            update_logs: [],
+            proofFiles: [],
+            proof_files: [],
+            startDate,
+            deadline,
+            createdAt: now,
+            picId: rawPicId || '',
+            authorId: currentUserId,
+            author_id: currentUserId,
+            todos: duplicatedTodos
+        };
+
+        setTasks(prev => [...prev, newTask]);
+        if (notifications?.markTaskAsViewed) {
+            notifications.markTaskAsViewed(newTaskId);
+        }
+        return newTask;
+    };
+
     const handleDeleteTask = async (id) => {
         openDialog({
             type: 'confirm',
@@ -10708,6 +10861,7 @@ export default function TaskManagerApp() {
                                             onAdd={handleAddTask}
                                             onEdit={handleEditTask}
                                             onDelete={handleDeleteTask}
+                                            onDuplicate={handleDuplicateTask}
                                             onUpdatePriority={handleUpdatePriority}
                                             onUpdateStatus={handleUpdateStatus}
                                             onUpdateTask={handleSaveEditedTask}
@@ -10857,6 +11011,7 @@ export default function TaskManagerApp() {
                                     onAdd={handleAddTask}
                                     onEdit={handleEditTask}
                                     onDelete={handleDeleteTask}
+                                    onDuplicate={handleDuplicateTask}
                                     onUpdatePriority={handleUpdatePriority}
                                     onUpdateStatus={handleUpdateStatus}
                                     onUpdateTask={handleSaveEditedTask}
@@ -10957,6 +11112,7 @@ export default function TaskManagerApp() {
                 isOpen={!!editingTask}
                 onClose={() => setEditingTask(null)}
                 onSave={handleSaveEditedTask}
+                onDuplicate={handleDuplicateTask}
                 session={session}
                 projectAccess={projectAccess}
             />
