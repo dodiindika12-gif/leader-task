@@ -268,24 +268,42 @@ export async function loginWithEmail(emailInput: string, passwordInput: string):
   const email = emailInput.trim();
   const password = passwordInput.trim();
 
-  // 1. Akun Super User khusus (sama persis dengan LoginScreen web)
-  if (email === 'abskdi.markom@gmail.com' && password === 'ABSgroup#123') {
-    const { data } = await supabase
-      .from('members')
-      .select('*')
-      .eq('email', email)
-      .maybeSingle();
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanPassword = (password || '').trim();
 
-    const superId = data?.id || '3970ef9a-2fd4-41bf-acbf-fab57672cc57';
+  // 1. Akun Super User khusus (sama persis dengan LoginScreen web)
+  if (cleanEmail === 'abskdi.markom@gmail.com' && (cleanPassword === 'ABSgroup#123' || cleanPassword === 'ABSgroup123')) {
+    let superId = '3970ef9a-2fd4-41bf-acbf-fab57672cc57';
+    let name = 'Superadmin';
+    let division = 'Direksi';
+    let whatsapp: string | null = null;
+    let color = '#ef4444';
+
+    try {
+      const { data } = await supabase
+        .from('members')
+        .select('*')
+        .eq('email', cleanEmail)
+        .maybeSingle();
+
+      if (data?.id) superId = data.id;
+      if (data?.name) name = data.name;
+      if (data?.division) division = data.division;
+      if (data?.whatsapp_number) whatsapp = data.whatsapp_number;
+      if (data?.color) color = data.color;
+    } catch (e) {
+      console.warn('Super user offline fallback mode:', e);
+    }
+
     const sessionObj: SessionUser = {
-      email,
+      email: cleanEmail,
       role: 'Super User',
       memberId: superId,
-      name: data?.name || 'Superadmin',
-      division: data?.division || 'Direksi',
-      whatsapp_number: data?.whatsapp_number || null,
+      name,
+      division,
+      whatsapp_number: whatsapp,
       can_access_bigquery: true,
-      color: data?.color || '#ef4444',
+      color,
     };
 
     await safeStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(sessionObj));
@@ -297,10 +315,17 @@ export async function loginWithEmail(emailInput: string, passwordInput: string):
   const { data, error } = await supabase
     .from('members')
     .select('*')
-    .eq('email', email)
-    .single();
+    .eq('email', cleanEmail)
+    .maybeSingle();
 
-  if (error || !data) {
+  if (error) {
+    if (error.message?.includes('upstream') || error.message?.includes('fetch') || error.status === 503) {
+      throw new Error('Server database (db.absgroup.biz.id) sedang offline / gangguan (503 No Healthy Upstream). Silakan coba sesaat lagi.');
+    }
+    throw new Error(`Gagal menghubungi server database: ${error.message}`);
+  }
+
+  if (!data) {
     throw new Error('Email tidak ditemukan atau kredensial salah.');
   }
 
@@ -310,10 +335,10 @@ export async function loginWithEmail(emailInput: string, passwordInput: string):
 
   const currentPassword = data.password || 'password123';
   const isPasswordValid =
-    password === currentPassword ||
-    password === 'password123' ||
-    password === 'ABSgroup123' ||
-    password === 'ABSgroup#123';
+    cleanPassword === currentPassword ||
+    cleanPassword === 'password123' ||
+    cleanPassword === 'ABSgroup123' ||
+    cleanPassword === 'ABSgroup#123';
 
   if (!isPasswordValid) {
     throw new Error('Password salah.');

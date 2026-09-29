@@ -5873,16 +5873,28 @@ const LoginScreen = ({ onLoginSuccess }) => {
         e.preventDefault();
         setLoading(true);
         try {
-            // Hardcoded Super User
-            if (email === 'abskdi.markom@gmail.com' && password === 'ABSgroup#123') {
-                const { data } = await supabase.from('members').select('*').eq('email', email).single();
-                const superId = data?.id || '3970ef9a-2fd4-41bf-acbf-fab57672cc57';
+            const cleanEmail = (email || '').trim().toLowerCase();
+            const cleanPassword = (password || '').trim();
+
+            // Hardcoded Super User (tetap bisa login meski server database sedang down)
+            if (cleanEmail === 'abskdi.markom@gmail.com' && (cleanPassword === 'ABSgroup#123' || cleanPassword === 'ABSgroup123')) {
+                let superId = '3970ef9a-2fd4-41bf-acbf-fab57672cc57';
+                let division = 'Direksi';
+                let whatsapp = null;
+                try {
+                    const { data } = await supabase.from('members').select('*').eq('email', cleanEmail).maybeSingle();
+                    if (data?.id) superId = data.id;
+                    if (data?.division) division = data.division;
+                    if (data?.whatsapp_number) whatsapp = data.whatsapp_number;
+                } catch (e) {
+                    console.warn('Super user offline fallback mode:', e);
+                }
                 const sessionObj = { 
-                    email, 
+                    email: cleanEmail, 
                     role: 'Super User',
                     memberId: superId,
-                    division: data?.division || 'Direksi',
-                    whatsapp_number: data?.whatsapp_number || null,
+                    division,
+                    whatsapp_number: whatsapp,
                     can_access_bigquery: true
                 };
                 localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(sessionObj));
@@ -5892,20 +5904,30 @@ const LoginScreen = ({ onLoginSuccess }) => {
             }
 
             // Check members table
-            const { data, error } = await supabase.from('members').select('*').eq('email', email).single();
-            if (error || !data) {
+            const { data, error } = await supabase.from('members').select('*').eq('email', cleanEmail).maybeSingle();
+            
+            if (error) {
+                console.error('Database connection error during login:', error);
+                if (error.message?.includes('upstream') || error.message?.includes('fetch') || error.status === 503 || error.code === '503') {
+                    throw new Error('Server database (db.absgroup.biz.id) sedang tidak dapat dihubungi (503 No Healthy Upstream). Layanan database di server sedang gangguan atau restart. Silakan hubungi admin server atau coba beberapa saat lagi.');
+                }
+                throw new Error(`Gagal menghubungi server database: ${error.message || 'Koneksi terputus'}`);
+            }
+
+            if (!data) {
                 throw new Error('Email tidak ditemukan atau kredensial salah!');
             }
+
             if (data.is_active === false) {
                 throw new Error('Akun Anda telah dinonaktifkan. Hubungi admin.');
             }
 
             const currentPassword = data.password || 'password123';
 
-            if (password === currentPassword || password === 'password123' || password === 'ABSgroup123' || password === 'ABSgroup#123') {
+            if (cleanPassword === currentPassword || cleanPassword === 'password123' || cleanPassword === 'ABSgroup123' || cleanPassword === 'ABSgroup#123') {
                 const requiresPasswordChange = (currentPassword === 'password123' || currentPassword === 'ABSgroup123');
                 const sessionObj = { 
-                    email, 
+                    email: cleanEmail, 
                     role: data.role, 
                     memberId: data.id, 
                     division: data.division,
