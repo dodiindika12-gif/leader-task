@@ -337,12 +337,34 @@ function SystemProcessGroup({ parts = [], isLoading = false }) {
                                                     ? 'Menyimpan memori'
                                                     : tName === 'refine_skill'
                                                         ? 'Menyempurnakan skill'
-                                                        : 'Query BigQuery'}
+                                                        : tName === 'get_beauty_advisors'
+                                                            ? 'Cari Data Beauty Advisor'
+                                                            : tName === 'get_ba_attendance'
+                                                                ? 'Cek Absensi BA Realtime'
+                                                                : tName === 'get_beauty_advisor_detail'
+                                                                    ? 'Detail Profil Beauty Advisor'
+                                                                    : tName === 'get_ba_master_data'
+                                                                        ? 'Master Brand & Outlet BA'
+                                                                        : tName === 'get_active_promos'
+                                                                            ? 'Cek Promo Outlet'
+                                                                            : tName === 'get_tasks'
+                                                                                ? 'Query Daftar Tugas'
+                                                                                : tName === 'create_task'
+                                                                                    ? 'Membuat Tugas Baru'
+                                                                                    : tName === 'update_task_status'
+                                                                                        ? 'Perbarui Status Tugas'
+                                                                                        : 'Query BigQuery'}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             {isRes && typeof out.rowCount === 'number' && (
                                                 <span className="font-mono text-[10px] text-slate-400">{out.rowCount} baris</span>
+                                            )}
+                                            {isRes && typeof out.totalMatched === 'number' && (
+                                                <span className="font-mono text-[10px] text-pink-600 font-medium">{out.totalMatched} BA cocok</span>
+                                            )}
+                                            {isRes && typeof out.totalAttendance === 'number' && (
+                                                <span className="font-mono text-[10px] text-emerald-600 font-medium">{out.totalAttendance} absensi</span>
                                             )}
                                             {isRes && out.ok === false && (
                                                 <span className="font-mono text-[10px] text-rose-500 font-bold">gagal</span>
@@ -354,6 +376,27 @@ function SystemProcessGroup({ parts = [], isLoading = false }) {
                                         <pre className="p-2 rounded-lg bg-slate-950 text-emerald-300 font-mono text-[10px] overflow-x-auto whitespace-pre">
                                             {inp.sql}
                                         </pre>
+                                    )}
+
+                                    {tName === 'get_beauty_advisors' && (inp.query || inp.brand || inp.outlet) && (
+                                        <div className="p-2 rounded-lg bg-pink-50 border border-pink-100 text-pink-900 text-[10px] flex flex-wrap gap-2">
+                                            {inp.brand && <span>Brand: <strong>{inp.brand}</strong></span>}
+                                            {inp.outlet && <span>Outlet: <strong>{inp.outlet}</strong></span>}
+                                            {inp.query && <span>Cari: <em>&quot;{inp.query}&quot;</em></span>}
+                                        </div>
+                                    )}
+
+                                    {tName === 'get_ba_attendance' && (
+                                        <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-900 text-[10px] flex flex-wrap gap-2">
+                                            <span>Tanggal: <strong>{inp.date || inp.startDate || 'Hari ini'}</strong></span>
+                                            {inp.outlet && <span>Outlet: <strong>{inp.outlet}</strong></span>}
+                                            {inp.brand && <span>Brand: <strong>{inp.brand}</strong></span>}
+                                            {isRes && out.activeOnDuty !== undefined && (
+                                                <span className="ml-auto font-semibold text-emerald-700">
+                                                    Aktif shift: {out.activeOnDuty} | Selesai: {out.finishedShift}
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
 
                                     {tName === 'remember' && inp.content && (

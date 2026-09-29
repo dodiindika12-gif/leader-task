@@ -22,6 +22,13 @@ import {
     attachTaskFileForUser,
 } from '@/lib/task-assistant';
 import { queryActivePromos } from '@/lib/promos';
+import {
+    queryBeautyAdvisors,
+    queryBaAttendance,
+    getBeautyAdvisorDetail,
+    getBaMasterData,
+} from '@/lib/beauty-advisor';
+
 
 export const maxDuration = 180;
 
@@ -129,6 +136,16 @@ function systemPrompt({ memories, skills, canUseBigQuery = true, member = null, 
         '- Gunakan tool get_active_promos jika user menanyakan promo hari ini, diskon, hadiah (GWP), voucher, flash sale, promo brand tertentu (Wardah, Emina, Make Over, Maybelline, Nivea, Azarine, Fav Beauty, dll.), atau promo cabang tertentu.',
         '- Sajikan info promo secara rapi dan menarik: nama promo, brand, mekanisme keuntungan, periode promo, cabang/outlet yang berlaku, dan sertakan tautan Link Materi Promosi / Link SKU jika ada.',
         '- Data promo ini berlaku dan dapat diakses oleh semua pengguna.',
+        '',
+        '6. INTEGRASI DATA BEAUTY ADVISOR (BA) & ABSENSI REALTIME (PORTAL MANAGEMENT KPI BA):',
+        '- Anda memiliki integrasi langsung ke sistem Beauty Advisor ABS Group via API resmi (https://ba.absgroup.biz.id/api/external).',
+        '- Pustaka Tool BA:',
+        '  a. `get_beauty_advisors`: Cari data BA aktif/nonaktif, penempatan toko cabang (B1 s/d B26), brand naungan (Wardah, Y.O.U, Glad2Glow, Skintific, Luxcrime, Unilever, Inez, dll.), dan status. Bisa filter brand, outlet, status, atau cari nama/kode.',
+        '  b. `get_ba_attendance`: Cek data absensi realtime hari ini atau rentang tanggal tertentu. Menyajikan jam masuk (clock in WITA), jam pulang (clock out), status sedang aktif bertugas di toko (incomplete) atau sudah selesai shift (complete), catatan izin/kendala jaringan, serta rekap jumlah hadir per outlet dan per brand.',
+        '  c. `get_beauty_advisor_detail`: Tampilkan profil rinci 1 orang BA berdasarkan ID atau kode BA (ba_code).',
+        '  d. `get_ba_master_data`: Daftar referensi resmi 26 cabang toko (B1 s/d B26) dan 65 brand.',
+        '- Gunakan data ini secara proaktif kapan pun user menanyakan: kehadiran BA hari ini, siapa yang bertugas di toko tertentu, daftar BA brand tertentu, atau analisis distribusi tim toko.',
+        '- Jika user meminta rekapitulasi atau slide presentasi tentang performa/kehadiran BA, kombinasikan data dari tool BA dengan tool `generate_file` (format "pdf" atau "xlsx").',
         '',
         'Referensi Anggota Tim / PIC yang tersedia: ' + (memberSummary || '(Belum ada anggota)'),
         '',
@@ -652,7 +669,79 @@ export async function POST(req) {
                     },
                 }),
 
+                get_beauty_advisors: tool({
+                    description: 'Cari dan tampilkan data Beauty Advisor (BA) aktif/nonaktif, penempatan cabang outlet, dan brand naungan dari Portal Management KPI BA. Mendukung filter berdasarkan brand (mis. WARDAH, G2G, LUXCRIME, SKINTIFIC), outlet (mis. B1, B2, B21), status, atau pencarian bebas nama / kode BA.',
+                    inputSchema: z.object({
+                        query: z.string().optional().describe('Kata kunci pencarian bebas (nama BA, kode BA, brand, atau outlet)'),
+                        brand: z.string().optional().describe('Filter nama brand (misal: "WARDAH", "SKINTIFIC", "Y.O.U", "LUXCRIME")'),
+                        outlet: z.string().optional().describe('Filter cabang outlet penempatan (misal: "B1", "B2", "B21")'),
+                        status: z.enum(['aktif', 'nonaktif', 'all']).optional().default('aktif').describe('Filter status keaktifan BA (default: "aktif")'),
+                        limit: z.number().optional().default(30).describe('Batas maksimal data yang ditampilkan (default: 30)'),
+                        offset: z.number().optional().default(0).describe('Offset pagination'),
+                    }),
+                    execute: async (params) => {
+                        try {
+                            const res = await queryBeautyAdvisors(params);
+                            return { ok: true, ...res };
+                        } catch (err) {
+                            return { ok: false, error: err.message || 'Gagal memuat data Beauty Advisor.' };
+                        }
+                    },
+                }),
+
+                get_ba_attendance: tool({
+                    description: 'Cek data absensi realtime hari ini atau rekap kehadiran Beauty Advisor di seluruh cabang outlet Beauty Kendari. Menyajikan jam masuk (clock in WITA), jam pulang (clock out), status sedang bertugas / selesai shift, catatan pengajuan izin/kendala, serta ringkasan jumlah kehadiran per outlet dan brand.',
+                    inputSchema: z.object({
+                        date: z.string().optional().describe('Tanggal absensi format YYYY-MM-DD (default: hari ini jika user menanyakan kehadiran hari ini)'),
+                        startDate: z.string().optional().describe('Tanggal awal untuk rekap rentang tanggal (YYYY-MM-DD)'),
+                        endDate: z.string().optional().describe('Tanggal akhir untuk rekap rentang tanggal (YYYY-MM-DD)'),
+                        outlet: z.string().optional().describe('Filter cabang outlet tempat bertugas (misal: "B1", "B2", "B20")'),
+                        brand: z.string().optional().describe('Filter brand BA (misal: "WARDAH", "SKINTIFIC", "G2G")'),
+                        baCode: z.string().optional().describe('Filter kode BA tertentu (misal: "26091127")'),
+                        status: z.enum(['all', 'incomplete', 'complete']).optional().default('all').describe('Filter status: "incomplete" (sedang bertugas/belum clock out), "complete" (sudah clock out/pulang), "all" (semua yang hadir)'),
+                        limit: z.number().optional().default(50).describe('Batas maksimal log absensi yang ditampilkan (default: 50)'),
+                    }),
+                    execute: async (params) => {
+                        try {
+                            const res = await queryBaAttendance(params);
+                            return { ok: true, ...res };
+                        } catch (err) {
+                            return { ok: false, error: err.message || 'Gagal memuat data absensi Beauty Advisor.' };
+                        }
+                    },
+                }),
+
+                get_beauty_advisor_detail: tool({
+                    description: 'Lihat profil lengkap dan riwayat satu Beauty Advisor berdasarkan ID atau kode BA (ba_code).',
+                    inputSchema: z.object({
+                        idOrBaCode: z.string().describe('ID UUID atau Kode BA (misal: "26091127")'),
+                    }),
+                    execute: async ({ idOrBaCode }) => {
+                        try {
+                            const res = await getBeautyAdvisorDetail(idOrBaCode);
+                            if (!res) return { ok: false, error: `Beauty Advisor dengan kode/ID "${idOrBaCode}" tidak ditemukan.` };
+                            return { ok: true, beautyAdvisor: res };
+                        } catch (err) {
+                            return { ok: false, error: err.message || 'Gagal memuat profil Beauty Advisor.' };
+                        }
+                    },
+                }),
+
+                get_ba_master_data: tool({
+                    description: 'Dapatkan daftar master referensi cabang outlet resmi (B1 s/d B26) dan master brand naungan Beauty Advisor.',
+                    inputSchema: z.object({}),
+                    execute: async () => {
+                        try {
+                            const res = await getBaMasterData();
+                            return { ok: true, ...res };
+                        } catch (err) {
+                            return { ok: false, error: err.message || 'Gagal memuat master data outlet & brand BA.' };
+                        }
+                    },
+                }),
+
                 remember: tool({
+
                     description: 'Simpan fakta penting ke memori agar tidak perlu ditanya lagi di percakapan lain. Gunakan saat user menyampaikan preferensi, aturan, konteks tim, atau koreksi.',
                     inputSchema: z.object({
                         scope: z.enum(['global', 'user']).describe('global = berlaku semua user (butuh relay exec pada UI, tetap boleh diusulkan), user = hanya untuk user ini.'),

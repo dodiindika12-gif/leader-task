@@ -16,11 +16,11 @@ import ChatHistoryDrawer from '@/components/ChatHistoryDrawer';
 
 const BIGQUERY_SUGGESTED_QUERIES = [
     {
-        title: 'Task Saya yang Berjalan',
-        desc: 'Lihat daftar tugas yang ditugaskan ke saya dan deadline terdekat.',
-        query: 'Bebie, tampilkan daftar task saya yang sedang berjalan dan urutkan berdasarkan deadline terdekat.',
-        icon: CheckSquare,
-        iconBg: 'bg-emerald-100 text-emerald-600',
+        title: 'Absensi BA Hari Ini',
+        desc: 'Cek rekap kehadiran & shift Beauty Advisor di seluruh cabang toko hari ini.',
+        query: 'Bebie, cek rekap absensi Beauty Advisor yang hadir di outlet hari ini dan siapa saja yang masih bertugas.',
+        icon: Users,
+        iconBg: 'bg-pink-100 text-pink-600',
     },
     {
         title: 'Promo Aktif Hari Ini',
@@ -47,11 +47,18 @@ const BIGQUERY_SUGGESTED_QUERIES = [
 
 const GENERAL_SUGGESTED_QUERIES = [
     {
-        title: 'Task Saya yang Berjalan',
-        desc: 'Lihat daftar tugas yang ditugaskan ke saya dan deadline terdekat.',
-        query: 'Bebie, tampilkan daftar task saya yang sedang berjalan dan urutkan berdasarkan deadline terdekat.',
-        icon: CheckSquare,
-        iconBg: 'bg-emerald-100 text-emerald-600',
+        title: 'Absensi BA Hari Ini',
+        desc: 'Cek rekap kehadiran & shift Beauty Advisor di seluruh cabang toko hari ini.',
+        query: 'Bebie, cek rekap absensi Beauty Advisor yang hadir di outlet hari ini dan siapa saja yang masih bertugas.',
+        icon: Users,
+        iconBg: 'bg-pink-100 text-pink-600',
+    },
+    {
+        title: 'Tim Beauty Advisor',
+        desc: 'Lihat daftar Beauty Advisor berdasarkan brand naungan atau penempatan toko.',
+        query: 'Bebie, tampilkan daftar Beauty Advisor brand Wardah beserta toko penempatannya.',
+        icon: Sparkles,
+        iconBg: 'bg-purple-100 text-purple-600',
     },
     {
         title: 'Promo Aktif Hari Ini',
@@ -61,18 +68,11 @@ const GENERAL_SUGGESTED_QUERIES = [
         iconBg: 'bg-rose-100 text-rose-600',
     },
     {
-        title: 'Buatkan Task Baru',
-        desc: 'Minta Bebie bantu buatkan task baru lengkap dengan konfirmasi PIC dan deadline.',
-        query: 'Bebie, bantu saya buatkan task baru untuk tim di project kami.',
-        icon: PlusCircle,
-        iconBg: 'bg-indigo-100 text-indigo-600',
-    },
-    {
-        title: 'Pantau Task Tim',
-        desc: 'Cek progress pekerjaan tim saya di workspace dan project yang saya ikuti.',
-        query: 'Bagaimana status dan progres task tim saya di project yang saya ikuti saat ini?',
-        icon: Users,
-        iconBg: 'bg-amber-100 text-amber-600',
+        title: 'Task Saya yang Berjalan',
+        desc: 'Lihat daftar tugas yang ditugaskan ke saya dan deadline terdekat.',
+        query: 'Bebie, tampilkan daftar task saya yang sedang berjalan dan urutkan berdasarkan deadline terdekat.',
+        icon: CheckSquare,
+        iconBg: 'bg-emerald-100 text-emerald-600',
     },
 ];
 
