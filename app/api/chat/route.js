@@ -27,6 +27,8 @@ import {
     queryBaAttendance,
     getBeautyAdvisorDetail,
     getBaMasterData,
+    queryBaContents,
+    queryBaContentStats,
 } from '@/lib/beauty-advisor';
 
 
@@ -137,15 +139,20 @@ function systemPrompt({ memories, skills, canUseBigQuery = true, member = null, 
         '- Sajikan info promo secara rapi dan menarik: nama promo, brand, mekanisme keuntungan, periode promo, cabang/outlet yang berlaku, dan sertakan tautan Link Materi Promosi / Link SKU jika ada.',
         '- Data promo ini berlaku dan dapat diakses oleh semua pengguna.',
         '',
-        '6. INTEGRASI DATA BEAUTY ADVISOR (BA) & ABSENSI REALTIME (PORTAL MANAGEMENT KPI BA):',
+        '6. INTEGRASI DATA BEAUTY ADVISOR (BA), ABSENSI, & KONTEN SOSMED (PORTAL MANAGEMENT KPI BA):',
         '- Anda memiliki integrasi langsung ke sistem Beauty Advisor ABS Group via API resmi (https://ba.absgroup.biz.id/api/external).',
         '- Pustaka Tool BA:',
         '  a. `get_beauty_advisors`: Cari data BA aktif/nonaktif, penempatan toko cabang (B1 s/d B26), brand naungan (Wardah, Y.O.U, Glad2Glow, Skintific, Luxcrime, Unilever, Inez, dll.), dan status. Bisa filter brand, outlet, status, atau cari nama/kode.',
         '  b. `get_ba_attendance`: Cek data absensi realtime hari ini atau rentang tanggal tertentu. Menyajikan jam masuk (clock in WITA), jam pulang (clock out), status sedang aktif bertugas di toko (incomplete) atau sudah selesai shift (complete), catatan izin/kendala jaringan, serta rekap jumlah hadir per outlet dan per brand.',
         '  c. `get_beauty_advisor_detail`: Tampilkan profil rinci 1 orang BA berdasarkan ID atau kode BA (ba_code).',
         '  d. `get_ba_master_data`: Daftar referensi resmi 26 cabang toko (B1 s/d B26) dan 65 brand.',
-        '- Gunakan data ini secara proaktif kapan pun user menanyakan: kehadiran BA hari ini, siapa yang bertugas di toko tertentu, daftar BA brand tertentu, atau analisis distribusi tim toko.',
-        '- Jika user meminta rekapitulasi atau slide presentasi tentang performa/kehadiran BA, kombinasikan data dari tool BA dengan tool `generate_file` (format "pdf" atau "xlsx").',
+        '  e. `get_ba_contents`: Cari dan pantau setoran konten video promosi Beauty Advisor (link video TikTok, Instagram, dll.), tanggal setor, status verifikasi (Terverifikasi vs Menunggu Verifikasi), serta rekap sebaran platform dan brand/outlet. Gunakan saat user menanyakan konten video terbaru, siapa yang sudah/belum setor konten hari/minggu ini, atau link video BA.',
+        '  f. `get_ba_content_stats`: Lihat KPI kepatuhan setoran konten BA mingguan, rekap missed/alpa setor, compliance rate (%), riwayat surat peringatan terakhir (last warning stage), dan rekomendasi tahapan sanksi berikutnya (recommended next stage: SP1, SP2, SP3, Surat Teguran, Surat Peringatan). Gunakan saat user/leader ingin mengevaluasi kedisiplinan BA, mencari BA yang terancam SP, atau menyusun laporan audit KPI konten.',
+        '- KETENTUAN KPI KONTEN BA:',
+        '  * Setiap BA diwajibkan menyetor konten video promosi berkala (TikTok/Instagram) untuk mendongkrak visibilitas produk di toko.',
+        '  * Jika BA tidak setor konten (missed count bertambah), sistem akan otomatis merekomendasikan penerbitan Surat Peringatan berjenjang (Surat Teguran -> SP1 -> SP2 -> SP3).',
+        '  * Sajikan analisis kepatuhan dengan objektif, sebutkan angka kepatuhan (%), jumlah missed vs submitted, serta nama brand & outlet penempatan.',
+        '- Jika user meminta rekapitulasi atau slide presentasi tentang performa/kehadiran/konten BA, kombinasikan data dari tool BA dengan tool `generate_file` (format "pdf" atau "xlsx").',
         '',
         'Referensi Anggota Tim / PIC yang tersedia: ' + (memberSummary || '(Belum ada anggota)'),
         '',
@@ -637,20 +644,22 @@ export async function POST(req) {
                 }),
 
                 get_active_promos: tool({
-                    description: 'Dapatkan data promo yang sedang aktif berjalan hari ini di semua outlet Beauty Kendari. Mendukung filter berdasarkan brand, cabang outlet, jenis promo (diskon, gwp/hadiah, voucher, potongan_harga), flash sale, atau pencarian bebas.',
+                    description: 'Dapatkan data promo yang sedang aktif berjalan hari ini maupun promo mendatang di semua outlet Beauty Kendari. Mendukung filter berdasarkan status promo (sedang_berjalan/akan_berjalan), brand, cabang outlet, jenis promo (diskon, gwp/hadiah, voucher, potongan_harga), flash sale, atau pencarian bebas.',
                     inputSchema: z.object({
                         brand: z.string().optional().describe('Filter nama brand (misal: "WARDAH", "EMINA", "MAYBELLINE", "NIVEA", "AZARINE", "IMPLORA")'),
                         outlet: z.string().optional().describe('Filter cabang outlet (misal: "B2", "Beauty 2", "B11", "Online Store", atau "SEMUA")'),
+                        status: z.enum(['sedang_berjalan', 'akan_berjalan', 'berakhir', 'all']).optional().default('sedang_berjalan').describe('Status promo: "sedang_berjalan" (aktif saat ini, default), "akan_berjalan" (mendatang), "berakhir" (sudah lewat), atau "all" (semua).'),
                         jenisPromo: z.string().optional().describe('Jenis promo: diskon, gwp (hadiah), voucher, potongan_harga, dll.'),
                         search: z.string().optional().describe('Kata kunci pencarian bebas (nama promo, brand, produk, mekanisme)'),
                         flashSaleOnly: z.boolean().optional().describe('Filter hanya promo flash sale aktif'),
                         limit: z.number().optional().default(20).describe('Batas maksimal promo yang ditampilkan (default: 20)'),
                     }),
-                    execute: async ({ brand, outlet, jenisPromo, search, flashSaleOnly, limit }) => {
+                    execute: async ({ brand, outlet, status, jenisPromo, search, flashSaleOnly, limit }) => {
                         try {
                             const res = await queryActivePromos({
                                 brand,
                                 outlet,
+                                status: status || 'sedang_berjalan',
                                 jenisPromo,
                                 search,
                                 flashSaleOnly,
@@ -736,6 +745,54 @@ export async function POST(req) {
                             return { ok: true, ...res };
                         } catch (err) {
                             return { ok: false, error: err.message || 'Gagal memuat master data outlet & brand BA.' };
+                        }
+                    },
+                }),
+
+                get_ba_contents: tool({
+                    description: 'Cari dan pantau setoran konten video promosi Beauty Advisor (link video TikTok, Instagram, dll.), tanggal setor, status verifikasi (Terverifikasi / Menunggu Verifikasi), serta rekap sebaran platform dan brand/outlet. Mendukung filter berdasarkan tanggal (YYYY-MM-DD), rentang tanggal, brand, outlet (B1 s/d B26), kode BA, status verifikasi, atau pencarian teks.',
+                    inputSchema: z.object({
+                        date: z.string().optional().describe('Tanggal upload konten spesifik (YYYY-MM-DD)'),
+                        startDate: z.string().optional().describe('Tanggal awal rentang (YYYY-MM-DD)'),
+                        endDate: z.string().optional().describe('Tanggal akhir rentang (YYYY-MM-DD)'),
+                        brand: z.string().optional().describe('Filter nama brand (misal: "WARDAH", "G2G", "EMINA", "LA TULIPE")'),
+                        outlet: z.string().optional().describe('Filter cabang outlet toko penempatan (misal: "B2", "B15")'),
+                        baCode: z.string().optional().describe('Filter kode BA tertentu (misal: "25040930")'),
+                        status: z.enum(['all', 'verified', 'pending']).optional().default('all').describe('Filter status verifikasi: "verified" (sudah diverifikasi), "pending" (menunggu verifikasi), atau "all"'),
+                        search: z.string().optional().describe('Kata kunci pencarian bebas (nama BA, brand, outlet, atau tautan link)'),
+                        limit: z.number().optional().default(30).describe('Batas jumlah data konten yang ditampilkan (default: 30)'),
+                        offset: z.number().optional().default(0).describe('Offset pagination'),
+                    }),
+                    execute: async (params) => {
+                        try {
+                            const res = await queryBaContents(params);
+                            return { ok: true, ...res };
+                        } catch (err) {
+                            return { ok: false, error: err.message || 'Gagal memuat data konten Beauty Advisor.' };
+                        }
+                    },
+                }),
+
+                get_ba_content_stats: tool({
+                    description: 'Lihat statistik KPI kepatuhan setoran konten BA mingguan, rekap missed/alpa setor, rasio kepatuhan (%), riwayat surat peringatan terakhir (last warning stage), dan rekomendasi tahapan sanksi berikutnya (SP1, SP2, SP3, Surat Teguran, Surat Peringatan). Sangat berguna untuk audit kedisiplinan BA, evaluasi brand, dan rekomendasi sanksi manajemen.',
+                    inputSchema: z.object({
+                        brand: z.string().optional().describe('Filter nama brand tertentu (misal: "WARDAH", "MAKE OVER", "Y.O.U")'),
+                        outlet: z.string().optional().describe('Filter cabang outlet toko penempatan (misal: "B2", "B4")'),
+                        baCode: z.string().optional().describe('Filter kode BA spesifik (misal: "22031003")'),
+                        recommendedStage: z.enum(['all', 'SP3', 'SP2', 'SP1', 'SURAT_PERINGATAN', 'SURAT_TEGURAN']).optional().default('all').describe('Filter berdasarkan rekomendasi tahapan sanksi (misal "SP3" untuk BA paling kritis)'),
+                        warningStage: z.string().optional().describe('Filter berdasarkan surat peringatan terakhir yang pernah diterbitkan (misal: "SP1", "SURAT_TEGURAN", "none")'),
+                        hasMissed: z.boolean().optional().describe('Set true untuk hanya menampilkan BA yang pernah bolos setor konten (missed > 0)'),
+                        sortBy: z.enum(['missed_desc', 'submitted_desc', 'compliance_desc', 'compliance_asc']).optional().default('missed_desc').describe('Urutan data: "missed_desc" (paling banyak bolos / kritis), "submitted_desc" (paling rajin), "compliance_desc" (% kepatuhan tertinggi), "compliance_asc" (% kepatuhan terendah)'),
+                        search: z.string().optional().describe('Kata kunci pencarian bebas (nama BA, brand, outlet)'),
+                        limit: z.number().optional().default(40).describe('Batas jumlah data statistik BA yang ditampilkan (default: 40)'),
+                        offset: z.number().optional().default(0).describe('Offset pagination'),
+                    }),
+                    execute: async (params) => {
+                        try {
+                            const res = await queryBaContentStats(params);
+                            return { ok: true, ...res };
+                        } catch (err) {
+                            return { ok: false, error: err.message || 'Gagal memuat statistik konten Beauty Advisor.' };
                         }
                     },
                 }),

@@ -8,7 +8,7 @@ import {
     Settings2, Settings, X, Check, Loader2, Feather, ShieldCheck, Database,
     Brain, Zap, Trash2, Plus, Power, GitBranch, LogIn, ArrowLeft, RotateCcw, Lock,
     History, TrendingUp, Store, Sparkles, Target, ArrowUpRight, AlertCircle,
-    CheckSquare, PlusCircle, Users, Tag,
+    CheckSquare, PlusCircle, Users, Tag, Video,
 } from 'lucide-react';
 import ChatMessage from '@/components/ChatMessage';
 import ChatInput from '@/components/ChatInput';
@@ -21,6 +21,20 @@ const BIGQUERY_SUGGESTED_QUERIES = [
         query: 'Bebie, cek rekap absensi Beauty Advisor yang hadir di outlet hari ini dan siapa saja yang masih bertugas.',
         icon: Users,
         iconBg: 'bg-pink-100 text-pink-600',
+    },
+    {
+        title: 'Setoran Konten BA',
+        desc: 'Pantau video promosi TikTok & IG yang di-upload oleh Beauty Advisor.',
+        query: 'Bebie, cek setoran konten video promosi Beauty Advisor yang masuk hari ini beserta link videonya.',
+        icon: Video,
+        iconBg: 'bg-violet-100 text-violet-600',
+    },
+    {
+        title: 'Audit KPI & SP Konten',
+        desc: 'Lihat daftar BA yang banyak alpa setor konten dan direkomendasikan SP.',
+        query: 'Bebie, tampilkan rekap kepatuhan konten BA dan siapa saja yang direkomendasikan SP3 karena alpa setor.',
+        icon: AlertCircle,
+        iconBg: 'bg-amber-100 text-amber-600',
     },
     {
         title: 'Promo Aktif Hari Ini',
@@ -41,7 +55,7 @@ const BIGQUERY_SUGGESTED_QUERIES = [
         desc: 'Cabang mana dengan performa penjualan tertinggi saat ini?',
         query: 'Tampilkan ranking cabang berdasarkan penjualan bulan ini.',
         icon: Store,
-        iconBg: 'bg-amber-100 text-amber-600',
+        iconBg: 'bg-emerald-100 text-emerald-600',
     },
 ];
 
@@ -52,6 +66,20 @@ const GENERAL_SUGGESTED_QUERIES = [
         query: 'Bebie, cek rekap absensi Beauty Advisor yang hadir di outlet hari ini dan siapa saja yang masih bertugas.',
         icon: Users,
         iconBg: 'bg-pink-100 text-pink-600',
+    },
+    {
+        title: 'Setoran Konten BA',
+        desc: 'Pantau video promosi TikTok & IG yang di-upload oleh Beauty Advisor.',
+        query: 'Bebie, cek setoran konten video promosi Beauty Advisor yang masuk hari ini beserta link videonya.',
+        icon: Video,
+        iconBg: 'bg-violet-100 text-violet-600',
+    },
+    {
+        title: 'Audit KPI & SP Konten',
+        desc: 'Lihat daftar BA yang banyak alpa setor konten dan direkomendasikan SP.',
+        query: 'Bebie, tampilkan rekap kepatuhan konten BA dan siapa saja yang direkomendasikan SP3 karena alpa setor.',
+        icon: AlertCircle,
+        iconBg: 'bg-amber-100 text-amber-600',
     },
     {
         title: 'Tim Beauty Advisor',
