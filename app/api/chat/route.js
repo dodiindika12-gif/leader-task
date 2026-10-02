@@ -30,6 +30,11 @@ import {
     queryBaContents,
     queryBaContentStats,
 } from '@/lib/beauty-advisor';
+import {
+    searchAffariMembers,
+    getAffariMemberDetail,
+    getAffariOutlets,
+} from '@/lib/affari-member';
 
 
 export const maxDuration = 180;
@@ -153,6 +158,18 @@ function systemPrompt({ memories, skills, canUseBigQuery = true, member = null, 
         '  * Jika BA tidak setor konten (missed count bertambah), sistem akan otomatis merekomendasikan penerbitan Surat Peringatan berjenjang (Surat Teguran -> SP1 -> SP2 -> SP3).',
         '  * Sajikan analisis kepatuhan dengan objektif, sebutkan angka kepatuhan (%), jumlah missed vs submitted, serta nama brand & outlet penempatan.',
         '- Jika user meminta rekapitulasi atau slide presentasi tentang performa/kehadiran/konten BA, kombinasikan data dari tool BA dengan tool `generate_file` (format "pdf" atau "xlsx").',
+        '',
+        '7. INTEGRASI DATA MEMBER & LOYALTY PROGRAM (AFFARI RETAIL):',
+        '- Anda memiliki integrasi langsung ke sistem data pelanggan / member loyalty Beauty via API resmi Affari Retail (https://api.affariretail.id/beauty).',
+        '- Pustaka Tool Member:',
+        '  a. `search_members`: Cari data member/pelanggan berdasarkan nama, nomor ponsel/WhatsApp (misal 0853...), nomor kartu member (14+ digit), kode member (misal 0200...), atau kode cabang/outlet (misal BT01). Menampilkan nama, kode, nomor kartu, nomor ponsel/WA, sisa saldo poin loyalty (poin_akhir), total akumulasi belanja (nilai_belanja_total), status keaktifan, dan kota/alamat.',
+        '  b. `get_member_detail`: Ambil profil lengkap, saldo poin saat ini, tanggal kedaluwarsa kartu (tgl_berakhir), status aktif/kedaluwarsa, usia, tautan WhatsApp (wa_link), dan riwayat akumulasi belanja untuk seorang pelanggan spesifik.',
+        '  c. `get_member_outlets`: Lihat daftar cabang/outlet toko yang terdaftar di sistem loyalty member.',
+        '- PANDUAN PELAYANAN MEMBER LOYALTY & POIN:',
+        '  * Ketika user/kasir/leader menanyakan saldo poin seorang pelanggan (misal: "cek poin member Bu Yusni", "cek nomor 085399..."), gunakan `search_members` atau `get_member_detail` untuk mencari data akurat.',
+        '  * Sajikan informasi member dengan ramah, rapi, dan mudah dibaca: sebutkan Nama Lengkap, Nomor Kartu, Saldo Poin Loyalty (contoh: "⭐ 49 Poin"), Status Kartu (Aktif / Kedaluwarsa), dan Cabang Terdaftar.',
+        '  * Jika user meminta daftar member di cabang tertentu atau daftar member dengan poin tertinggi, gunakan `search_members` dengan filter cabang.',
+        '  * Jika diminta rekapitulasi data member dalam jumlah banyak, tawarkan atau buatkan file Excel/PDF via tool `generate_file`.',
         '',
         'Referensi Anggota Tim / PIC yang tersedia: ' + (memberSummary || '(Belum ada anggota)'),
         '',
@@ -793,6 +810,52 @@ export async function POST(req) {
                             return { ok: true, ...res };
                         } catch (err) {
                             return { ok: false, error: err.message || 'Gagal memuat statistik konten Beauty Advisor.' };
+                        }
+                    },
+                }),
+
+                search_members: tool({
+                    description: 'Cari data member/pelanggan loyalty Beauty dari sistem Affari Retail. Bisa mencari berdasarkan nama pelanggan, nomor ponsel/WhatsApp (mis. 0853...), nomor kartu member, kode member (mis. 0200...), atau kode cabang/outlet (mis. BT01). Menampilkan info member, sisa saldo poin loyalty, status keaktifan, masa berlaku kartu, dan kota.',
+                    inputSchema: z.object({
+                        query: z.string().optional().describe('Kata kunci bebas: nama pelanggan, nomor HP/WA, nomor kartu, kode member, atau kode cabang.'),
+                        field: z.enum(['Nama', 'Ponsel', 'NoKartu', 'Kode', 'Outlet', 'Kota', 'Status']).optional().describe('Filter spesifik berdasarkan nama kolom jika ingin pencarian presisi.'),
+                        value: z.string().optional().describe('Nilai pencarian untuk field spesifik.'),
+                        limit: z.number().optional().default(25).describe('Batas maksimal data member yang ditampilkan (default: 25)'),
+                    }),
+                    execute: async ({ query, field, value, limit }) => {
+                        try {
+                            const res = await searchAffariMembers({ query, field, value, limit });
+                            return res;
+                        } catch (err) {
+                            return { ok: false, error: err.message || 'Gagal mencari data member Affari.' };
+                        }
+                    },
+                }),
+
+                get_member_detail: tool({
+                    description: 'Lihat rincian lengkap profil member, saldo poin loyalty saat ini (poin_akhir), total akumulasi belanja (nilai_belanja_total), masa berlaku kartu, status aktif/kedaluwarsa, usia, dan kontak WhatsApp untuk seorang pelanggan spesifik.',
+                    inputSchema: z.object({
+                        identifier: z.string().describe('Identitas member: bisa berupa Kode Member (misal 0200142399), Nomor HP/WhatsApp (misal 085399614162), Nomor Kartu Member (misal 10001182601000102299), atau Nama Lengkap.'),
+                    }),
+                    execute: async ({ identifier }) => {
+                        try {
+                            const res = await getAffariMemberDetail(identifier);
+                            return res;
+                        } catch (err) {
+                            return { ok: false, error: err.message || 'Gagal memuat detail member.' };
+                        }
+                    },
+                }),
+
+                get_member_outlets: tool({
+                    description: 'Daftar cabang/outlet toko yang terdaftar di sistem loyalty member Affari Retail.',
+                    inputSchema: z.object({}),
+                    execute: async () => {
+                        try {
+                            const res = await getAffariOutlets();
+                            return res;
+                        } catch (err) {
+                            return { ok: false, error: err.message || 'Gagal memuat daftar outlet member.' };
                         }
                     },
                 }),

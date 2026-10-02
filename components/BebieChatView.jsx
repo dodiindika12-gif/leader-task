@@ -8,13 +8,20 @@ import {
     Settings2, Settings, X, Check, Loader2, Feather, ShieldCheck, Database,
     Brain, Zap, Trash2, Plus, Power, GitBranch, LogIn, ArrowLeft, RotateCcw, Lock,
     History, TrendingUp, Store, Sparkles, Target, ArrowUpRight, AlertCircle,
-    CheckSquare, PlusCircle, Users, Tag, Video,
+    CheckSquare, PlusCircle, Users, Tag, Video, Award,
 } from 'lucide-react';
 import ChatMessage from '@/components/ChatMessage';
 import ChatInput from '@/components/ChatInput';
 import ChatHistoryDrawer from '@/components/ChatHistoryDrawer';
 
 const BIGQUERY_SUGGESTED_QUERIES = [
+    {
+        title: 'Cek Poin & Member Loyalty',
+        desc: 'Cari data pelanggan, saldo poin loyalty, dan masa berlaku kartu member.',
+        query: 'Bebie, bagaimana cara cek poin dan profil member pelanggan? Tolong berikan ringkasannya.',
+        icon: Award,
+        iconBg: 'bg-amber-100 text-amber-600',
+    },
     {
         title: 'Absensi BA Hari Ini',
         desc: 'Cek rekap kehadiran & shift Beauty Advisor di seluruh cabang toko hari ini.',
@@ -34,7 +41,7 @@ const BIGQUERY_SUGGESTED_QUERIES = [
         desc: 'Lihat daftar BA yang banyak alpa setor konten dan direkomendasikan SP.',
         query: 'Bebie, tampilkan rekap kepatuhan konten BA dan siapa saja yang direkomendasikan SP3 karena alpa setor.',
         icon: AlertCircle,
-        iconBg: 'bg-amber-100 text-amber-600',
+        iconBg: 'bg-rose-100 text-rose-600',
     },
     {
         title: 'Promo Aktif Hari Ini',
@@ -50,16 +57,16 @@ const BIGQUERY_SUGGESTED_QUERIES = [
         icon: TrendingUp,
         iconBg: 'bg-indigo-100 text-indigo-600',
     },
-    {
-        title: 'Peringkat Cabang',
-        desc: 'Cabang mana dengan performa penjualan tertinggi saat ini?',
-        query: 'Tampilkan ranking cabang berdasarkan penjualan bulan ini.',
-        icon: Store,
-        iconBg: 'bg-emerald-100 text-emerald-600',
-    },
 ];
 
 const GENERAL_SUGGESTED_QUERIES = [
+    {
+        title: 'Cek Poin & Member Loyalty',
+        desc: 'Cari data pelanggan, saldo poin loyalty, dan masa berlaku kartu member.',
+        query: 'Bebie, bagaimana cara cek poin dan profil member pelanggan? Tolong berikan ringkasannya.',
+        icon: Award,
+        iconBg: 'bg-amber-100 text-amber-600',
+    },
     {
         title: 'Absensi BA Hari Ini',
         desc: 'Cek rekap kehadiran & shift Beauty Advisor di seluruh cabang toko hari ini.',
@@ -80,13 +87,6 @@ const GENERAL_SUGGESTED_QUERIES = [
         query: 'Bebie, tampilkan rekap kepatuhan konten BA dan siapa saja yang direkomendasikan SP3 karena alpa setor.',
         icon: AlertCircle,
         iconBg: 'bg-amber-100 text-amber-600',
-    },
-    {
-        title: 'Tim Beauty Advisor',
-        desc: 'Lihat daftar Beauty Advisor berdasarkan brand naungan atau penempatan toko.',
-        query: 'Bebie, tampilkan daftar Beauty Advisor brand Wardah beserta toko penempatannya.',
-        icon: Sparkles,
-        iconBg: 'bg-purple-100 text-purple-600',
     },
     {
         title: 'Promo Aktif Hari Ini',
