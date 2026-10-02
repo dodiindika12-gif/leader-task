@@ -274,30 +274,39 @@ export default function ChatScreen() {
   const saveThread = useCallback(async (msgs: ChatMessage[]) => {
     if (msgs.length === 0 || !memberId) return;
     try {
-      const threadId = activeThreadId || `thread_${Date.now()}`;
       const firstUser = msgs.find(m => m.role === 'user');
       const title = firstUser?.content?.slice(0, 50) || 'Percakapan Bebie';
+      const payload: any = {
+        title,
+        messages: msgs.map(m => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          parts: [{ type: 'text', text: m.content }],
+        })),
+      };
+      if (activeThreadId) {
+        payload.id = activeThreadId;
+      }
+
       const res = await fetch(`${NEXT_API_BASE_URL}/api/chat/threads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...sessionHeaders },
-        body: JSON.stringify({
-          id: threadId,
-          title,
-          messages: msgs.map(m => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            parts: [{ type: 'text', text: m.content }],
-          })),
-        }),
+        body: JSON.stringify(payload),
       });
-      if (res.ok && !activeThreadId) {
-        setActiveThreadId(threadId);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ok && data.thread) {
+          if (!activeThreadId && data.thread.id) {
+            setActiveThreadId(data.thread.id);
+          }
+          loadThreads();
+        }
       }
     } catch (err) {
       console.warn('Gagal menyimpan thread:', err);
     }
-  }, [activeThreadId, memberId, sessionHeaders]);
+  }, [activeThreadId, memberId, sessionHeaders, loadThreads]);
 
   const selectThread = useCallback(async (threadId: string) => {
     try {

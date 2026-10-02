@@ -574,7 +574,10 @@ function SystemProcessGroup({ parts = [], isLoading = false }) {
 
 export default function ChatMessage({ message, showSystemProcess = false, isLoading = false }) {
     const isUser = message.role === 'user';
-    const parts = message.parts || [];
+    let parts = Array.isArray(message.parts) && message.parts.length > 0 ? message.parts : [];
+    if (parts.length === 0 && message.content) {
+        parts = [{ type: 'text', text: typeof message.content === 'string' ? message.content : JSON.stringify(message.content) }];
+    }
 
     const hasFileToolPart = parts.some((p) => {
         const name = p.toolName || (p.type?.startsWith('tool-') ? p.type.replace(/^tool-/, '') : '');

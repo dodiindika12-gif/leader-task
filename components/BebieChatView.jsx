@@ -333,9 +333,22 @@ export default function BebieChatView({
 
         saveThreadTimerRef.current = setTimeout(async () => {
             try {
-                const threadId = activeThreadId || `thread_${Date.now()}`;
+                // Ambil teks dari user message pertama untuk judul percakapan
                 const firstUserMsg = messages.find(m => m.role === 'user');
-                const title = firstUserMsg?.content?.slice(0, 50) || 'Percakapan Bebie';
+                const userText =
+                    firstUserMsg?.parts?.find(p => p.type === 'text')?.text ||
+                    (typeof firstUserMsg?.content === 'string' ? firstUserMsg.content : '') ||
+                    '';
+                const title = userText.trim().slice(0, 60) || 'Percakapan Bebie';
+
+                // Hanya sertakan id jika activeThreadId sudah ada (berupa UUID valid)
+                const payload = {
+                    title,
+                    messages,
+                };
+                if (activeThreadId) {
+                    payload.id = activeThreadId;
+                }
 
                 const res = await fetch('/api/chat/threads', {
                     method: 'POST',
@@ -343,29 +356,31 @@ export default function BebieChatView({
                         'Content-Type': 'application/json',
                         ...sessionHeaders,
                     },
-                    body: JSON.stringify({
-                        id: threadId,
-                        title,
-                        messages,
-                    }),
+                    body: JSON.stringify(payload),
                 });
 
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.ok && !activeThreadId) {
-                        setActiveThreadId(threadId);
-                        loadThreads();
+                    if (data.ok && data.thread) {
+                        if (!activeThreadId && data.thread.id) {
+                            setActiveThreadId(data.thread.id);
+                        }
+                        // Update daftar thread di history secara langsung
+                        setThreads(prev => {
+                            const remaining = prev.filter(t => t.id !== data.thread.id);
+                            return [data.thread, ...remaining];
+                        });
                     }
                 }
             } catch (err) {
                 console.warn('Gagal menyimpan riwayat chat:', err);
             }
-        }, 1500);
+        }, 500);
 
         return () => {
             if (saveThreadTimerRef.current) clearTimeout(saveThreadTimerRef.current);
         };
-    }, [messages, isLoading, activeThreadId, session?.memberId, sessionHeaders, loadThreads]);
+    }, [messages, isLoading, activeThreadId, session?.memberId, sessionHeaders]);
 
     const handleSelectThread = useCallback(async (threadId) => {
         try {
@@ -376,7 +391,16 @@ export default function BebieChatView({
                 const data = await res.json();
                 if (data.ok && data.thread) {
                     setActiveThreadId(data.thread.id);
-                    setMessages(data.thread.messages || []);
+                    const restoredMessages = (data.thread.messages || []).map((m, idx) => ({
+                        id: m.id || `msg_${idx}_${Date.now()}`,
+                        role: m.role,
+                        content: m.content || m.parts?.find(p => p.type === 'text')?.text || '',
+                        parts: Array.isArray(m.parts) && m.parts.length > 0
+                            ? m.parts
+                            : [{ type: 'text', text: m.content || '' }],
+                        createdAt: m.createdAt || m.created_at || new Date().toISOString(),
+                    }));
+                    setMessages(restoredMessages);
                     setHistoryOpen(false);
                     showToast('Riwayat percakapan dimuat.');
                 }
@@ -408,6 +432,7 @@ export default function BebieChatView({
     const handleNewChat = useCallback(() => {
         setActiveThreadId(null);
         setMessages([]);
+        setHistoryOpen(false);
         showToast('Memulai percakapan baru.');
     }, [setMessages, showToast]);
 
