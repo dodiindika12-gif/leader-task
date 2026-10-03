@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { isMeetingSchedule, isWorksheetSchedule } from './WeeklyScheduleView';
+import { isScheduleActiveOnDate } from '../lib/calendar-utils';
 
 const DAYS_ORDER = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
@@ -123,8 +124,9 @@ export default function SidebarScheduleWidget({
     const myTodaySchedules = useMemo(() => {
         return (schedules || [])
             .filter(item => {
-                if (!item || !item.day) return false;
-                return item.day.trim().toLowerCase() === currentDayName.toLowerCase() && isMySchedule(item);
+                if (!item) return false;
+                const activeToday = isScheduleActiveOnDate(item, currentTime);
+                return activeToday && isMySchedule(item);
             })
             .map(item => {
                 const startTimeStr = item.startTime || item.start_time || '09:00';
@@ -143,7 +145,7 @@ export default function SidebarScheduleWidget({
                 };
             })
             .sort((a, b) => a.startTotalMin - b.startTotalMin);
-    }, [schedules, currentDayName, isMySchedule]);
+    }, [schedules, currentTime, isMySchedule]);
 
     // 1. Ongoing schedule ("Jadwal yang sedang berjalan")
     const ongoingSchedule = useMemo(() => {
@@ -213,13 +215,13 @@ export default function SidebarScheduleWidget({
             };
         }
 
-        // If none left today, find next schedule in coming days of the week
-        const currentDayIndex = currentTime.getDay();
-        for (let offset = 1; offset <= 6; offset++) {
-            const targetDayIndex = (currentDayIndex + offset) % 7;
-            const targetDayName = DAYS_ORDER[targetDayIndex];
+        // If none left today, find next schedule in coming 7 days
+        for (let offset = 1; offset <= 7; offset++) {
+            const targetDate = new Date(currentTime);
+            targetDate.setDate(currentTime.getDate() + offset);
+            const targetDayName = DAYS_ORDER[targetDate.getDay()];
             const targetDaySchedules = (schedules || [])
-                .filter(item => item?.day?.trim().toLowerCase() === targetDayName.toLowerCase() && isMySchedule(item))
+                .filter(item => isScheduleActiveOnDate(item, targetDate) && isMySchedule(item))
                 .map(item => {
                     const startTimeStr = item.startTime || item.start_time || '09:00';
                     return {

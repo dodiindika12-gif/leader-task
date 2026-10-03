@@ -8483,21 +8483,39 @@ export default function TaskManagerApp() {
             try {
                 const { data: schedData, error: schedError } = await supabase.from('schedules').select('*').order('created_at', { ascending: true });
                 if (!schedError && Array.isArray(schedData)) {
-                    loadedSchedules = schedData.map(s => ({
-                        id: s.id,
-                        type: isMeetingSchedule(s) ? 'schedule_meeting' : 'schedule_worksheet',
-                        title: s.title || '',
-                        day: s.day || 'Senin',
-                        startTime: s.start_time || '09:00',
-                        endTime: s.end_time || '10:00',
-                        picId: s.pic_id || '',
-                        attendees: Array.isArray(s.attendees) ? s.attendees : [],
-                        location: s.location || '',
-                        notes: s.notes || '',
-                        color: s.color || '#6366f1',
-                        createdAt: s.created_at,
-                        updatedAt: s.updated_at
-                    }));
+                    loadedSchedules = schedData.map(s => {
+                        let notesText = s.notes || '';
+                        let recurrence = { type: 'weekly', days: [s.day || 'Senin'] };
+                        let specificDate = null;
+                        if (s.notes && typeof s.notes === 'string' && s.notes.trim().startsWith('{') && s.notes.trim().endsWith('}')) {
+                            try {
+                                const parsed = JSON.parse(s.notes);
+                                if (parsed && typeof parsed === 'object') {
+                                    notesText = parsed.text ?? parsed.notes ?? '';
+                                    if (parsed.recurrence) recurrence = parsed.recurrence;
+                                    if (parsed.date) specificDate = parsed.date;
+                                }
+                            } catch (e) {}
+                        }
+
+                        return {
+                            id: s.id,
+                            type: isMeetingSchedule(s) ? 'schedule_meeting' : 'schedule_worksheet',
+                            title: s.title || '',
+                            day: s.day || 'Senin',
+                            startTime: s.start_time || '09:00',
+                            endTime: s.end_time || '10:00',
+                            picId: s.pic_id || '',
+                            attendees: Array.isArray(s.attendees) ? s.attendees : [],
+                            location: s.location || '',
+                            notes: notesText,
+                            recurrence: recurrence,
+                            date: specificDate,
+                            color: s.color || '#6366f1',
+                            createdAt: s.created_at,
+                            updatedAt: s.updated_at
+                        };
+                    });
                 }
             } catch (e) {}
 
@@ -8509,6 +8527,7 @@ export default function TaskManagerApp() {
                         let parsed = {};
                         try { parsed = JSON.parse(n.content || '{}'); } catch(e) {}
                         const rawItem = { ...parsed, type: n.type, title: n.title };
+                        const recurrence = parsed.recurrence || { type: 'weekly', days: [parsed.day || 'Senin'] };
                         return {
                             id: n.id,
                             type: isMeetingSchedule(rawItem) ? 'schedule_meeting' : 'schedule_worksheet',
@@ -8520,6 +8539,8 @@ export default function TaskManagerApp() {
                             attendees: Array.isArray(parsed.attendees) ? parsed.attendees : (Array.isArray(n.attendees) ? n.attendees : []),
                             location: n.location || parsed.location || '',
                             notes: parsed.notes || '',
+                            recurrence: recurrence,
+                            date: parsed.date || null,
                             color: n.color || parsed.color || '#6366f1',
                             createdAt: n.created_at,
                             updatedAt: n.updated_at
@@ -9661,6 +9682,13 @@ export default function TaskManagerApp() {
         } catch (e) {}
 
         const dbPicId = safeUUID(scheduleItem.picId, null);
+        const notesToPersist = (scheduleItem.recurrence || scheduleItem.date)
+            ? JSON.stringify({
+                notes: scheduleItem.notes || '',
+                recurrence: scheduleItem.recurrence || null,
+                date: scheduleItem.date || null
+            })
+            : (scheduleItem.notes || null);
 
         // Try inserting into schedules table
         const { error: schedError } = await supabase.from('schedules').insert({
@@ -9673,7 +9701,7 @@ export default function TaskManagerApp() {
             pic_id: dbPicId,
             attendees: Array.isArray(scheduleItem.attendees) ? scheduleItem.attendees : [],
             location: scheduleItem.location || null,
-            notes: scheduleItem.notes || null,
+            notes: notesToPersist,
             color: scheduleItem.color || '#6366f1',
             created_at: scheduleItem.createdAt || new Date().toISOString(),
             updated_at: scheduleItem.updatedAt || new Date().toISOString()
@@ -9694,6 +9722,8 @@ export default function TaskManagerApp() {
                     attendees: scheduleItem.attendees || [],
                     location: scheduleItem.location,
                     notes: scheduleItem.notes,
+                    recurrence: scheduleItem.recurrence || null,
+                    date: scheduleItem.date || null,
                     color: scheduleItem.color
                 }),
                 pic_id: dbPicId,
@@ -9711,6 +9741,13 @@ export default function TaskManagerApp() {
         } catch (e) {}
 
         const dbPicId = safeUUID(updatedItem.picId, null);
+        const notesToPersist = (updatedItem.recurrence || updatedItem.date)
+            ? JSON.stringify({
+                notes: updatedItem.notes || '',
+                recurrence: updatedItem.recurrence || null,
+                date: updatedItem.date || null
+            })
+            : (updatedItem.notes || null);
 
         // Try updating schedules table
         const { error: schedError } = await supabase.from('schedules').update({
@@ -9722,7 +9759,7 @@ export default function TaskManagerApp() {
             pic_id: dbPicId,
             attendees: Array.isArray(updatedItem.attendees) ? updatedItem.attendees : [],
             location: updatedItem.location || null,
-            notes: updatedItem.notes || null,
+            notes: notesToPersist,
             color: updatedItem.color || '#6366f1',
             updated_at: new Date().toISOString()
         }).eq('id', updatedItem.id);
@@ -9739,6 +9776,8 @@ export default function TaskManagerApp() {
                     attendees: updatedItem.attendees || [],
                     location: updatedItem.location,
                     notes: updatedItem.notes,
+                    recurrence: updatedItem.recurrence || null,
+                    date: updatedItem.date || null,
                     color: updatedItem.color
                 }),
                 pic_id: dbPicId,
