@@ -7,6 +7,7 @@ import TimelineView from '../components/TimelineView';
 import MinuteOfMeeting from '../components/MinuteOfMeeting';
 import ProjectSettingsModal from '../components/ProjectSettingsModal';
 import WeeklyScheduleView, { getRoleLevel, isMeetingSchedule, isWorksheetSchedule } from '../components/WeeklyScheduleView';
+import MeetingCalendarView from '../components/MeetingCalendarView';
 import MainDashboard from '../components/MainDashboard';
 import NotificationCenter from '../components/NotificationCenter';
 import MemberMigrationModal from '../components/MemberMigrationModal';
@@ -10679,7 +10680,7 @@ export default function TaskManagerApp() {
                         )}
 
                         {view === 'schedule_meeting' && (
-                            <WeeklyScheduleView
+                            <MeetingCalendarView
                                 type="meeting"
                                 schedules={filteredAccessibleSchedules}
                                 members={members}
