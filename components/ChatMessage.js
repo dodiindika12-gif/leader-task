@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { FileText, Download, Wrench, AlertCircle, Settings, ChevronDown, Sparkles } from 'lucide-react';
+import BebieAvatar from './BebieAvatar';
 
 const BEAUTY_QUOTES = [
     { text: "Sedang Pakai Sunscreen... Biar Data Tetap Glowing! 🧴✨" },
@@ -572,12 +573,24 @@ function SystemProcessGroup({ parts = [], isLoading = false }) {
     );
 }
 
-export default function ChatMessage({ message, showSystemProcess = false, isLoading = false }) {
+export default function ChatMessage({ message, showSystemProcess = false, isLoading = false, useStaticIdle = false }) {
     const isUser = message.role === 'user';
     let parts = Array.isArray(message.parts) && message.parts.length > 0 ? message.parts : [];
     if (parts.length === 0 && message.content) {
         parts = [{ type: 'text', text: typeof message.content === 'string' ? message.content : JSON.stringify(message.content) }];
     }
+
+    const hasLearningTool = parts.some(
+        (p) =>
+            (p.toolName === 'remember' || p.toolName === 'refine_skill') ||
+            (p.toolInvocation?.toolName === 'remember' || p.toolInvocation?.toolName === 'refine_skill')
+    ) || message?.toolInvocations?.some(
+        (ti) => ti.toolName === 'remember' || ti.toolName === 'refine_skill'
+    );
+
+    const messageAvatarState = isLoading
+        ? (hasLearningTool ? 'learning' : 'working')
+        : (hasLearningTool ? 'learning' : 'idle');
 
     const hasFileToolPart = parts.some((p) => {
         const name = p.toolName || (p.type?.startsWith('tool-') ? p.type.replace(/^tool-/, '') : '');
@@ -842,12 +855,11 @@ export default function ChatMessage({ message, showSystemProcess = false, isLoad
                     <i className="fa-solid fa-user" aria-hidden="true"></i>
                 </div>
             ) : (
-                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-xs border border-pink-200 bg-pink-100 flex items-center justify-center mt-0.5">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src="/bebie-avatar.jpg"
-                        alt="Bebie - Beauty Bestie AI"
-                        className="w-full h-full object-cover"
+                <div className="mt-0.5 shrink-0">
+                    <BebieAvatar
+                        state={messageAvatarState}
+                        size="sm"
+                        useStaticIdle={!isLoading || useStaticIdle}
                     />
                 </div>
             )}
