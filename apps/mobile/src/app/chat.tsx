@@ -14,6 +14,7 @@ import {
   ScrollView,
   Animated,
   Dimensions,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -54,47 +55,103 @@ interface SuggestedQuery {
 // ---------------------------------------------------------------------------
 const GENERAL_QUERIES: SuggestedQuery[] = [
   {
-    title: 'Format Presentasi',
-    desc: 'Buatkan kerangka presentasi eksekutif yang profesional.',
+    title: 'Cek Poin & Member Loyalty',
+    desc: 'Cari data pelanggan, saldo poin loyalty, dan masa berlaku kartu member.',
+    query: 'Bebie, bagaimana cara cek poin dan profil member pelanggan? Tolong berikan ringkasannya.',
+    icon: 'gift-outline',
+    color: '#d97706',
+    bgColor: '#fffbeb',
+  },
+  {
+    title: 'Absensi BA Hari Ini',
+    desc: 'Cek rekap kehadiran & shift Beauty Advisor di seluruh cabang toko hari ini.',
+    query: 'Bebie, cek rekap absensi Beauty Advisor yang hadir di outlet hari ini dan siapa saja yang masih bertugas.',
+    icon: 'people-outline',
+    color: '#db2777',
+    bgColor: '#fdf2f8',
+  },
+  {
+    title: 'Setoran Konten BA',
+    desc: 'Pantau video promosi TikTok & IG yang di-upload oleh Beauty Advisor.',
+    query: 'Bebie, cek setoran konten video promosi Beauty Advisor yang masuk hari ini beserta link videonya.',
+    icon: 'videocam-outline',
+    color: '#7c3aed',
+    bgColor: '#f5f3ff',
+  },
+  {
+    title: 'Promo Aktif Hari Ini',
+    desc: 'Cek daftar promo diskon & hadiah yang sedang berjalan di outlet hari ini.',
+    query: 'Bebie, apa saja promo dan diskon yang sedang aktif berjalan di outlet hari ini?',
+    icon: 'pricetag-outline',
+    color: '#e11d48',
+    bgColor: '#fff1f2',
+  },
+  {
+    title: 'Format Presentasi Eksekutif',
+    desc: 'Buatkan kerangka slide presentasi profesional.',
     query: 'Buatkan kerangka presentasi PPTX eksekutif 5 slide untuk evaluasi strategi operasional cabang.',
     icon: 'easel-outline',
     color: '#6366f1',
     bgColor: '#eef2ff',
   },
   {
-    title: 'Rangkum Rapat',
-    desc: 'Rapikan poin penting dan action items meeting.',
+    title: 'Rangkum Rapat & MoM',
+    desc: 'Rapikan poin penting dan action items meeting tim.',
     query: 'Bantu saya merapikan catatan rapat ini menjadi action plan dan daftar PIC yang terstruktur.',
     icon: 'sparkles-outline',
     color: '#e11d48',
     bgColor: '#fff1f2',
   },
-  {
-    title: 'Ide Peningkatan',
-    desc: 'Brainstorming strategi dan ide peningkatan layanan.',
-    query: 'Berikan 5 ide strategi kreatif untuk meningkatkan repeat order treatment kecantikan di klinik.',
-    icon: 'trending-up-outline',
-    color: '#d97706',
-    bgColor: '#fffbeb',
-  },
-  {
-    title: 'SOP & Template',
-    desc: 'Susun format rekapitulasi kerja mingguan.',
-    query: 'Buatkan template rekapitulasi kinerja mingguan tim dalam format tabel yang rapi.',
-    icon: 'document-text-outline',
-    color: '#059669',
-    bgColor: '#ecfdf5',
-  },
 ];
 
 const BIGQUERY_QUERIES: SuggestedQuery[] = [
   {
-    title: 'Pencapaian Omset',
+    title: 'Cek Poin & Member Loyalty',
+    desc: 'Cari data pelanggan, saldo poin loyalty, dan masa berlaku kartu member.',
+    query: 'Bebie, bagaimana cara cek poin dan profil member pelanggan? Tolong berikan ringkasannya.',
+    icon: 'gift-outline',
+    color: '#d97706',
+    bgColor: '#fffbeb',
+  },
+  {
+    title: 'Absensi BA Hari Ini',
+    desc: 'Cek rekap kehadiran & shift Beauty Advisor di seluruh cabang toko hari ini.',
+    query: 'Bebie, cek rekap absensi Beauty Advisor yang hadir di outlet hari ini dan siapa saja yang masih bertugas.',
+    icon: 'people-outline',
+    color: '#db2777',
+    bgColor: '#fdf2f8',
+  },
+  {
+    title: 'Setoran Konten BA',
+    desc: 'Pantau video promosi TikTok & IG yang di-upload oleh Beauty Advisor.',
+    query: 'Bebie, cek setoran konten video promosi Beauty Advisor yang masuk hari ini beserta link videonya.',
+    icon: 'videocam-outline',
+    color: '#7c3aed',
+    bgColor: '#f5f3ff',
+  },
+  {
+    title: 'Audit KPI & SP Konten',
+    desc: 'Lihat daftar BA yang banyak alpa setor konten dan direkomendasikan SP.',
+    query: 'Bebie, tampilkan rekap kepatuhan konten BA dan siapa saja yang direkomendasikan SP3 karena alpa setor.',
+    icon: 'alert-circle-outline',
+    color: '#e11d48',
+    bgColor: '#fff1f2',
+  },
+  {
+    title: 'Promo Aktif Hari Ini',
+    desc: 'Cek daftar promo diskon & hadiah yang sedang berjalan di outlet hari ini.',
+    query: 'Bebie, apa saja promo dan diskon yang sedang aktif berjalan di outlet hari ini?',
+    icon: 'pricetag-outline',
+    color: '#e11d48',
+    bgColor: '#fff1f2',
+  },
+  {
+    title: 'Pencapaian Omset Cabang',
     desc: 'Pencapaian penjualan bulan ini vs target per cabang.',
     query: 'Berapa pencapaian omset bulan ini dibanding target per cabang?',
     icon: 'trending-up-outline',
-    color: '#e11d48',
-    bgColor: '#fff1f2',
+    color: '#4f46e5',
+    bgColor: '#eef2ff',
   },
   {
     title: 'Peringkat Cabang',
@@ -105,20 +162,12 @@ const BIGQUERY_QUERIES: SuggestedQuery[] = [
     bgColor: '#eef2ff',
   },
   {
-    title: 'Top Produk',
+    title: 'Top Produk & Treatment',
     desc: '5 treatment dan produk terlaris bulan ini.',
     query: 'Apa 5 treatment dan produk terlaris di seluruh outlet bulan ini?',
     icon: 'sparkles-outline',
     color: '#d97706',
     bgColor: '#fffbeb',
-  },
-  {
-    title: 'Under-Target',
-    desc: 'Outlet dengan pencapaian masih di bawah 80%.',
-    query: 'Tampilkan cabang-cabang yang pencapaian targetnya masih di bawah 80%.',
-    icon: 'flag-outline',
-    color: '#059669',
-    bgColor: '#ecfdf5',
   },
 ];
 
@@ -198,7 +247,7 @@ function parseSSELine(line: string): SSEChunk | null {
 // Component
 // ---------------------------------------------------------------------------
 export default function ChatScreen() {
-  const { session } = useAuth();
+  const { session, logout } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
@@ -208,8 +257,9 @@ export default function ChatScreen() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
-  // Thread history
+  // Thread history & user profile
   const [historyVisible, setHistoryVisible] = useState(false);
+  const [profileVisible, setProfileVisible] = useState(false);
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(false);
 
@@ -530,12 +580,18 @@ export default function ChatScreen() {
           <View style={styles.gateWarning}>
             <Ionicons name="alert-circle-outline" size={14} color="#d97706" />
             <Text style={styles.gateWarningText}>
-              Akun Anda terdaftar sebagai Staff. Hubungi atasan jika memerlukan akses.
+              Akun Anda ({session?.email}) terdaftar sebagai Staff. Silakan masuk menggunakan akun Leader.
             </Text>
           </View>
-          <TouchableOpacity style={styles.gateBtn} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={16} color="#fff" />
-            <Text style={styles.gateBtnText}>Kembali</Text>
+          <TouchableOpacity
+            style={styles.gateBtn}
+            onPress={async () => {
+              await logout();
+              router.replace('/login');
+            }}
+          >
+            <Ionicons name="log-out-outline" size={16} color="#fff" />
+            <Text style={styles.gateBtnText}>Ganti Akun Lain</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -550,7 +606,11 @@ export default function ChatScreen() {
       <View style={[styles.messageBubbleRow, isUser ? styles.userRow : styles.assistantRow]}>
         {!isUser && (
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarEmoji}>🤖</Text>
+            <Image
+              source={require('../../assets/images/bebie-avatar.png')}
+              style={styles.chatBubbleAvatar}
+              resizeMode="contain"
+            />
           </View>
         )}
         <View style={[
@@ -578,7 +638,11 @@ export default function ChatScreen() {
     >
       <View style={styles.emptyAvatarWrap}>
         <View style={styles.emptyAvatar}>
-          <Text style={styles.emptyAvatarEmoji}>🌸</Text>
+          <Image
+            source={require('../../assets/images/bebie-avatar.png')}
+            style={styles.emptyAvatarImg}
+            resizeMode="contain"
+          />
         </View>
         <View style={styles.onlineDot} />
       </View>
@@ -622,6 +686,113 @@ export default function ChatScreen() {
         ))}
       </View>
     </ScrollView>
+  );
+
+  // User profile modal
+  const renderProfileModal = () => (
+    <Modal
+      visible={profileVisible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setProfileVisible(false)}
+    >
+      <View style={[styles.profileModalContainer, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.historyHeader}>
+          <Text style={styles.historyTitle}>Profil Pengguna</Text>
+          <TouchableOpacity
+            onPress={() => setProfileVisible(false)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close" size={24} color="#64748b" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.profileModalContent}>
+          {/* Avatar & Name */}
+          <View style={styles.profileCard}>
+            <View style={styles.profileAvatarLarge}>
+              <Text style={styles.profileAvatarLargeText}>
+                {session?.name ? session.name.charAt(0).toUpperCase() : 'U'}
+              </Text>
+            </View>
+            <Text style={styles.profileUserName}>{session?.name || 'Pengguna Busana'}</Text>
+            <Text style={styles.profileUserEmail}>{session?.email || ''}</Text>
+
+            <View style={styles.profileBadgeWrap}>
+              <View style={styles.roleBadge}>
+                <Ionicons name="shield-checkmark" size={12} color="#db2777" />
+                <Text style={styles.roleBadgeText}>{session?.role || 'Leader'}</Text>
+              </View>
+              {session?.division && (
+                <View style={styles.divisionBadge}>
+                  <Text style={styles.divisionBadgeText}>{session.division}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Capabilities */}
+          <View style={styles.infoSection}>
+            <Text style={styles.sectionHeader}>Status Integrasi</Text>
+            <View style={styles.infoRow}>
+              <View style={styles.infoRowLeft}>
+                <Ionicons name="server-outline" size={18} color="#4f46e5" />
+                <Text style={styles.infoRowLabel}>Akses BigQuery</Text>
+              </View>
+              <Text style={[styles.infoRowValue, canUseBigQuery ? styles.statusActive : styles.statusInactive]}>
+                {canUseBigQuery ? 'Aktif' : 'Nonaktif'}
+              </Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <View style={styles.infoRowLeft}>
+                <Ionicons name="globe-outline" size={18} color="#059669" />
+                <Text style={styles.infoRowLabel}>Backend Server</Text>
+              </View>
+              <Text style={styles.infoRowValue}>task.absgroup.biz.id</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <View style={styles.infoRowLeft}>
+                <Ionicons name="hardware-chip-outline" size={18} color="#db2777" />
+                <Text style={styles.infoRowLabel}>Aplikasi</Text>
+              </View>
+              <Text style={styles.infoRowValue}>Bebie AI Standalone</Text>
+            </View>
+          </View>
+
+          {/* Logout Action */}
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            onPress={() => {
+              Alert.alert(
+                'Keluar dari Bebie AI',
+                'Apakah Anda yakin ingin keluar dari akun ini?',
+                [
+                  { text: 'Batal', style: 'cancel' },
+                  {
+                    text: 'Keluar',
+                    style: 'destructive',
+                    onPress: async () => {
+                      setProfileVisible(false);
+                      await logout();
+                      router.replace('/login');
+                    },
+                  },
+                ]
+              );
+            }}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#ef4444" />
+            <Text style={styles.logoutBtnText}>Keluar dari Akun</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.appVersionFooter}>
+            Bebie AI for Android • ABS Group
+          </Text>
+        </ScrollView>
+      </View>
+    </Modal>
   );
 
   // Thread history modal
@@ -705,19 +876,20 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      {/* Header */}
+      {/* Header Standalone Bebie AI */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
-          <Ionicons name="arrow-back" size={20} color="#64748b" />
-        </TouchableOpacity>
-
-        <View style={styles.headerCenter}>
+        <View style={styles.headerLeft}>
           <View style={styles.headerAvatarWrap}>
-            <Text style={styles.headerAvatarEmoji}>🌸</Text>
+            <Image
+              source={require('../../assets/images/bebie-avatar.png')}
+              style={styles.headerAvatarImg}
+              resizeMode="contain"
+            />
+            <View style={styles.headerOnlineDot} />
           </View>
-          <View>
-            <Text style={styles.headerTitle}>Bebie AI</Text>
-            <View style={styles.headerBadgeRow}>
+          <View style={styles.headerTextWrap}>
+            <View style={styles.headerTitleRow}>
+              <Text style={styles.headerTitle}>Bebie AI</Text>
               {canUseBigQuery ? (
                 <View style={styles.headerBadgeBQ}>
                   <Ionicons name="server-outline" size={9} color="#4f46e5" />
@@ -726,30 +898,46 @@ export default function ChatScreen() {
               ) : (
                 <View style={styles.headerBadgeGeneral}>
                   <Ionicons name="sparkles" size={9} color="#64748b" />
-                  <Text style={styles.headerBadgeGeneralText}>Asisten Umum</Text>
+                  <Text style={styles.headerBadgeGeneralText}>Asisten</Text>
                 </View>
               )}
             </View>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
+              {session?.name ? session.name : 'Beauty Bestie AI'}
+            </Text>
           </View>
         </View>
 
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={handleNewChat}
+            style={[styles.headerBtn, messages.length === 0 && { opacity: 0.35 }]}
+            disabled={messages.length === 0}
+            accessibilityLabel="Percakapan Baru"
+          >
+            <Ionicons name="add-circle-outline" size={22} color="#0f172a" />
+          </TouchableOpacity>
+
           <TouchableOpacity
             onPress={() => {
               setHistoryVisible(true);
               loadThreads();
             }}
             style={styles.headerBtn}
+            accessibilityLabel="Riwayat Percakapan"
           >
-            <Ionicons name="time-outline" size={20} color="#64748b" />
+            <Ionicons name="time-outline" size={22} color="#0f172a" />
             {threads.length > 0 && <View style={styles.headerDot} />}
           </TouchableOpacity>
+
           <TouchableOpacity
-            onPress={handleNewChat}
-            style={[styles.headerBtn, messages.length === 0 && { opacity: 0.35 }]}
-            disabled={messages.length === 0}
+            onPress={() => setProfileVisible(true)}
+            style={styles.profileBtn}
+            accessibilityLabel="Profil Pengguna"
           >
-            <Ionicons name="add-circle-outline" size={20} color="#64748b" />
+            <Text style={styles.profileBtnText}>
+              {session?.name ? session.name.charAt(0).toUpperCase() : 'U'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -901,46 +1089,62 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  headerBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  headerCenter: {
+  headerLeft: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginLeft: 4,
   },
   headerAvatarWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: '#fce7f3',
     borderWidth: 1.5,
     borderColor: '#fbcfe8',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
   },
-  headerAvatarEmoji: {
-    fontSize: 18,
+  headerAvatarImg: {
+    width: 34,
+    height: 34,
+  },
+  headerOnlineDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#10b981',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  headerTextWrap: {
+    flex: 1,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   headerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: '#0f172a',
   },
-  headerBadgeRow: {
-    flexDirection: 'row',
+  headerSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
     marginTop: 1,
   },
   headerBadgeBQ: {
@@ -948,8 +1152,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     backgroundColor: '#eef2ff',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#c7d2fe',
@@ -964,8 +1168,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     backgroundColor: '#f1f5f9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -977,7 +1181,17 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
-    gap: 2,
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    position: 'relative',
   },
   headerDot: {
     position: 'absolute',
@@ -989,6 +1203,171 @@ const styles = StyleSheet.create({
     backgroundColor: '#db2777',
     borderWidth: 1.5,
     borderColor: '#fff',
+  },
+  profileBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fce7f3',
+    borderWidth: 1.5,
+    borderColor: '#fbcfe8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#db2777',
+  },
+
+  // Profile Modal
+  profileModalContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  profileModalContent: {
+    padding: 20,
+    gap: 18,
+  },
+  profileCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  profileAvatarLarge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#fce7f3',
+    borderWidth: 2,
+    borderColor: '#fbcfe8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  profileAvatarLargeText: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#db2777',
+  },
+  profileUserName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  profileUserEmail: {
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 12,
+  },
+  profileBadgeWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#fff1f2',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+  },
+  roleBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#be185d',
+  },
+  divisionBadge: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  divisionBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  infoSection: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    gap: 14,
+  },
+  sectionHeader: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  infoRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoRowLabel: {
+    fontSize: 14,
+    color: '#334155',
+    fontWeight: '500',
+  },
+  infoRowValue: {
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  statusActive: {
+    color: '#059669',
+  },
+  statusInactive: {
+    color: '#94a3b8',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 4,
+  },
+  logoutBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  appVersionFooter: {
+    textAlign: 'center',
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 6,
   },
 
   // Chat area
@@ -1014,17 +1393,21 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   avatarCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#fce7f3',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
     marginBottom: 2,
+    borderWidth: 1,
+    borderColor: '#fce7f3',
+    overflow: 'hidden',
   },
-  avatarEmoji: {
-    fontSize: 14,
+  chatBubbleAvatar: {
+    width: 26,
+    height: 26,
   },
   messageBubble: {
     borderRadius: 18,
@@ -1082,11 +1465,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: '#fce7f3',
-    borderWidth: 2.5,
+    width: 68,
+    height: 68,
+    borderRadius: 22,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
     borderColor: '#fbcfe8',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1095,9 +1478,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 4,
+    overflow: 'hidden',
   },
-  emptyAvatarEmoji: {
-    fontSize: 30,
+  emptyAvatarImg: {
+    width: 58,
+    height: 58,
   },
   onlineDot: {
     position: 'absolute',

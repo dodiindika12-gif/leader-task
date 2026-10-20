@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -33,9 +34,10 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password.trim());
-      router.replace('/(tabs)');
+      // Setelah login, langsung masuk ke chat Bebie
+      router.replace('/');
     } catch (err: any) {
-      Alert.alert('Login Gagal', err.message || 'Kredensial tidak valid.');
+      Alert.alert('Login Gagal', err.message || 'Kredensial tidak valid atau akun tidak terdaftar.');
     } finally {
       setLoading(false);
     }
@@ -55,16 +57,26 @@ export default function LoginScreen() {
         {/* Header / Logo Badge */}
         <View style={styles.header}>
           <View style={styles.logoBadge}>
-            <Ionicons name="sparkles" size={28} color="#db2777" />
+            <Image
+              source={require('../../assets/images/bebie-avatar.png')}
+              style={styles.logoImg}
+              resizeMode="contain"
+            />
+            <View style={styles.sparkleWrap}>
+              <Ionicons name="sparkles" size={14} color="#db2777" />
+            </View>
           </View>
-          <Text style={styles.brandTitle}>Task Leader ABS</Text>
-          <Text style={styles.subtitle}>Masuk untuk mengelola tugas dan agenda tim</Text>
+          <Text style={styles.brandTitle}>Bebie AI</Text>
+          <Text style={styles.brandTagline}>Beauty Bestie AI Assistant</Text>
+          <Text style={styles.subtitle}>
+            Masuk dengan kredensial yang sama dengan akun Busana Anda
+          </Text>
         </View>
 
         {/* Form Card */}
         <View style={styles.card}>
           {/* Email Field */}
-          <Text style={styles.label}>Email Kerja</Text>
+          <Text style={styles.label}>Email Busana</Text>
           <View style={styles.inputWrapper}>
             <Ionicons name="mail-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
             <TextInput
@@ -85,7 +97,7 @@ export default function LoginScreen() {
             <Ionicons name="lock-closed-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Masukkan password"
+              placeholder="Masukkan password akun Busana"
               placeholderTextColor="#94a3b8"
               value={password}
               onChangeText={setPassword}
@@ -114,7 +126,10 @@ export default function LoginScreen() {
             {loading ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.buttonText}>Masuk ke Dashboard</Text>
+              <View style={styles.buttonInner}>
+                <Ionicons name="chatbubble-ellipses" size={18} color="#ffffff" />
+                <Text style={styles.buttonText}>Masuk ke Bebie Chat</Text>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -133,7 +148,7 @@ export default function LoginScreen() {
 
         {/* Footer */}
         <Text style={styles.footerText}>
-          Aplikasi Manajemen Tugas & Agenda Pemimpin Divisi ABS Group
+          Asisten Cerdas Terintegrasi Busana Task & BigQuery Analytics
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -153,44 +168,70 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 28,
   },
   logoBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 22,
+    width: 76,
+    height: 76,
+    borderRadius: 24,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
     shadowColor: '#db2777',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
-    borderWidth: 1,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 5,
+    borderWidth: 1.5,
     borderColor: '#fce7f3',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  logoImg: {
+    width: 60,
+    height: 60,
+  },
+  sparkleWrap: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#fff1f2',
+    borderRadius: 10,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: '#fbcfe8',
   },
   brandTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '800',
     color: '#0f172a',
     letterSpacing: -0.5,
-    marginBottom: 6,
+    marginBottom: 4,
+  },
+  brandTagline: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#db2777',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748b',
     textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: 18,
   },
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 24,
     padding: 24,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.05,
-    shadowRadius: 16,
+    shadowRadius: 20,
     elevation: 3,
     borderWidth: 1,
     borderColor: '#f1f5f9',
@@ -238,13 +279,18 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
+  buttonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   buttonText: {
     color: '#ffffff',
     fontSize: 15,
     fontWeight: '700',
   },
   quickHintContainer: {
-    marginTop: 24,
+    marginTop: 22,
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
@@ -274,8 +320,8 @@ const styles = StyleSheet.create({
   },
   footerText: {
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: 11,
     color: '#94a3b8',
-    marginTop: 32,
+    marginTop: 28,
   },
 });

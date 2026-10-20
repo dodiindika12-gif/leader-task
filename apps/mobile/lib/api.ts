@@ -20,15 +20,14 @@ export const SUPABASE_ANON_KEY =
 // URL Backend Next.js untuk endpoint API server (/api/tasks, /api/chat, /api/verify-pin, dll.)
 function getApiBaseUrl(): string {
   const configured = process.env.EXPO_PUBLIC_API_URL?.trim();
-  if (configured && !configured.includes('leader.absgroup.biz.id')) {
+  if (configured && !configured.includes('leader.absgroup.biz.id') && !configured.includes('localhost') && !configured.includes('192.168.')) {
     return configured.replace(/\/+$/, '');
   }
-  // Pada browser web Expo, arahkan ke hostname yang sama di port Next.js (3001)
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
-    return `http://${window.location.hostname}:3001`;
+  if (configured && configured.startsWith('http')) {
+    return configured.replace(/\/+$/, '');
   }
-  // Fallback perangkat fisik / Expo Go di jaringan lokal yang sama
-  return 'http://192.168.10.224:3001';
+  // Default ke live production server Busana (bisa diakses di mana saja tanpa tunnel lokal)
+  return 'https://task.absgroup.biz.id';
 }
 
 export const NEXT_API_BASE_URL = getApiBaseUrl();
@@ -319,7 +318,7 @@ export async function loginWithEmail(emailInput: string, passwordInput: string):
     .maybeSingle();
 
   if (error) {
-    if (error.message?.includes('upstream') || error.message?.includes('fetch') || error.status === 503) {
+    if (error.message?.includes('upstream') || error.message?.includes('fetch') || (error as any).status === 503) {
       throw new Error('Server database (db.absgroup.biz.id) sedang offline / gangguan (503 No Healthy Upstream). Silakan coba sesaat lagi.');
     }
     throw new Error(`Gagal menghubungi server database: ${error.message}`);

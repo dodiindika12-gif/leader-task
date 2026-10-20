@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 
 function RootNavigation() {
@@ -15,17 +15,17 @@ function RootNavigation() {
     const inAuthGroup = segments[0] === 'login';
 
     if (!session && !inAuthGroup) {
-      // Redirect to login if user is not authenticated
+      // Belum login -> arahkan ke halaman login
       router.replace('/login');
     } else if (session && inAuthGroup) {
-      // Redirect to tabs if user is already authenticated
-      router.replace('/(tabs)');
+      // Sudah login -> langsung buka chat Bebie
+      router.replace('/');
     }
   }, [session, loading, segments, router]);
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#db2777" />
       </View>
     );
@@ -36,39 +36,14 @@ function RootNavigation() {
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: '#ffffff' },
-          headerTintColor: '#0f172a',
-          headerTitleStyle: { fontWeight: '600' },
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: '#f8fafc' },
+          headerShown: false,
+          contentStyle: { backgroundColor: '#fff5f7' },
+          animation: 'fade',
         }}
       >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="task/[id]"
-          options={{
-            presentation: 'modal',
-            title: 'Detail Tugas',
-            headerShown: true,
-          }}
-        />
-        <Stack.Screen
-          name="new-task"
-          options={{
-            presentation: 'modal',
-            title: 'Buat Tugas Baru',
-            headerShown: true,
-          }}
-        />
-        <Stack.Screen
-          name="chat"
-          options={{
-            presentation: 'fullScreenModal',
-            headerShown: false,
-            animation: 'slide_from_bottom',
-          }}
-        />
+        <Stack.Screen name="chat" options={{ headerShown: false }} />
       </Stack>
     </>
   );
@@ -81,3 +56,12 @@ export default function RootLayout() {
     </AuthProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff5f7',
+  },
+});
