@@ -1,36 +1,30 @@
 import React, { useEffect } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 
+// Keep the splash screen visible while fonts and auth initialize
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 function RootNavigation() {
-  const { session, loading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
+  const { loading } = useAuth();
 
+  // Dismiss native splash screen as soon as auth loading finishes or failsafe timeout
   useEffect(() => {
-    if (loading) return;
+    const timer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 1500);
 
-    const inAuthGroup = segments[0] === 'login';
-
-    if (!session && !inAuthGroup) {
-      // Belum login -> arahkan ke halaman login
-      router.replace('/login');
-    } else if (session && inAuthGroup) {
-      // Sudah login -> langsung buka chat Bebie
-      router.replace('/');
+    if (!loading) {
+      SplashScreen.hideAsync().catch(() => {});
     }
-  }, [session, loading, segments, router]);
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#db2777" />
-      </View>
-    );
-  }
+    return () => clearTimeout(timer);
+  }, [loading]);
 
+  // The Root Layout navigator MUST always be rendered immediately on first render.
+  // Never conditionally return null or an ActivityIndicator from the Root Layout!
   return (
     <>
       <StatusBar style="dark" />
@@ -57,11 +51,3 @@ export default function RootLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff5f7',
-  },
-});

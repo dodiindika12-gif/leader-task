@@ -28,7 +28,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let isMounted = true;
-    getCurrentSession()
+    const timeoutPromise = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), 2000)
+    );
+
+    Promise.race([getCurrentSession(), timeoutPromise])
       .then((user) => {
         if (isMounted) {
           setSession(user);
@@ -36,7 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       })
       .catch((err) => {
-        console.error('Error restoring session:', err);
+        console.warn('Error restoring session:', err);
         if (isMounted) {
           setSession(null);
           setLoading(false);

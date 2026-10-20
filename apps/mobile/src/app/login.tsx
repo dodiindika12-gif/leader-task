@@ -34,8 +34,10 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password.trim());
-      // Setelah login, langsung masuk ke chat Bebie
-      router.replace('/');
+      // Setelah login, pastikan berada di rute root ('/')
+      try {
+        router.replace('/');
+      } catch {}
     } catch (err: any) {
       Alert.alert('Login Gagal', err.message || 'Kredensial tidak valid atau akun tidak terdaftar.');
     } finally {

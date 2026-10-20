@@ -1,18 +1,18 @@
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet, Text, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '../context/AuthContext';
 import ChatScreen from './chat';
+import LoginScreen from './login';
 
 export default function IndexScreen() {
   const { session, loading } = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !session) {
-      router.replace('/login');
+    if (!loading) {
+      SplashScreen.hideAsync().catch(() => {});
     }
-  }, [session, loading, router]);
+  }, [loading]);
 
   if (loading) {
     return (
@@ -30,10 +30,12 @@ export default function IndexScreen() {
     );
   }
 
+  // Jika belum login, langsung tampilkan form Login tanpa redirect loop
   if (!session) {
-    return null;
+    return <LoginScreen />;
   }
 
+  // Jika sudah login, langsung buka antarmuka Chat Bebie
   return <ChatScreen />;
 }
 

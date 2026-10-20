@@ -44,8 +44,19 @@ jobs:
         working-directory: apps/mobile
         run: npm ci || npm install
 
+      - name: Setup Mobile Environment Variables
+        working-directory: apps/mobile
+        run: |
+          echo "EXPO_PUBLIC_SUPABASE_URL=https://db.absgroup.biz.id" > .env
+          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg4MjMxMjM2LCJleHAiOjE5NDU5MTEyMzZ9.nNHFrq9e9IJ6kLXEea5lfzOUa8a0506kFg3nyNZEyHU" >> .env
+          echo "EXPO_PUBLIC_API_URL=https://task.absgroup.biz.id" >> .env
+
       - name: Prebuild Native Android Project
         working-directory: apps/mobile
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://db.absgroup.biz.id
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg4MjMxMjM2LCJleHAiOjE5NDU5MTEyMzZ9.nNHFrq9e9IJ6kLXEea5lfzOUa8a0506kFg3nyNZEyHU
+          EXPO_PUBLIC_API_URL: https://task.absgroup.biz.id
         run: npx expo prebuild --platform android --clean
 
       - name: Grant execute permission for gradlew
@@ -53,6 +64,10 @@ jobs:
 
       - name: Build Android Debug APK
         working-directory: apps/mobile/android
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://db.absgroup.biz.id
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg4MjMxMjM2LCJleHAiOjE5NDU5MTEyMzZ9.nNHFrq9e9IJ6kLXEea5lfzOUa8a0506kFg3nyNZEyHU
+          EXPO_PUBLIC_API_URL: https://task.absgroup.biz.id
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Prepare APK Output

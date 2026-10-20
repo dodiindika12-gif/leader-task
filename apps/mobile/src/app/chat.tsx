@@ -587,7 +587,7 @@ export default function ChatScreen() {
             style={styles.gateBtn}
             onPress={async () => {
               await logout();
-              router.replace('/login');
+              try { router.replace('/'); } catch {}
             }}
           >
             <Ionicons name="log-out-outline" size={16} color="#fff" />
@@ -776,7 +776,7 @@ export default function ChatScreen() {
                     onPress: async () => {
                       setProfileVisible(false);
                       await logout();
-                      router.replace('/login');
+                      try { router.replace('/'); } catch {}
                     },
                   },
                 ]
